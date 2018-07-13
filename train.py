@@ -4,9 +4,10 @@ import logging
 import argparse
 import torch
 from model.model import *
+from model.unet import UNet
 from model.loss import *
 from model.metric import *
-from data_loader import MnistDataLoader
+from data_loader import getDataLoaders
 from trainer import Trainer
 from logger import Logger
 
@@ -14,10 +15,11 @@ logging.basicConfig(level=logging.INFO, format='')
 
 
 def main(config, resume):
+    np.random.seed(1234)
     train_logger = Logger()
 
-    data_loader = MnistDataLoader(config)
-    valid_data_loader = data_loader.split_validation()
+    data_loader, valid_data_loader = getDataLoader(config,'train')
+    #valid_data_loader = data_loader.split_validation()
 
     model = eval(config['arch'])(config['model'])
     model.summary()

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from datasets import AI2D
 from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -44,3 +45,55 @@ class MnistDataLoader(BaseDataLoader):
 
     def _n_samples(self):
         return len(self.x)
+
+def getDataLoader(config,split):
+        data_set_name = config['data_loader']['data_set_name']
+        data_dir = config['data_loader']['data_dir']
+        batch_size = config['data_loader']['batch_size']
+        if 'augmentation_params' in config['data_loader']
+            aug_param = config['data_loader']['augmentation_params']
+        else:
+            aug_param = None
+        shuffle = config['data_loader']['shuffle']
+        shuffleValid = config['validation']['shuffle']
+        if data_set_name=='AI2D':
+            dataset=AI2D(dirPath=data_dir, split=split, config=config)
+            if split=='train':
+                validation=torch.utils.data.DataLoader(dataset.splitValidation(config), batch_size=batch_size, shuffle=shuffleValid, collate_fn=padMiniBatch)
+            else:
+                validation=None
+            return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=padMiniBatch), validation
+
+def padMiniBatch(data):
+    """
+    Pads all images and targets to be the same size
+    Randomly positions images within the padding
+    """
+
+    maxH=0
+    maxW=0
+    for image,label in data:
+        if image.shape[0]>maxH:
+            maxH=image.shape[0]
+        if image.shape[1]>maxW:
+            maxW=image.shape[1]
+
+    newSource = torch.zeros(len(data),maxH,maxW,4)
+    newTarget = torch.zeros(len(data),maxH,maxW)
+    for index, (image,label) in enumerate(data):
+        diffH = maxH-image.shape[0]
+        padLeft = np.random.randint(0,diffH)
+        #padRight = diffH-padLeft
+        diffW = maxW-image.shape[1]
+        padTop = np.random.randint(0,diffW)
+        #padBot = diffW-padTop
+
+        newSource[index,padLeft:image.shape[0]+padLeft,padTop:image.shape[1]+padTop] = image
+        newTarget[index,padLeft:image.shape[0]+padLeft,padTop:image.shape[1]+padTop] = label
+
+    return newSource, newTarget
+
+
+
+    
+

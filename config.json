@@ -1,9 +1,10 @@
 {
-    "name": "Mnist_LeNet",
+    "name": "AI2D_UNet",
     "cuda": true,
     "gpu": 0,
     "data_loader": {
-        "data_dir": "datasets/",
+        "data_set_name": "AI2D",
+        "data_dir": "~/brian/data/ai2d",
         "batch_size": 32,
         "shuffle": true
     },
@@ -33,7 +34,7 @@
         "monitor": "val_loss",
         "monitor_mode": "min"
     },
-    "arch": "MnistModel", 
+    "arch": "UNet", 
     "model": {
 
     }

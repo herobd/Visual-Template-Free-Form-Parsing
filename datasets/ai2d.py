@@ -1,24 +1,73 @@
 import torch
+import torch.utils.data
+import numpy as np
 import json
 from skimage import io
+from skimage import draw
+import os
 
 class AI2D(torch.utils.data.Dataset):
     """
     Class for reading AI2D dataset and creating query/result masks from bounding polygons
     """
-    def __init__(self, dirPath=None, split=None, config=None, images=None, queryPolys=None, responsePolyLists=None):
+
+    def __getResponsePolyList(self,queryId,annotations):
+        responsePolyList=[]
+        for relId in annotations['relationships']:
+            if queryId in relId:
+                #print('query: '+queryId)
+                #print('rel:   '+relId)
+                pos = relId.find(queryId)
+                if pos+len(queryId)<len(relId) and relId[pos+len(queryId)]!='+': #ensure 'B1' doesnt match 'B10'
+                    continue
+                #only the objects listed immediatley before or after this one are important
+                if pos>0 and relId[pos-1]=='+':
+                    nextPlus = relId.rfind('+',0,pos-1)
+                    #print('nextP: '+str(nextPlus))
+                    neighborId = relId[nextPlus+1:pos-1]
+                    #print('neBe:  '+neighborId)
+                    poly = self.__getResponsePoly(neighborId,annotations)
+                    if poly is not None:
+                        responsePolyList.append(poly)
+                if pos+len(queryId)+1<len(relId) and relId[pos+len(queryId)]=='+':
+                    nextPlus = relId.find('+',pos+len(queryId)+1)
+                    if nextPlus==-1:
+                        neighborId=relId[pos+len(queryId)+1:]
+                        #print('neAf1: '+neighborId)
+                    else:
+                        neighborId=relId[pos+len(queryId)+1:nextPlus]
+                        #print('neAf2: '+neighborId)
+                    poly = self.__getResponsePoly(neighborId,annotations)
+                    if poly is not None:
+                        responsePolyList.append(poly)
+        return responsePolyList
+
+    def __getResponsePoly(self, neighborId,annotations):
+        if neighborId[0]=='T':
+            rect=annotations['text'][neighborId]['rectangle']
+            poly = [ rect[0], [rect[1][0],rect[0][1]], rect[1], [rect[0][0],rect[1][1]] ]#, rect[0] ]
+            return np.array(poly)
+        elif neighborId[0]=='A':
+            return np.array(annotations['arrows'][neighborId]['polygon'])
+        elif neighborId[0]=='B':
+            return np.array(annotations['blobs'][neighborId]['polygon'])
+        else:
+            return None
+
+    def __init__(self, dirPath=None, split=None, config=None, ids=None, imagePaths=None, queryPolys=None, responsePolyLists=None, test=False):
         if 'augmentation_params' in config['data_loader']:
             self.augmentation_params=config['data_loader']['augmentation_params']
         else:
             self.augmentation_params=None
-        if images is not None:
-            self.imagePaths=images
+        if imagePaths is not None:
+            self.ids=ids
+            self.imagePaths=imagePaths
             self.queryPolys=queryPolys
             self.responsePolyLists=responsePolyLists
         else:
-            with open(os.path.join(dirPath,'categories.json') as f:
+            with open(os.path.join(dirPath,'categories.json')) as f:
                 imageToCategories = json.loads(f.read())
-            with open(os.path.join(dirPath,'traintestplit_categories.json') as f:
+            with open(os.path.join(dirPath,'traintestplit_categories.json')) as f:
                 #if split=='valid' or split=='validation':
                 #    trainTest='train'
                 #else:
@@ -27,62 +76,64 @@ class AI2D(torch.utils.data.Dataset):
             self.imagePaths=[]
             self.queryPolys=[]
             self.responsePolyLists=[]
+            self.ids=[]
+            if test:
+                aH=0
+                aW=0
+                aA=0
             for image, category in imageToCategories.items():
+                if test:
+                    im = io.imread(os.path.join(dirPath,'images',image))
+                    aH+=im.shape[0]
+                    aW+=im.shape[1]
+                    aA+=im.shape[0]*im.shape[1]
                 if category in categoriesToUse:
                     with open(os.path.join(dirPath,'annotations',image+'.json')) as f:
                         annotations = json.loads(f.read())
-                    for blobId, blob in annotations['blob'].items():
+                    for blobId, blob in annotations['blobs'].items():
+                        self.ids.append(blobId)
                         self.imagePaths.append(os.path.join(dirPath,'images',image))
-                        self.queryPolys.append(blob['polygon'])
-                        self.responsePolyLists.append(getResponsePolyList(blobId,annotations))
+                        self.queryPolys.append(np.array(blob['polygon']))
+                        self.responsePolyLists.append(self.__getResponsePolyList(blobId,annotations))
 
-                                    
-                    annotationPaths.append(os.path.join(dirPath,'annotations',image+'.json'))
+                    for arrowId, arrow in annotations['arrows'].items():
+                        self.ids.append(arrowId)
+                        self.imagePaths.append(os.path.join(dirPath,'images',image))
+                        self.queryPolys.append(np.array(arrow['polygon']))
+                        self.responsePolyLists.append(self.__getResponsePolyList(arrowId,annotations))
+
+                    for textId, text in annotations['text'].items():
+                        self.ids.append(textId)
+                        self.imagePaths.append(os.path.join(dirPath,'images',image))
+                        rect=text['rectangle']
+                        self.queryPolys.append(np.array([ rect[0], [rect[1][0],rect[0][1]], rect[1], [rect[0][0],rect[1][1]] ]))#, rect[0] ]))
+                        self.responsePolyLists.append(self.__getResponsePolyList(textId,annotations))
+        
+        if test:
+            print('average height: '+str(aH/len(imageToCategories)))
+            print('average width:  '+str(aW/len(imageToCategories)))
+            print('average area:   '+str(aA/len(imageToCategories)))
 
 
-    def getResponsePolyList(queryId,annotaions):
-        responsePolyList=[]
-        for relId in annotations['relationships']:
-            if queryId in relId:
-                pos = relId.find(queryId)
-                #only the objects listed immediatley before or after this one are important
-                if pos>0 and relId[pos-1]=='+':
-                    nextPlus = relId.rfind('+',0,pos)
-                    neighborId = relId[nextPlus+1:pos-1]
-                    responsePolyList.append(getResponsePoly(neighborId,annotations))
-                if pos+len(queryId)+1<len(relId) and relId[pos+len(queryId)+1]=='+':
-                    nextPlus = relId.find('+',pos+len(queryId)+2)
-                    if nextPlus==-1:
-                        neighborId=relId[pos+len(queryId)+1:]
-                    else:
-                        neighborId=relId[pos+len(queryId)+1:nextPlus]
-                    responsePolyList.append(getResponsePoly(neighborId,annotations))
-        return responsePolyList
-
-    def getResponsePoly(neighborId,annotations):
-        if neighborId[0]=='T':
-            rect=annotations['text'][neighborId]['rectangle']
-            poly = [ rect[0], [rect[1][0],rect[0][1]], rect[1], [rect[0][1],rect[1][0]] ]
-            return poly
-        elif neighborId[0]=='A':
-            return annotations['arrows'][neighborId]['polygon']
-        elif neighborId[0]=='B':
-            return annotations['blobs'][neighborId]['polygon']
 
     def __len__(self):
-        return len(imagePaths)
+        return len(self.imagePaths)
 
     def __getitem__(self,index):
-        image = io.imread(self.imagePaths[index])
+        #print(index)
+        #print(self.imagePaths[index])
+        #print(self.ids[index])
+        image = io.imread(self.imagePaths[index])/255.0
         queryMask = np.zeros([image.shape[0],image.shape[1]])
-        rr, cc = polygon(self.queryPolys[index][:, 0], self.queryPolys[index][:, 1], queryMask.shape)
+        rr, cc = draw.polygon(self.queryPolys[index][:, 1], self.queryPolys[index][:, 0], queryMask.shape)
         queryMask[rr,cc]=1
         responseMask = np.zeros([image.shape[0],image.shape[1]])
         for poly in self.responsePolyLists[index]:
-            rr, cc = polygon(poly[:, 0], poly[:, 1], responseMask.shape)
+            rr, cc = draw.polygon(poly[:, 1], poly[:, 0], responseMask.shape)
             responseMask[rr,cc]=1
 
-        imageWithQuery = np.stack(np.dsplit(image,3)+queryMask,-1)
+        imageWithQuery = np.append(image,queryMask.reshape(queryMask.shape+(1,)),axis=2)
+        imageWithQuery = np.moveaxis(imageWithQuery,2,0)
 
         sample = (imageWithQuery, responseMask)
         if self.augmentation_params is not None:
@@ -93,12 +144,14 @@ class AI2D(torch.utils.data.Dataset):
         validation_split = config['validation']['validation_split']
         split = int(len(self) * validation_split)
         perm = np.random.permutation(len(self))
-        images = [self.images[x] for x in perm]
+        ids = [self.ids[x] for x in perm]
+        images = [self.imagePaths[x] for x in perm]
         queryPolys = [self.queryPolys[x] for x in perm]
         responsePolyLists = [self.responsePolyLists[x] for x in perm]
 
-        self.images=images[split:]
+        self.ids=ids[split:]
+        self.imagePaths=images[split:]
         self.queryPolys=queryPolys[split:]
         self.responsePolyLists=responsePolyLists[split:]
 
-        return AI2D(config=config, images=images[:split], queryPolys=queryPolys[:split], responsePolyLists=responsePolyLists[:split])
+        return AI2D(config=config, ids=ids[:split], imagePaths=images[:split], queryPolys=queryPolys[:split], responsePolyLists=responsePolyLists[:split])

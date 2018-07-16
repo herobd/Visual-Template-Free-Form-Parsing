@@ -4,8 +4,8 @@
     "gpu": 0,
     "data_loader": {
         "data_set_name": "AI2D",
-        "data_dir": "~/brian/data/ai2d",
-        "batch_size": 32,
+        "data_dir": "/home/ubuntu/brian/data/ai2d",
+        "batch_size": 1,
         "shuffle": true
     },
     "validation": {
@@ -24,8 +24,8 @@
         "lr": 0.001,
         "weight_decay": 0
     },
-    "loss": "my_loss",
-    "metrics": ["my_metric", "my_metric2"],
+    "loss": "sigmoid_BCE_loss",
+    "metrics": ["meanIOU"],
     "trainer": {
         "epochs": 1000,
         "save_dir": "saved/",
@@ -36,6 +36,7 @@
     },
     "arch": "UNet", 
     "model": {
-
+        "skip_last_sigmoid": true,
+        "n_channels": 4
     }
 }

@@ -1,6 +1,7 @@
 import torch
+import torch.utils.data
 import numpy as np
-from datasets import AI2D
+from datasets.ai2d import AI2D
 from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -50,7 +51,7 @@ def getDataLoader(config,split):
         data_set_name = config['data_loader']['data_set_name']
         data_dir = config['data_loader']['data_dir']
         batch_size = config['data_loader']['batch_size']
-        if 'augmentation_params' in config['data_loader']
+        if 'augmentation_params' in config['data_loader']:
             aug_param = config['data_loader']['augmentation_params']
         else:
             aug_param = None
@@ -62,36 +63,75 @@ def getDataLoader(config,split):
                 validation=torch.utils.data.DataLoader(dataset.splitValidation(config), batch_size=batch_size, shuffle=shuffleValid, collate_fn=padMiniBatch)
             else:
                 validation=None
-            return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=padMiniBatch), validation
+            patchSize=config['data_loader']['patch_size']
+            centerJitterFactor=config['data_loader']['center_jitter']
+            sizeJitterFactor=config['data_loader']['size_jitter']
+            return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=resizeMiniBatchF(patchSize,centerJitterFactor,sizeJitterFactor), validation
 
-def padMiniBatch(data):
+def resizeMiniBatchF(patchSize, centerJitterFactor, sizeJitterFactor):
     """
-    Pads all images and targets to be the same size
-    Randomly positions images within the padding
+    Returns function which crops and pads data to include all masks and
     """
 
-    maxH=0
-    maxW=0
-    for image,label in data:
-        if image.shape[0]>maxH:
-            maxH=image.shape[0]
-        if image.shape[1]>maxW:
-            maxW=image.shape[1]
+    def resizeMiniBatch(data):
+        #maxH=0
+        #maxW=0
+        #for image,label in data:
+        #    if image.shape[1]>maxH:
+        #        maxH=image.shape[1]
+        #    if image.shape[2]>maxW:
+        #         maxW=image.shape[2]
 
-    newSource = torch.zeros(len(data),maxH,maxW,4)
-    newTarget = torch.zeros(len(data),maxH,maxW)
-    for index, (image,label) in enumerate(data):
-        diffH = maxH-image.shape[0]
-        padLeft = np.random.randint(0,diffH)
-        #padRight = diffH-padLeft
-        diffW = maxW-image.shape[1]
-        padTop = np.random.randint(0,diffW)
-        #padBot = diffW-padTop
+        newSource = torch.zeros(len(data),4,patchSize,patchSize, dtype=torch.float32)
+        newTarget = torch.zeros(len(data),patchSize,patchSize, dtype=torch.float32)
+        for index, (image,label,xQueryC,yQueryC,reach,x0,y0,x1,y1) in enumerate(data):
+            xc = xQueryC + np.random.normal(0,reach*centerJitterFactor)
+            xc = xQueryC + np.random.normal(0,reach*centerJitterFactor)
+            radius = reach + np.random.normal(reach*centerJitterFactor,reach*sizeJitterFactor)
+            #make radius smaller if we go off image
+            if xc+radius>image.shape[2]-1:
+                radius=image.shape[2]-1-xc
+            if xc-radius<0:
+                radius=xc
+            if yc+radius+1>image.shape[1]:
+                radius=image.shape[1]-yc-1
+            if yc-radius<0:
+                radius=yc
 
-        newSource[index,padLeft:image.shape[0]+padLeft,padTop:image.shape[1]+padTop] = image
-        newTarget[index,padLeft:image.shape[0]+padLeft,padTop:image.shape[1]+padTop] = label
+            #make radius big enough to include all masks
+            if xc+radius>x1:
+                radius=x1-xc
+            if xc-radius<x0:
+                radius = xc-x0
+            if yc+radius>y1:
+                radius=y1-yc
+            if yc-radius<y0:
+                radius = yc-y0
 
-    return newSource, newTarget
+            cropOutX0 = max(xc-radius,0)
+            cropOutY0 = max(yc-radius,0)
+            cropOutX1 = min(xc+radius+1,image.shape[2])
+            cropOutY1 = min(yc+radius+1,image.shape[1])
+
+            diffH = pathSize-(cropOutX1-cropOutX0)
+            if diffH==0:
+                padTop=0
+            else:
+                padTop = np.random.randint(0,diffH)
+            diffW = patchSize-(cropOutY1-cropOutY0)
+            if diffW==0:
+                padLeft=0
+            else:
+                padLeft = np.random.randint(0,diffW)
+
+            #print(image.shape)
+            #print(newSource.shape)
+            #print((index,':',str(padTop)+':'+str(image.shape[1]+padTop),str(padLeft)+':'+str(image.shape[2]+padLeft)))
+            newSource[index][:,padTop+cropOutY0:padTop+cropOutY1,padLeft+cropOutX0:padLeft+cropOutX1] = torch.from_numpy(image[)
+            newTarget[index][padTop:image.shape[1]+padTop,padLeft:image.shape[2]+padLeft] = torch.from_numpy(label)
+
+        return newSource, newTarget
+    return resize
 
 
 

@@ -7,7 +7,7 @@ from model.model import *
 from model.unet import UNet
 from model.loss import *
 from model.metric import *
-from data_loader import getDataLoaders
+from data_loader import getDataLoader
 from trainer import Trainer
 from logger import Logger
 

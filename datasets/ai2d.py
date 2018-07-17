@@ -5,6 +5,7 @@ import json
 from skimage import io
 from skimage import draw
 import os
+import math
 
 class AI2D(torch.utils.data.Dataset):
     """
@@ -77,6 +78,7 @@ class AI2D(torch.utils.data.Dataset):
             self.queryPolys=[]
             self.responsePolyLists=[]
             self.ids=[]
+            self.helperStats=[]
             if test:
                 aH=0
                 aW=0
@@ -96,11 +98,15 @@ class AI2D(torch.utils.data.Dataset):
                         self.queryPolys.append(np.array(blob['polygon']))
                         self.responsePolyLists.append(self.__getResponsePolyList(blobId,annotations))
 
+                        self.helperStats.append(self.__getHelperStats(self.queryPolys[-1], self.responsePolyLists[-1]))
+
                     for arrowId, arrow in annotations['arrows'].items():
                         self.ids.append(arrowId)
                         self.imagePaths.append(os.path.join(dirPath,'images',image))
                         self.queryPolys.append(np.array(arrow['polygon']))
                         self.responsePolyLists.append(self.__getResponsePolyList(arrowId,annotations))
+
+                        self.helperStats.append(self.__getHelperStats(self.queryPolys[-1], self.responsePolyLists[-1]))
 
                     for textId, text in annotations['text'].items():
                         self.ids.append(textId)
@@ -108,6 +114,8 @@ class AI2D(torch.utils.data.Dataset):
                         rect=text['rectangle']
                         self.queryPolys.append(np.array([ rect[0], [rect[1][0],rect[0][1]], rect[1], [rect[0][0],rect[1][1]] ]))#, rect[0] ]))
                         self.responsePolyLists.append(self.__getResponsePolyList(textId,annotations))
+
+                        self.helperStats.append(self.__getHelperStats(self.queryPolys[-1], self.responsePolyLists[-1]))
         
         if test:
             print('average height: '+str(aH/len(imageToCategories)))
@@ -124,6 +132,7 @@ class AI2D(torch.utils.data.Dataset):
         #print(self.imagePaths[index])
         #print(self.ids[index])
         image = io.imread(self.imagePaths[index])/255.0
+        #TODO color jitter, rotation?, skew?
         queryMask = np.zeros([image.shape[0],image.shape[1]])
         rr, cc = draw.polygon(self.queryPolys[index][:, 1], self.queryPolys[index][:, 0], queryMask.shape)
         queryMask[rr,cc]=1
@@ -135,7 +144,7 @@ class AI2D(torch.utils.data.Dataset):
         imageWithQuery = np.append(image,queryMask.reshape(queryMask.shape+(1,)),axis=2)
         imageWithQuery = np.moveaxis(imageWithQuery,2,0)
 
-        sample = (imageWithQuery, responseMask)
+        sample = (imageWithQuery, responseMask,) + self.helperStats[index] + (self.imagePaths[index]+' '+self.ids[index],)
         if self.augmentation_params is not None:
             sample = self.augment(sample)
         return sample
@@ -155,3 +164,35 @@ class AI2D(torch.utils.data.Dataset):
         self.responsePolyLists=responsePolyLists[split:]
 
         return AI2D(config=config, ids=ids[:split], imagePaths=images[:split], queryPolys=queryPolys[:split], responsePolyLists=responsePolyLists[:split])
+
+    def __getHelperStats(self, queryPoly, polyList):
+        """
+        This returns stats used when putting a batch together, croping and resizeing windows.
+        It returns
+            the centerpoint of the query mask,
+            the furthest response mask point from the center (minimum set by query mask size in case no response)
+            the bounding rectangle containing all masks
+        """
+        x0 = minXQuery = np.amin(queryPoly[:,1])
+        x1 = maxXQuery = np.amax(queryPoly[:,1])
+        y0 = minYQuery = np.amin(queryPoly[:,0])
+        y1 = maxYQuery = np.amax(queryPoly[:,0])
+        queryCenterX = (maxXQuery+minXQuery)/2
+        queryCenterY = (maxYQuery+minYQuery)/2
+
+        def dist(x,y):
+            return math.sqrt((queryCenterX-x)**2 + (queryCenterY-y)**2)
+
+        maxDistFromCenter = maxXQuery-minXQuery+maxYQuery-minYQuery
+        for poly in polyList:
+            minX = np.amin(poly[:,1])
+            maxX = np.amax(poly[:,1])
+            minY = np.amin(poly[:,0])
+            maxY = np.amax(poly[:,0])
+            maxDistFromCenter = max(maxDistFromCenter, dist(minX,minY), dist(minX,maxY), dist(maxX,minY), dist(maxX,maxY))
+            x0 = min(x0,minX)
+            x1 = max(x1,maxX)
+            y0 = min(y0,minY)
+            y1 = max(y1,maxY)
+        
+        return ( queryCenterX, queryCenterY, maxDistFromCenter, int(x0),int(y0),int(x1),int(y1))

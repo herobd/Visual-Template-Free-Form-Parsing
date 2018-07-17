@@ -5,8 +5,11 @@
     "data_loader": {
         "data_set_name": "AI2D",
         "data_dir": "/home/ubuntu/brian/data/ai2d",
-        "batch_size": 1,
-        "shuffle": true
+        "batch_size": 16,
+        "shuffle": true,
+        "patch_size": 300,
+        "center_jitter": 0.1,
+        "size_jitter": 0.2
     },
     "validation": {
         "validation_split": 0.1,

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from torch.nn.utils.weight_norm import weight_norm
 
 class UNet(BaseModel):
     def __init__(self, config):
@@ -12,15 +13,20 @@ class UNet(BaseModel):
             skip_last_sigmoid=False
         else:
             skip_last_sigmoid=config['skip_last_sigmoid']
-        self.inc = inconv(config['n_channels'], 64, self.training)
-        self.down1 = down(64, 128, self.training)
-        self.down2 = down(128, 256, self.training)
-        self.down3 = down(256, 512, self.training)
-        self.down4 = down(512, 512, self.training)
-        self.up1 = up(1024, 256, self.training)
-        self.up2 = up(512, 128, self.training)
-        self.up3 = up(256, 64, self.training)
-        self.up4 = up(128, 64, self.training)
+        if config is None or 'norm_type' not in config:
+            norm_type=None
+        else:
+            norm_type=config['norm_type']
+
+        self.inc = inconv(config['n_channels'], 64, norm_type)
+        self.down1 = down(64, 128, norm_type)
+        self.down2 = down(128, 256, norm_type)
+        self.down3 = down(256, 512, norm_type)
+        self.down4 = down(512, 512, norm_type)
+        self.up1 = up(1024, 256, norm_type)
+        self.up2 = up(512, 128, norm_type)
+        self.up3 = up(256, 64, norm_type)
+        self.up4 = up(128, 64, norm_type)
         self.outc = outconv(64, 1, skip_last_sigmoid)
 
     def forward(self, x):
@@ -34,22 +40,37 @@ class UNet(BaseModel):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         x = self.outc(x)
-        return x.view(1,x.shape[-2],x.shape[-1])
+        return x.view(x.shape[0],x.shape[-2],x.shape[-1])
 
 
 
 class double_conv(nn.Module):
     '''(conv => BN => ReLU) * 2'''
-    def __init__(self, in_ch, out_ch, train):
+    def __init__(self, in_ch, out_ch, normType):
         super(double_conv, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, padding=1),
-            nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1),
-            nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True)
-        )
+        if normType is None:
+            self.conv = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_ch, out_ch, 3, padding=1),
+                nn.ReLU(inplace=True)
+            )
+        elif normType=='batchNorm':
+            self.conv = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 3, padding=1),
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_ch, out_ch, 3, padding=1),
+                nn.BatchNorm2d(out_ch),
+                nn.ReLU(inplace=True)
+            )
+        elif normType=='weightNorm':
+            self.conv = nn.Sequential(
+                weight_norm(nn.Conv2d(in_ch, out_ch, 3, padding=1)),
+                nn.ReLU(inplace=True),
+                weight_norm(nn.Conv2d(out_ch, out_ch, 3, padding=1)),
+                nn.ReLU(inplace=True)
+            )
 
     def forward(self, x):
         x = self.conv(x)
@@ -57,9 +78,9 @@ class double_conv(nn.Module):
 
 
 class inconv(nn.Module):
-    def __init__(self, in_ch, out_ch, train):
+    def __init__(self, in_ch, out_ch, normType):
         super(inconv, self).__init__()
-        self.conv = double_conv(in_ch, out_ch, train)
+        self.conv = double_conv(in_ch, out_ch, normType)
 
     def forward(self, x):
         x = self.conv(x)
@@ -67,11 +88,11 @@ class inconv(nn.Module):
 
 
 class down(nn.Module):
-    def __init__(self, in_ch, out_ch, train):
+    def __init__(self, in_ch, out_ch, normType):
         super(down, self).__init__()
         self.mpconv = nn.Sequential(
             nn.MaxPool2d(2),
-            double_conv(in_ch, out_ch, train)
+            double_conv(in_ch, out_ch, normType)
         )
 
     def forward(self, x):
@@ -80,7 +101,7 @@ class down(nn.Module):
 
 
 class up(nn.Module):
-    def __init__(self, in_ch, out_ch, train, bilinear=True):
+    def __init__(self, in_ch, out_ch, normType, bilinear=True):
         super(up, self).__init__()
 
         #  would be a nice idea if the upsampling could be learned too,
@@ -90,7 +111,7 @@ class up(nn.Module):
         else:
             self.up = nn.ConvTranspose2d(in_ch//2, in_ch//2, 2, stride=2)
 
-        self.conv = double_conv(in_ch, out_ch, train)
+        self.conv = double_conv(in_ch, out_ch, normType)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)

@@ -18,8 +18,10 @@ class BaseTrainer:
         self.loss = loss
         self.metrics = metrics
         self.name = config['name']
-        self.epochs = config['trainer']['epochs']
+        self.iterations = config['trainer']['iterations']
+        self.ipoch_size = config['trainer']['ipoch_size']
         self.save_freq = config['trainer']['save_freq']
+        self.log_step = config['trainer']['log_step']
         self.verbosity = config['trainer']['verbosity']
         self.with_cuda = config['cuda'] and torch.cuda.is_available()
         if config['cuda'] and not torch.cuda.is_available():
@@ -42,7 +44,7 @@ class BaseTrainer:
         self.monitor_mode = config['trainer']['monitor_mode']
         assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
         self.monitor_best = math.inf if self.monitor_mode == 'min' else -math.inf
-        self.start_epoch = 1
+        self.start_iteration = 1
         self.checkpoint_dir = os.path.join(config['trainer']['save_dir'], self.name)
         ensure_dir(self.checkpoint_dir)
         json.dump(config, open(os.path.join(self.checkpoint_dir, 'config.json'), 'w'),
@@ -54,62 +56,89 @@ class BaseTrainer:
         """
         Full training logic
         """
-        for epoch in range(self.start_epoch, self.epochs + 1):
-            result = self._train_epoch(epoch)
-            log = {'epoch': epoch}
+        sumLog={}
+        for metric in self.metrics:
+            sumLog['avg_'+metric.__name__]=0
+
+        for iteration in range(self.start_iteration, self.iterations + 1):
+            result = self._train_iteration(iteration)
+            log = {'iteration': self.iterations}
+
             for key, value in result.items():
                 if key == 'metrics':
                     for i, metric in enumerate(self.metrics):
                         log[metric.__name__] = result['metrics'][i]
+                        sumLog['avg_'+metric.__name__] += result['metrics'][i]
                 elif key == 'val_metrics':
                     for i, metric in enumerate(self.metrics):
                         log['val_' + metric.__name__] = result['val_metrics'][i]
                 else:
                     log[key] = value
-            if self.train_logger is not None:
-                self.train_logger.add_entry(log)
-                if self.verbosity >= 1:
-                    for key, value in log.items():
-                        self.logger.info('    {:15s}: {}'.format(str(key), value))
-            if (self.monitor_mode == 'min' and log[self.monitor] < self.monitor_best)\
+
+            if iteration%self.log_step==0:
+                self._minor_log(log)
+                for metric in self.metrics:
+                    sumLog['avg_'+metric.__name__] /= self.log_step
+                self._minor_log(sumLog)
+                for metric in self.metrics:
+                    sumLog['avg_'+metric.__name__] =0
+
+            if iteration%self.val_step==0:
+                val_result = self._val_epoch()
+                for key, value in val_result.items():
+                    if key == 'metrics':
+                        for i, metric in enumerate(self.metrics):
+                            log[metric.__name__] = result['metrics'][i]
+                    elif key == 'val_metrics':
+                        for i, metric in enumerate(self.metrics):
+                            log['val_' + metric.__name__] = result['val_metrics'][i]
+                    else:
+                        log[key] = value
+
+                if self.train_logger is not None:
+                    self.train_logger.add_entry(log)
+                    if self.verbosity >= 1:
+                        for key, value in log.items():
+                            self.logger.info('    {:15s}: {}'.format(str(key), value))
+            if (self.monitor_mode == 'min' and self.monitor in log and log[self.monitor] < self.monitor_best)\
                     or (self.monitor_mode == 'max' and log[self.monitor] > self.monitor_best):
                 self.monitor_best = log[self.monitor]
-                self._save_checkpoint(epoch, log, save_best=True)
-            if epoch % self.save_freq == 0:
-                self._save_checkpoint(epoch, log)
-            if self.lr_scheduler and epoch % self.lr_scheduler_freq == 0:
-                self.lr_scheduler.step(epoch)
+                self._save_checkpoint(iteration, log, save_best=True)
+            if iteration % self.save_freq == 0:
+                self._save_checkpoint(iteration, log)
+            if self.lr_scheduler and iteration % self.lr_scheduler_freq == 0:
+                self.lr_scheduler.step(iteration)
                 lr = self.lr_scheduler.get_lr()[0]
                 self.logger.info('New Learning Rate: {:.6f}'.format(lr))
 
-    def _train_epoch(self, epoch):
+    def _train_iteration(self, iteration):
         """
-        Training logic for an epoch
+        Training logic for a single iteration
 
-        :param epoch: Current epoch number
+        :param iteration: Current iteration number
         """
         raise NotImplementedError
 
-    def _save_checkpoint(self, epoch, log, save_best=False):
+    def _save_checkpoint(self, iteration, log, save_best=False):
         """
         Saving checkpoints
 
-        :param epoch: current epoch number
-        :param log: logging information of the epoch
+        :param iteration: current iteration number
+        :param log: logging information of the ipoch
         :param save_best: if True, rename the saved checkpoint to 'model_best.pth.tar'
         """
         arch = type(self.model).__name__
         state = {
             'arch': arch,
-            'epoch': epoch,
+            'iteration': iteration,
             'logger': self.train_logger,
             'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
             'monitor_best': self.monitor_best,
             'config': self.config
         }
-        filename = os.path.join(self.checkpoint_dir, 'checkpoint-epoch{:03d}-loss-{:.4f}.pth.tar'
-                                .format(epoch, log['loss']))
+        filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}-loss-{:.4f}.pth.tar'
+                                .format(iteration, log['loss']))
         torch.save(state, filename)
         if save_best:
             os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))
@@ -125,7 +154,7 @@ class BaseTrainer:
         """
         self.logger.info("Loading checkpoint: {} ...".format(resume_path))
         checkpoint = torch.load(resume_path)
-        self.start_epoch = checkpoint['epoch'] + 1
+        self.start_iteration = checkpoint['iteration'] + 1
         self.monitor_best = checkpoint['monitor_best']
         self.model.load_state_dict(checkpoint['state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
@@ -136,4 +165,4 @@ class BaseTrainer:
                         state[k] = v.cuda(self.gpu)
         self.train_logger = checkpoint['logger']
         self.config = checkpoint['config']
-        self.logger.info("Checkpoint '{}' (epoch {}) loaded".format(resume_path, self.start_epoch))
+        self.logger.info("Checkpoint '{}' (iteration {}) loaded".format(resume_path, self.start_iteration))

@@ -12,11 +12,12 @@ def my_metric(y_input, y_target):
 
 def meanIOU(y_output, y_target):
     assert len(y_output) == len(y_target)
+    epsilon = 0.001
     iouSum = 0
     for out, targ in zip(y_output, y_target):
         binary = out>0 #torch.where(out>0,1,0)
         #binary = torch.round(y_input) #threshold at 0.5
         intersection = (binary * targ).sum()
         union = (binary + targ).sum() - intersection
-        iouSum += float(intersection) / float(union)
+        iouSum += float(intersection) / (union+epsilon)
     return iouSum / float(len(y_output))

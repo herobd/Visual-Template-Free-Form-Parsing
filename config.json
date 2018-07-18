@@ -33,9 +33,10 @@
         "epochs": 1000,
         "save_dir": "saved/",
         "save_freq": 1,
+        "log_step": 100,
         "verbosity": 2,
-        "monitor": "val_loss",
-        "monitor_mode": "min"
+        "monitor": "val_meanIOU",
+        "monitor_mode": "max"
     },
     "arch": "UNet", 
     "model": {

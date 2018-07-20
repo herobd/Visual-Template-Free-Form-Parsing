@@ -19,5 +19,5 @@ def meanIOU(y_output, y_target):
         #binary = torch.round(y_input) #threshold at 0.5
         intersection = (binary * targ).sum()
         union = (binary + targ).sum() - intersection
-        iouSum += float(intersection) / (union+epsilon)
+        iouSum += (intersection+epsilon) / (union+epsilon)
     return iouSum / float(len(y_output))

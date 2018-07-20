@@ -17,6 +17,8 @@ class Trainer(BaseTrainer):
         self.config = config
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
+        self.data_loader_iter = iter(data_loader)
+        #for i in range(self.start_iteration,
         self.valid_data_loader = valid_data_loader
         self.valid = True if self.valid_data_loader is not None else False
         #self.log_step = int(np.sqrt(self.batch_size))
@@ -34,16 +36,15 @@ class Trainer(BaseTrainer):
         acc_metrics = np.zeros(len(self.metrics))
         output = output.cpu().data.numpy()
         target = target.cpu().data.numpy()
-        output = np.argmax(output, axis=1)
         for i, metric in enumerate(self.metrics):
             acc_metrics[i] += metric(output, target)
         return acc_metrics
 
-    def _train_ipoch(self, iteration):
+    def _train_iteration(self, iteration):
         """
-        Training logic for an ipoch (epoch of user defined size, not dataset defined size)
+        Training logic for an iteration
 
-        :param epoch: Current training epoch.
+        :param iteration: Current training iteration.
         :return: A log that contains all information you want to save.
 
         Note:
@@ -57,14 +58,8 @@ class Trainer(BaseTrainer):
         """
         self.model.train()
 
-        #total_loss = 0
-        #total_metrics = np.zeros(len(self.metrics))
-        #total_loss_since_log=0
-        #tlsl_count=0
-            #for batch_idx, (data, target) in enumerate(self.data_loader):
-        #for iteration in range(iteration, iteration+self.ipoch_size):
         batch_idx = (iteration-1) % len(self.data_loader)
-        data, target = self._to_tensor(*self.data_loader[batch_idx])
+        data, target = self._to_tensor(*self.data_loader_iter.next())
         
         self.optimizer.zero_grad()
         output = self.model(data)
@@ -72,45 +67,26 @@ class Trainer(BaseTrainer):
         loss.backward()
         self.optimizer.step()
 
-            total_loss += loss.item()
-            total_loss_since_log += loss.item()
-            tlsl_count+=1
-            metrics = self._eval_metrics(output, target)
-            total_metrics += metrics
-            total_metrics_since_log += metrics
+        loss = loss.item()
+        metrics = self._eval_metrics(output, target)
 
-            if self.verbosity >= 2 and batch_idx % self.log_step == 0:
-                self.logger.info('Train iteration: {} [{}/{} ({:.0f}%)] Loss: {:.6f} avgLoss: {:.6f}'.format(
-                    iteration,
-                    batch_idx * self.data_loader.batch_size,
-                    len(self.data_loader) * self.data_loader.batch_size,
-                    100.0 * batch_idx / len(self.data_loader),
-                    loss.item(),
-                    total_loss_since_log.item()/tlsl_count ))
-                ms=''
-                for i in range(total_metrics_since_log.shape[0]):
-                    ms += '{:.6f}, '.format(total_metrics_since_log[0]/tlsl_count)
-
-                self.logger.info('     avgMetrics: '+ms)
-                tlsl_count=0
-                total_loss_since_log=0
-                total_metric_since_log=0
 
         log = {
-            'loss': total_loss / self.ipoch_size,
-            'metrics': (total_metrics / self.ipoch_size).tolist()
+            'loss': loss,
+            'metrics': metrics
         }
 
-        if self.valid:
-            val_log = self._valid_epoch()
-            log = {**log, **val_log}
 
         return log
 
-    def _minor_log(log):
+    def _minor_log(self, log):
         ls=''
         for key,val in log.items:
-            ks +
+            ls += key
+            if type(val) is float:
+                ls +=': {:.6f}, '.format(val)
+            else:
+                ls +=': {}, '.format(val)
         self.logger.info('Train '+ls)
 
     def _valid_epoch(self):

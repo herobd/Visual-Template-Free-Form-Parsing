@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format='')
 
 
 def main(config, resume):
-    np.random.seed(1234)
+    #np.random.seed(1234) I don't have a way of restarting the DataLoader at the same place, so this makes it totaly random
     train_logger = Logger()
 
     data_loader, valid_data_loader = getDataLoader(config,'train')
@@ -33,7 +33,7 @@ def main(config, resume):
                       data_loader=data_loader,
                       valid_data_loader=valid_data_loader,
                       train_logger=train_logger)
-
+    print("Begin training")
     trainer.train()
 
 

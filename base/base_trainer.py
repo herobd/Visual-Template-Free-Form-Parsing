@@ -19,8 +19,8 @@ class BaseTrainer:
         self.metrics = metrics
         self.name = config['name']
         self.iterations = config['trainer']['iterations']
-        self.ipoch_size = config['trainer']['ipoch_size']
-        self.save_freq = config['trainer']['save_freq']
+        self.val_step = config['trainer']['val_step']
+        self.save_step = config['trainer']['save_step']
         self.log_step = config['trainer']['log_step']
         self.verbosity = config['trainer']['verbosity']
         self.with_cuda = config['cuda'] and torch.cuda.is_available()
@@ -39,10 +39,10 @@ class BaseTrainer:
             config['lr_scheduler_type'], None)
         if self.lr_scheduler:
             self.lr_scheduler = self.lr_scheduler(self.optimizer, **config['lr_scheduler'])
-            self.lr_scheduler_freq = config['lr_scheduler_freq']
+            self.lr_scheduler_step = config['lr_scheduler_step']
         self.monitor = config['trainer']['monitor']
         self.monitor_mode = config['trainer']['monitor_mode']
-        assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
+        #assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
         self.monitor_best = math.inf if self.monitor_mode == 'min' else -math.inf
         self.start_iteration = 1
         self.checkpoint_dir = os.path.join(config['trainer']['save_dir'], self.name)
@@ -69,29 +69,24 @@ class BaseTrainer:
                     for i, metric in enumerate(self.metrics):
                         log[metric.__name__] = result['metrics'][i]
                         sumLog['avg_'+metric.__name__] += result['metrics'][i]
-                elif key == 'val_metrics':
-                    for i, metric in enumerate(self.metrics):
-                        log['val_' + metric.__name__] = result['val_metrics'][i]
                 else:
                     log[key] = value
 
             if iteration%self.log_step==0:
                 self._minor_log(log)
-                for metric in self.metrics:
-                    sumLog['avg_'+metric.__name__] /= self.log_step
-                self._minor_log(sumLog)
+                if iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
+                    for metric in self.metrics:
+                        sumLog['avg_'+metric.__name__] /= self.log_step
+                    self._minor_log(sumLog)
                 for metric in self.metrics:
                     sumLog['avg_'+metric.__name__] =0
 
             if iteration%self.val_step==0:
-                val_result = self._val_epoch()
+                val_result = self._valid_epoch()
                 for key, value in val_result.items():
-                    if key == 'metrics':
+                    if 'metrics' in key:
                         for i, metric in enumerate(self.metrics):
-                            log[metric.__name__] = result['metrics'][i]
-                    elif key == 'val_metrics':
-                        for i, metric in enumerate(self.metrics):
-                            log['val_' + metric.__name__] = result['val_metrics'][i]
+                            log['val_' + metric.__name__] = result[key][i]
                     else:
                         log[key] = value
 
@@ -100,13 +95,13 @@ class BaseTrainer:
                     if self.verbosity >= 1:
                         for key, value in log.items():
                             self.logger.info('    {:15s}: {}'.format(str(key), value))
-            if (self.monitor_mode == 'min' and self.monitor in log and log[self.monitor] < self.monitor_best)\
-                    or (self.monitor_mode == 'max' and log[self.monitor] > self.monitor_best):
-                self.monitor_best = log[self.monitor]
-                self._save_checkpoint(iteration, log, save_best=True)
-            if iteration % self.save_freq == 0:
+                if (self.monitor_mode == 'min' and self.monitor in log and log[self.monitor] < self.monitor_best)\
+                        or (self.monitor_mode == 'max' and log[self.monitor] > self.monitor_best):
+                    self.monitor_best = log[self.monitor]
+                    self._save_checkpoint(iteration, log, save_best=True)
+            if iteration % self.save_step == 0:
                 self._save_checkpoint(iteration, log)
-            if self.lr_scheduler and iteration % self.lr_scheduler_freq == 0:
+            if self.lr_scheduler and iteration % self.lr_scheduler_step == 0:
                 self.lr_scheduler.step(iteration)
                 lr = self.lr_scheduler.get_lr()[0]
                 self.logger.info('New Learning Rate: {:.6f}'.format(lr))

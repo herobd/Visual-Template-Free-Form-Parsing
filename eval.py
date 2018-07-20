@@ -105,7 +105,7 @@ def main(resume,saveDir,numberOfImages,index):
                     val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
 
-        for vi in range(curVI,len(valid_data_loader)//10):
+        for vi in range(curVI,len(valid_data_loader)):
             data, target = valid_iter.next() #valid_data_loader[validIndex]
             data  = _to_tensor(gpu,data)
             output = model(data)
@@ -114,7 +114,7 @@ def main(resume,saveDir,numberOfImages,index):
             metricsO = _eval_metrics(metrics,output, target)
             val_metrics_sum += metricsO
         
-        val_metrics_sum /= len(valid_data_loader)//10
+        val_metrics_sum /= len(valid_data_loader)
         print('Validation metrics')
         for i in range(len(metrics)):
             print(metrics[i].__name__ + ': '+str(val_metrics_sum[i]))

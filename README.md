@@ -50,7 +50,9 @@ Config files are in `.json` format:
   {
     "name": "Mnist_LeNet",        // training session name
     "cuda": true,                 // use cuda
+    "override": false,            // if resuming, whether to replace the previous config with this one
     "data_loader": {
+        "data_set_name":          // the name of the dataset
         "data_dir": "datasets/",  // dataset path
         "batch_size": 32,         // batch size
         "shuffle": true           // shuffle data each time calling __iter__()
@@ -65,17 +67,19 @@ Config files are in `.json` format:
         "weight_decay": 0         // (optional) weight decay
     },
     "loss": "my_loss",            // loss
-    "metrics": [                  // metrics
+    "metrics": [                  // metrics, function names
       "my_metric",
       "my_metric2"
     ],
     "trainer": {
         "epochs": 1000,           // number of training epochs
         "save_dir": "saved/",     // checkpoints are saved in save_dir/name
-        "save_freq": 1,           // save checkpoints every save_freq epochs
+        "save_step": 5000,        // save checkpoints every save_step iterations
+        "val_step": 5000,         // run on validation set every val_step iterations
+        "log_step": 1000,         // print log statement every log_step iterations
         "verbosity": 2,           // 0: quiet, 1: per epoch, 2: full
         "monitor": "val_loss",    // monitor value for best model
-        "monitor_mode": "min"     // "min" if monitor value the lower the better, otherwise "max" 
+        "monitor_mode": "min"     // "min" if monitor value the lower the better, otherwise "max", "none" if you dont want to save best
     },
     "arch": "MnistModel",         // model architecture
     "model": {}                   // model configs
@@ -99,7 +103,7 @@ You can resume from a previously saved checkpoint by:
 
 The checkpoints will be saved in `save_dir/name`.
 
-The config file is saved in the same folder.
+The config file is saved in the same folder. (as a reference only, the config is loaded from the checkpoint)
 
 **Note**: checkpoints contain:
   ```python

@@ -81,7 +81,7 @@ class Trainer(BaseTrainer):
 
     def _minor_log(self, log):
         ls=''
-        for key,val in log.items:
+        for key,val in log.items():
             ls += key
             if type(val) is float:
                 ls +=': {:.6f}, '.format(val)

@@ -61,8 +61,9 @@ class BaseTrainer:
             sumLog['avg_'+metric.__name__]=0
 
         for iteration in range(self.start_iteration, self.iterations + 1):
+            print('iteration: '+str(iteration), end='\r')
             result = self._train_iteration(iteration)
-            log = {'iteration': self.iterations}
+            log = {'iteration': iteration}
 
             for key, value in result.items():
                 if key == 'metrics':
@@ -73,6 +74,7 @@ class BaseTrainer:
                     log[key] = value
 
             if iteration%self.log_step==0:
+                print()#clear inplace text
                 self._minor_log(log)
                 if iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
                     for metric in self.metrics:
@@ -91,6 +93,8 @@ class BaseTrainer:
                         log[key] = value
 
                 if self.train_logger is not None:
+                    if iteration%self.log_step!=0:
+                        print()#clear inplace text
                     self.train_logger.add_entry(log)
                     if self.verbosity >= 1:
                         for key, value in log.items():
@@ -101,9 +105,14 @@ class BaseTrainer:
                     self._save_checkpoint(iteration, log, save_best=True)
             if iteration % self.save_step == 0:
                 self._save_checkpoint(iteration, log)
+                if iteration%self.log_step!=0:
+                    print()#clear inplace text
+                self.logger.info('Checkpoint saved for iteration '+str(iteration))
             if self.lr_scheduler and iteration % self.lr_scheduler_step == 0:
                 self.lr_scheduler.step(iteration)
                 lr = self.lr_scheduler.get_lr()[0]
+                if iteration%self.log_step!=0:
+                    print()#clear inplace text
                 self.logger.info('New Learning Rate: {:.6f}'.format(lr))
 
     def _train_iteration(self, iteration):
@@ -159,5 +168,6 @@ class BaseTrainer:
                     if isinstance(v, torch.Tensor):
                         state[k] = v.cuda(self.gpu)
         self.train_logger = checkpoint['logger']
-        self.config = checkpoint['config']
+        if 'override' not in self.config or not self.config['override']:
+            self.config = checkpoint['config']
         self.logger.info("Checkpoint '{}' (iteration {}) loaded".format(resume_path, self.start_iteration))

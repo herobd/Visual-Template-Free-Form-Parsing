@@ -49,12 +49,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     config = None
-    if args.resume is not None:
+    if args.config is not None:
+        config = json.load(open(args.config))
+    if args.resume is not None and (config is None or'override' not in config or not config['override']:
         if args.config is not None:
             logger.warning('Warning: --config overridden by --resume')
         config = torch.load(args.resume)['config']
     elif args.config is not None:
-        config = json.load(open(args.config))
         path = os.path.join(config['trainer']['save_dir'], config['name'])
         assert not os.path.exists(path), "Path {} already exists!".format(path)
     assert config is not None

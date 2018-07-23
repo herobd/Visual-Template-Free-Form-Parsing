@@ -1,6 +1,7 @@
 import os
 import math
 import json
+import timeit
 import logging
 import torch
 import torch.optim as optim
@@ -65,21 +66,29 @@ class BaseTrainer:
         for iteration in range(self.start_iteration, self.iterations + 1):
             print('iteration: '+str(iteration), end='\r')
 
-            t = time.process_time()
+            t = timeit.default_timer()
             result = self._train_iteration(iteration)
-            elapsed_time = time.process_time() - t
+            elapsed_time = timeit.default_timer() - t
             sumLog['sec_per_iter'] += elapsed_time
+            #print('iter: '+str(elapsed_time))
 
-            log = {'iteration': iteration}
 
             for key, value in result.items():
                 if key == 'metrics':
                     for i, metric in enumerate(self.metrics):
-                        log[metric.__name__] = result['metrics'][i]
                         sumLog['avg_'+metric.__name__] += result['metrics'][i]
                 else:
-                    log[key] = value
                     sumLog['avg_'+key] += value
+
+            if iteration%self.log_step==0 or iteration%self.val_step==0 or iteration % self.save_step == 0:
+                log = {'iteration': iteration}
+
+                for key, value in result.items():
+                    if key == 'metrics':
+                        for i, metric in enumerate(self.metrics):
+                            log[metric.__name__] = result['metrics'][i]
+                    else:
+                        log[key] = value
 
             if iteration%self.log_step==0:
                 print()#clear inplace text
@@ -123,6 +132,7 @@ class BaseTrainer:
                 if iteration%self.log_step!=0:
                     print()#clear inplace text
                 self.logger.info('New Learning Rate: {:.6f}'.format(lr))
+            
 
     def _train_iteration(self, iteration):
         """

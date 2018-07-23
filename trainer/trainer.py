@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from base import BaseTrainer
+import timeit
 
 
 class Trainer(BaseTrainer):
@@ -58,21 +59,36 @@ class Trainer(BaseTrainer):
         """
         self.model.train()
 
+        #tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
             data, target = self._to_tensor(*self.data_loader_iter.next())
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
             data, target = self._to_tensor(*self.data_loader_iter.next())
+        #toc=timeit.default_timer()
+        #print('data: '+str(toc-tic))
         
+        #tic=timeit.default_timer()
+
         self.optimizer.zero_grad()
         output = self.model(data)
         loss = self.loss(output, target)
         loss.backward()
         self.optimizer.step()
 
-        loss = loss.item()
+        #toc=timeit.default_timer()
+        #print('for/bac: '+str(toc-tic))
+
+        #tic=timeit.default_timer()
         metrics = self._eval_metrics(output, target)
+        #toc=timeit.default_timer()
+        #print('metric: '+str(toc-tic))
+
+        #tic=timeit.default_timer()
+        loss = loss.item()
+        #toc=timeit.default_timer()
+        #print('item: '+str(toc-tic))
 
 
         log = {

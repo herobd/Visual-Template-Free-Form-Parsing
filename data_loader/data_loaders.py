@@ -57,14 +57,15 @@ def getDataLoader(config,split):
         else:
             aug_param = None
         shuffle = config['data_loader']['shuffle']
+        numDataWorkers = config['data_loader']['num_workers']
         shuffleValid = config['validation']['shuffle']
         if data_set_name=='AI2D':
             dataset=AI2D(dirPath=data_dir, split=split, config=config)
             if split=='train':
-                validation=torch.utils.data.DataLoader(dataset.splitValidation(config), batch_size=batch_size, shuffle=shuffleValid)
+                validation=torch.utils.data.DataLoader(dataset.splitValidation(config), batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
             else:
                 validation=None
-            return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle), validation
+            return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers), validation
 
 
 

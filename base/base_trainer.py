@@ -5,6 +5,7 @@ import logging
 import torch
 import torch.optim as optim
 from utils.util import ensure_dir
+from collections import defaultdict
 
 
 class BaseTrainer:
@@ -56,13 +57,19 @@ class BaseTrainer:
         """
         Full training logic
         """
-        sumLog={}
-        for metric in self.metrics:
-            sumLog['avg_'+metric.__name__]=0
+        sumLog=defaultdict(lambda:0)
+        sumTime=0
+        #for metric in self.metrics:
+        #    sumLog['avg_'+metric.__name__]=0
 
         for iteration in range(self.start_iteration, self.iterations + 1):
             print('iteration: '+str(iteration), end='\r')
+
+            t = time.process_time()
             result = self._train_iteration(iteration)
+            elapsed_time = time.process_time() - t
+            sumLog['sec_per_iter'] += elapsed_time
+
             log = {'iteration': iteration}
 
             for key, value in result.items():
@@ -72,25 +79,27 @@ class BaseTrainer:
                         sumLog['avg_'+metric.__name__] += result['metrics'][i]
                 else:
                     log[key] = value
+                    sumLog['avg_'+key] += value
 
             if iteration%self.log_step==0:
                 print()#clear inplace text
                 self._minor_log(log)
                 if iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
-                    for metric in self.metrics:
-                        sumLog['avg_'+metric.__name__] /= self.log_step
+                    for key in sumLog:
+                        sumLog[key] /= self.log_step
                     self._minor_log(sumLog)
-                for metric in self.metrics:
-                    sumLog['avg_'+metric.__name__] =0
+                for key in sumLog:
+                    sumLog[key] =0
 
             if iteration%self.val_step==0:
                 val_result = self._valid_epoch()
                 for key, value in val_result.items():
                     if 'metrics' in key:
                         for i, metric in enumerate(self.metrics):
-                            log['val_' + metric.__name__] = result[key][i]
+                            log['val_' + metric.__name__] = val_result[key][i]
                     else:
                         log[key] = value
+                        #sumLog['avg_'+key] += value
 
                 if self.train_logger is not None:
                     if iteration%self.log_step!=0:

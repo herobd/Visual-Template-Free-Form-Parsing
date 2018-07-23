@@ -33,7 +33,7 @@ def _eval_metrics_ind(metrics, output, target):
             acc_metrics[ind,i] += metric(output[ind:ind+1], target[ind:ind+1])
     return acc_metrics
 
-def main(resume,saveDir,numberOfImages,index):
+def main(resume,saveDir,numberOfImages,index,gpu=None):
     np.random.seed(1234)
     checkpoint = torch.load(resume)
     config = checkpoint['config']
@@ -47,11 +47,8 @@ def main(resume,saveDir,numberOfImages,index):
     model.eval()
     model.summary()
 
-    if config['cuda']:
-        gpu = config['gpu']
+    if gpu is not None:
         model = model.to(gpu)
-    else:
-        gpu=None
 
     metrics = [eval(metric) for metric in config['metrics']]
 
@@ -104,20 +101,20 @@ def main(resume,saveDir,numberOfImages,index):
 
                     val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
-
-        for vi in range(curVI,len(valid_data_loader)):
-            data, target = valid_iter.next() #valid_data_loader[validIndex]
-            data  = _to_tensor(gpu,data)
-            output = model(data)
-            output = output.cpu().data.numpy()
-            target = target.data.numpy()
-            metricsO = _eval_metrics(metrics,output, target)
-            val_metrics_sum += metricsO
-        
-        val_metrics_sum /= len(valid_data_loader)
-        print('Validation metrics')
-        for i in range(len(metrics)):
-            print(metrics[i].__name__ + ': '+str(val_metrics_sum[i]))
+        if gpu is not None:
+            for vi in range(curVI,len(valid_data_loader)):
+                data, target = valid_iter.next() #valid_data_loader[validIndex]
+                data  = _to_tensor(gpu,data)
+                output = model(data)
+                output = output.cpu().data.numpy()
+                target = target.data.numpy()
+                metricsO = _eval_metrics(metrics,output, target)
+                val_metrics_sum += metricsO
+            
+            val_metrics_sum /= len(valid_data_loader)
+            print('Validation metrics')
+            for i in range(len(metrics)):
+                print(metrics[i].__name__ + ': '+str(val_metrics_sum[i]))
 
     else:
         batchIndex = index//batchSize
@@ -150,6 +147,8 @@ if __name__ == '__main__':
                         help='index on instance to process (default: None)')
     parser.add_argument('-n', '--number', default=100, type=int,
                         help='number of images to save out (from each train and valid) (default: 100)')
+    parser.add_argument('-g', '--gpu', default=None, type=int,
+                        help='gpu number (default: cpu only)')
 
     args = parser.parse_args()
 
@@ -158,4 +157,4 @@ if __name__ == '__main__':
         print('Must provide checkpoint (with -c) and save dir (with -d)')
         exit()
 
-    main(args.checkpoint, args.savedir, args.number, args.index)
+    main(args.checkpoint, args.savedir, args.number, args.index, gpu=args.gpu)

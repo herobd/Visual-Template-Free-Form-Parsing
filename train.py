@@ -51,7 +51,7 @@ if __name__ == '__main__':
     config = None
     if args.config is not None:
         config = json.load(open(args.config))
-    if args.resume is not None and (config is None or'override' not in config or not config['override']:
+    if args.resume is not None and (config is None or 'override' not in config or not config['override']):
         if args.config is not None:
             logger.warning('Warning: --config overridden by --resume')
         config = torch.load(args.resume)['config']

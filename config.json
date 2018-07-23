@@ -32,9 +32,9 @@
     "trainer": {
         "iterations": 1000000,
         "save_dir": "saved/",
-        "val_step": 10000,
-        "save_step": 30000,
-        "log_step": 1000,
+        "val_step": 5000,
+        "save_step": 10000,
+        "log_step": 250,
         "verbosity": 2,
         "monitor": "val_meanIOU",
         "monitor_mode": "none"

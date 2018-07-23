@@ -59,7 +59,11 @@ class Trainer(BaseTrainer):
         self.model.train()
 
         batch_idx = (iteration-1) % len(self.data_loader)
-        data, target = self._to_tensor(*self.data_loader_iter.next())
+        try:
+            data, target = self._to_tensor(*self.data_loader_iter.next())
+        except StopIteration:
+            self.data_loader_iter = iter(self.data_loader)
+            data, target = self._to_tensor(*self.data_loader_iter.next())
         
         self.optimizer.zero_grad()
         output = self.model(data)

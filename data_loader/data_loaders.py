@@ -57,7 +57,10 @@ def getDataLoader(config,split):
         else:
             aug_param = None
         shuffle = config['data_loader']['shuffle']
-        numDataWorkers = config['data_loader']['num_workers']
+        if 'num_workers' in config['data_loader']:
+            numDataWorkers = config['data_loader']['num_workers']
+        else:
+            numDataWorkers = 1
         shuffleValid = config['validation']['shuffle']
         if data_set_name=='AI2D':
             dataset=AI2D(dirPath=data_dir, split=split, config=config)

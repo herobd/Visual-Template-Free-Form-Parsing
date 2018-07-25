@@ -2,11 +2,13 @@
     "name": "AI2D_UNet_wn",
     "cuda": true,
     "gpu": 0,
+    "override": true,
     "data_loader": {
         "data_set_name": "AI2D",
         "data_dir": "/home/ubuntu/brian/data/ai2d",
         "batch_size": 16,
         "shuffle": true,
+        "num_workers": 2,
         "patch_size": 300,
         "center_jitter": 0.1,
         "size_jitter": 0.2
@@ -16,11 +18,8 @@
         "shuffle": true
     },
 
-    "lr_scheduler_type": "ExponentialLR",
-    "lr_scheduler_step": 100000,
-    "lr_scheduler": {
-            "gamma": 0.8685113737513527
-    },
+    
+    "lr_scheduler_type": "none",
  
     "optimizer_type": "Adam",
     "optimizer": {

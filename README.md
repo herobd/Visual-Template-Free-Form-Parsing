@@ -55,7 +55,8 @@ Config files are in `.json` format:
         "data_set_name":          // the name of the dataset
         "data_dir": "datasets/",  // dataset path
         "batch_size": 32,         // batch size
-        "shuffle": true           // shuffle data each time calling __iter__()
+        "shuffle": true,          // shuffle data each time calling __iter__()
+        "num_workers": 2          // number of workers loading data (0 means on main thread, which is probably bad)
     },
     "validation": {
         "validation_split": 0.1,  // validation data ratio

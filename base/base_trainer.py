@@ -161,8 +161,8 @@ class BaseTrainer:
             'monitor_best': self.monitor_best,
             'config': self.config
         }
-        filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}-loss-{:.4f}.pth.tar'
-                                .format(iteration, log['loss']))
+        filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
+                                .format(iteration))
         torch.save(state, filename)
         if save_best:
             os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))

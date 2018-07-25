@@ -1,4 +1,6 @@
 import os
+import sys
+import signal
 import json
 import logging
 import argparse
@@ -27,12 +29,19 @@ def main(config, resume):
     loss = eval(config['loss'])
     metrics = [eval(metric) for metric in config['metrics']]
 
+
     trainer = Trainer(model, loss, metrics,
                       resume=resume,
                       config=config,
                       data_loader=data_loader,
                       valid_data_loader=valid_data_loader,
                       train_logger=train_logger)
+
+    def handleSIGINT(sig, frame):
+        trainer.save()
+        sys.exit(0)
+    signal.signal(signal.SIGINT, handleSIGINT)
+
     print("Begin training")
     trainer.train()
 

@@ -33,7 +33,7 @@
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 10000,
-        "log_step": 250,
+        "log_step": 500,
         "verbosity": 2,
         "monitor": "val_meanIOU",
         "monitor_mode": "none"

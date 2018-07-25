@@ -64,11 +64,11 @@ class BaseTrainer:
         #for metric in self.metrics:
         #    sumLog['avg_'+metric.__name__]=0
 
-        for iteration in range(self.start_iteration, self.iterations + 1):
-            print('iteration: '+str(iteration), end='\r')
+        for self.iteration in range(self.start_iteration, self.iterations + 1):
+            print('iteration: '+str(self.iteration), end='\r')
 
             t = timeit.default_timer()
-            result = self._train_iteration(iteration)
+            result = self._train_iteration(self.iteration)
             elapsed_time = timeit.default_timer() - t
             sumLog['sec_per_iter'] += elapsed_time
             #print('iter: '+str(elapsed_time))
@@ -81,8 +81,8 @@ class BaseTrainer:
                 else:
                     sumLog['avg_'+key] += value
 
-            if iteration%self.log_step==0 or iteration%self.val_step==0 or iteration % self.save_step == 0:
-                log = {'iteration': iteration}
+            if self.iteration%self.log_step==0 or self.iteration%self.val_step==0 or self.iteration % self.save_step == 0:
+                log = {'iteration': self.iteration}
 
                 for key, value in result.items():
                     if key == 'metrics':
@@ -91,17 +91,20 @@ class BaseTrainer:
                     else:
                         log[key] = value
 
-            if iteration%self.log_step==0:
+            if self.iteration%self.log_step==0:
                 print()#clear inplace text
-                self._minor_log(log)
-                if iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
+                if self.iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
                     for key in sumLog:
                         sumLog[key] /= self.log_step
-                    self._minor_log(sumLog)
+                    #self._minor_log(sumLog)
+                    log = {**log, **sumLog}
+                self._minor_log(log)
                 for key in sumLog:
                     sumLog[key] =0
+                if self.iteration%self.val_step!=0: #we'll do it later if we have a validation pass
+                    self.train_logger.add_entry(log)
 
-            if iteration%self.val_step==0:
+            if self.iteration%self.val_step==0:
                 val_result = self._valid_epoch()
                 for key, value in val_result.items():
                     if 'metrics' in key:
@@ -112,7 +115,7 @@ class BaseTrainer:
                         #sumLog['avg_'+key] += value
 
                 if self.train_logger is not None:
-                    if iteration%self.log_step!=0:
+                    if self.iteration%self.log_step!=0:
                         print()#clear inplace text
                     self.train_logger.add_entry(log)
                     if self.verbosity >= 1:
@@ -121,16 +124,16 @@ class BaseTrainer:
                 if (self.monitor_mode == 'min' and self.monitor in log and log[self.monitor] < self.monitor_best)\
                         or (self.monitor_mode == 'max' and log[self.monitor] > self.monitor_best):
                     self.monitor_best = log[self.monitor]
-                    self._save_checkpoint(iteration, log, save_best=True)
-            if iteration % self.save_step == 0:
-                self._save_checkpoint(iteration, log)
-                if iteration%self.log_step!=0:
+                    self._save_checkpoint(self.iteration, log, save_best=True)
+            if self.iteration % self.save_step == 0:
+                self._save_checkpoint(self.iteration, log)
+                if self.iteration%self.log_step!=0:
                     print()#clear inplace text
-                self.logger.info('Checkpoint saved for iteration '+str(iteration))
-            if self.lr_scheduler and iteration % self.lr_scheduler_step == 0:
-                self.lr_scheduler.step(iteration)
+                self.logger.info('Checkpoint saved for iteration '+str(self.iteration))
+            if self.lr_scheduler and self.iteration % self.lr_scheduler_step == 0:
+                self.lr_scheduler.step(self.iteration)
                 lr = self.lr_scheduler.get_lr()[0]
-                if iteration%self.log_step!=0:
+                if self.iteration%self.log_step!=0:
                     print()#clear inplace text
                 self.logger.info('New Learning Rate: {:.6f}'.format(lr))
             
@@ -142,6 +145,9 @@ class BaseTrainer:
         :param iteration: Current iteration number
         """
         raise NotImplementedError
+
+    def save(self):
+        self._save_checkpoint(self.iteration, None)
 
     def _save_checkpoint(self, iteration, log, save_best=False):
         """

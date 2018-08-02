@@ -62,6 +62,7 @@ def getDataLoader(config,split):
         else:
             numDataWorkers = 1
         shuffleValid = config['validation']['shuffle']
+
         if data_set_name=='AI2D':
             dataset=AI2D(dirPath=data_dir, split=split, config=config)
             if split=='train':
@@ -69,6 +70,17 @@ def getDataLoader(config,split):
             else:
                 validation=None
             return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers), validation
+        elif data_set_name=='Forms':
+            if split=='train':
+                trainData = Forms(dirPath=data_dir, split='train', config=config['data_loader'])
+                trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers, collate=forms.collate)
+                validData = Forms(dirPath=data_dir, split='valid', config=config['validation'])
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
+                return trainLoader, validLoader
+            elif split=='test':
+                testData = Forms(dirPath=data_dir, split='test', config=config)
+                testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers)
+                return testLoader, None
 
 
 

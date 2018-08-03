@@ -93,7 +93,7 @@ def getStartEndGT(bbs,s):
         end_gt[:,j,3] = ebY*s
     return start_gt, end_gt
 
-class Forms(torch.utils.data.Dataset):
+class FormsDetect(torch.utils.data.Dataset):
     """
     Class for reading forms dataset and creating starting and ending gt
     """
@@ -107,7 +107,7 @@ class Forms(torch.utils.data.Dataset):
         self.cropToPage=config['crop_to_page']
         #patchSize=config['patch_size']
         if 'crop_params' in config:
-            self.transform = CropTransform[config['crop_params']
+            self.transform = CropTransform(config['crop_params'])
         else:
             self.transform = None
 

@@ -4,11 +4,11 @@
     "gpu": 0,
     "override": true,
     "data_loader": {
-        "data_set_name": "AI2D",
-        "data_dir": "/home/ubuntu/brian/data/ai2d",
+        "data_set_name": "FormsDetect",
+        "data_dir": "/home/ubuntu/brian/data/forms",
         "batch_size": 16,
         "shuffle": true,
-        "num_workers": 2,
+        "num_workers": 3,
         "crop_to_page":false,
         "crop_params": {
             "prob_label": 0.75
@@ -20,6 +20,7 @@
     "validation": {
         "shuffle": false,
         "crop_to_page":false,
+        "rescale_range": [512,512]
     },
 
     
@@ -30,8 +31,8 @@
         "lr": 0.001,
         "weight_decay": 0
     },
-    "loss": "sigmoid_BCE_loss",
-    "metrics": ["meanIOU"],
+    "loss": "detect_alignment_loss",
+    "metrics": [],
     "trainer": {
         "iterations": 1000000,
         "save_dir": "saved/",
@@ -39,13 +40,12 @@
         "save_step": 10000,
         "log_step": 500,
         "verbosity": 2,
-        "monitor": "val_meanIOU",
+        "monitor": "loss",
         "monitor_mode": "none"
     },
-    "arch": "UNet", 
+    "arch": "SOL_EOL_Finder", 
     "model": {
-        "skip_last_sigmoid": true,
-        "n_channels": 4,
+        "number_of_object_types": 4,
         "norm_type": "weightNorm"
     }
 }

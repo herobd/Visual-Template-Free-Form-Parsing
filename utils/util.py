@@ -6,6 +6,46 @@ def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
+def pt_xyrs_2_xyxy(state):
+    out = Variable(torch.ones(state.data.shape[0], 5).type(state.data.type()))
+
+    x = state[:,:,1:2]
+    y = state[:,:,2:3]
+    r = state[:,:,3:4]
+    s = state[:,:,4:5]
+
+    x0 = -torch.sin(r) * s + x
+    y0 = -torch.cos(r) * s + y
+    x1 =  torch.sin(r) * s + x
+    y1 =  torch.cos(r) * s + y
+
+    return torch.cat([
+        state[:,:,0:1],
+        x0, y0, x1, y1
+    ], 2)
+def pt_xyxy_2_xyrs(state):
+    out = Variable(torch.ones(state.data.shape[0], 5).type(state.data.type()))
+
+    x0 = state[:,0:1]
+    y0 = state[:,1:2]
+    x1 = state[:,2:3]
+    y1 = state[:,3:4]
+
+    dx = x0-x1
+    dy = y0-y1
+
+    d = torch.sqrt(dx**2.0 + dy**2.0)/2.0
+
+    mx = (x0+x1)/2.0
+    my = (y0+y1)/2.0
+
+    theta = -torch.atan2(dx, -dy)
+
+    return torch.cat([
+        mx, my, theta, d,
+        state[:,4:5]
+    ], 1)
 #-------------------------------------------------------------------------------
 # Name:        get_image_size
 # Purpose:     extract image dimensions given a file path using just

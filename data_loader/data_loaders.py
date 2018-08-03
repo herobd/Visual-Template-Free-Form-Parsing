@@ -2,6 +2,7 @@ import torch
 import torch.utils.data
 import numpy as np
 from datasets.ai2d import AI2D
+from datasets.forms import Forms
 from torchvision import datasets, transforms
 from base import BaseDataLoader
 

@@ -7,7 +7,8 @@ import json
 #import skimage.transform as sktransform
 import os
 import math
-from utils.util import get_image_size
+from utils.crop_transform import CropTransform
+
 import cv2
 
 def collate(batch):
@@ -50,7 +51,7 @@ def collate(batch):
         "label_sizes": label_sizes
     }
 
-def getStartEndGT(bbs):
+def getStartEndGT(bbs,s):
     start_gt = np.zeros((1,len(bbs), 4), dtype=np.float32)
     end_gt = np.zeros((1,len(bbs), 4), dtype=np.float32)
     for bb in annotations['textBBs']:
@@ -100,22 +101,20 @@ class Forms(torch.utils.data.Dataset):
 
     def __init__(self, dirPath=None, split=None, config=None, transform=None, images=None):
         #if 'augmentation_params' in config['data_loader']:
-        #    self.augmentation_params=config['data_loader']['augmentation_params']
+        #    self.augmentation_params=config['augmentation_params']
         #else:
         #    self.augmentation_params=None
-        self.cropToPage=config['data_loader']['crop_to_page']
-        #patchSize=config['data_loader']['patch_size']
-        if 'crop_params' in config['data_loader']:
-            self.transform = CropTransform[config['data_loader']['crop_params']
+        self.cropToPage=config['crop_to_page']
+        #patchSize=config['patch_size']
+        if 'crop_params' in config:
+            self.transform = CropTransform[config['crop_params']
         else:
             self.transform = None
 
-        self.rescale_range = config['data_loader']['rescale_range']
+        self.rescale_range = config['rescale_range']
         if images is not None:
             self.images=images
         else:
-            centerJitterFactor=config['data_loader']['center_jitter']
-            sizeJitterFactor=config['data_loader']['size_jitter']
             self.cropResize = self.__cropResizeF(patchSize,centerJitterFactor,sizeJitterFactor)
             with open(os.path.join(dirPath,'train_valid_test_split.json')) as f:
                 #if split=='valid' or split=='validation':
@@ -163,8 +162,8 @@ class Forms(torch.utils.data.Dataset):
         target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
         org_img = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
         
-        text_start_gt, text_end_gt = getStartEndGT(annotations['textBBs'])
-        field_start_gt, field_end_gt = getStartEndGT(annotations['fieldBBs'])
+        text_start_gt, text_end_gt = getStartEndGT(annotations['textBBs'],s)
+        field_start_gt, field_end_gt = getStartEndGT(annotations['fieldBBs'],s)
 
         if self.transform is not None:
             out = self.transform({

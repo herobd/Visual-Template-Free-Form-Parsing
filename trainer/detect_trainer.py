@@ -41,7 +41,10 @@ class DetectTrainer(BaseTrainer):
             data = data.to(self.gpu)
             new_targets={}
             for name, target in targets.items():
-                new_targets[name] = target.to(self.gpu)
+                if target is not None:
+                    new_targets[name] = target.to(self.gpu)
+                else:
+                    new_targets[name] = None
             return data, new_targets, target_sizes
         return data, targets, target_sizes
 

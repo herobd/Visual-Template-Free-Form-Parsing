@@ -50,7 +50,10 @@ def collate(batch):
             pos_r = np.random.randint(0,diff_h+1)
             diff_w = max_w-img.size(2)
             pos_c = np.random.randint(0,diff_w+1)
-            resized[:,pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
+            if len(img.size())==3:
+                resized[:,pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
+            else:
+                resized[pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
             resized_imgs.append(resized)
         else:
             resized_imgs.append(img)

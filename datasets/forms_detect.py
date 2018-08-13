@@ -16,6 +16,7 @@ import cv2
 
 def collate(batch):
 
+    ##tic=timeit.default_timer()
     batch_size = len(batch)
     imgs = []
     max_h=0
@@ -40,17 +41,18 @@ def collate(batch):
 
     if len(imgs) == 0:
         return None
+    ##print(' col channels: {}'.format(len(imgs[0].size())))
     batch_size = len(imgs)
 
     resized_imgs = []
     for img in imgs:
         if img.size(1)<max_h or img.size(2)<max_w:
-            resized = torch.zeros([max_h,max_w]).type(img.type())
+            resized = torch.zeros([1,image.size(0),max_h,max_w]).type(img.type())
             diff_h = max_h-img.size(1)
             pos_r = np.random.randint(0,diff_h+1)
             diff_w = max_w-img.size(2)
             pos_c = np.random.randint(0,diff_w+1)
-            resized[:,pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
+            resized[:,:,pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
             resized_imgs.append(resized)
         else:
             resized_imgs.append(img)
@@ -66,13 +68,14 @@ def collate(batch):
             if label_sizes[name][i] == 0:
                 continue
             #if gt is None:
-            #    print('n {}, {}: {}    None'.format(i, name, label_sizes[name][i]))
+            #    ##print('n {}, {}: {}    None'.format(i, name, label_sizes[name][i]))
             #else:
-            #    print('n {}, {}: {}    {}'.format(i, name, label_sizes[name][i],gt.size()))
+            #    ##print('n {}, {}: {}    {}'.format(i, name, label_sizes[name][i],gt.size()))
             labels[name][i, :label_sizes[name][i]] = gt
 
     imgs = torch.cat(resized_imgs)
 
+    ##print('collate: '+str(timeit.default_timer()-tic))
     return {
         'sol_eol_gt': labels,
         'img': imgs,
@@ -97,8 +100,15 @@ class FormsDetect(torch.utils.data.Dataset):
             self.transform = CropTransform(config['crop_params'])
         else:
             self.transform = None
-
         self.rescale_range = config['rescale_range']
+        if 'cache_resized_images' in config:
+            self.cache_resized = config['cache_resized_images']
+            self.cache_path = os.path.join(dirPath,'cache_'+str(self.rescale_range[1]))
+            if self.cache_resized and not os.path.exists(self.cache_path):
+                os.mkdir(self.cache_path)
+        else:
+            self.cache_resized = False
+
         if images is not None:
             self.images=images
         else:
@@ -111,11 +121,22 @@ class FormsDetect(torch.utils.data.Dataset):
             self.images=[]
             for groupName, imageNames in groupsToUse.items():
                 for imageName in imageNames:
-                    path = os.path.join(dirPath,'groups',groupName,imageName)
-                    jsonPath = path[:path.rfind('.')]+'.json'
+                    org_path = os.path.join(dirPath,'groups',groupName,imageName)
+                    if self.cache_resized:
+                        path = os.path.join(self.cache_path,imageName)
+                    else:
+                        path = org_path
+                    jsonPath = org_path[:org_path.rfind('.')]+'.json'
                     #print(jsonPath)
                     if os.path.exists(jsonPath):
                         self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath})
+                        if self.cache_resized and not os.path.exists(path):
+                            org_img = cv2.imread(org_path)
+                            target_dim1 = self.rescale_range[1]
+                            target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
+                            resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
+                            cv2.imwrite(path,resized)
+                            
                         # with open(path+'.json') as f:
                         #    annotations = json.loads(f.read())
                         #    imH = annotations['height']
@@ -139,6 +160,7 @@ class FormsDetect(torch.utils.data.Dataset):
         return len(self.images)
 
     def __getitem__(self,index):
+        ##ticFull=timeit.default_timer()
         imagePath = self.images[index]['imagePath']
         annotationPath = self.images[index]['annotationPath']
         with open(annotationPath) as annFile:
@@ -146,7 +168,8 @@ class FormsDetect(torch.utils.data.Dataset):
 
         ##tic=timeit.default_timer()
         org_img = cv2.imread(imagePath)#/255.0
-        ##print('imread: '+str(timeit.default_timer()-tic))
+        ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,org_img.shape[0],org_img.shape[1]))
+        ##print('       channels : {}'.format(len(org_img.shape)))
         if self.cropToPage:
             pageCorners = annotations['page_corners']
             xl = max(0,int(min(pageCorners['tl'],pageCorners['bl'])))
@@ -160,7 +183,7 @@ class FormsDetect(torch.utils.data.Dataset):
         target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
         ##tic=timeit.default_timer()
         org_img = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
-        ##print('resize: '+str(timeit.default_timer()-tic))
+        ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,org_img.shape[0],org_img.shape[1]))
         
         ##tic=timeit.default_timer()
         text_start_gt, text_end_gt = self.getStartEndGT(annotations['textBBs'],s)
@@ -186,7 +209,7 @@ class FormsDetect(torch.utils.data.Dataset):
 
             org_img = augmentation.apply_random_color_rotation(org_img)
             org_img = augmentation.apply_tensmeyer_brightness(org_img)
-        ##print('transform: '+str(timeit.default_timer()-tic))
+        ##print('transform: {}  [{}, {}]'.format(timeit.default_timer()-tic,org_img.shape[0],org_img.shape[1]))
 
 
         img = org_img.transpose([2,0,1])[None,...] #from [row,col,color] to [batch,color,row,col]
@@ -200,6 +223,7 @@ class FormsDetect(torch.utils.data.Dataset):
         field_start_gt = None if field_start_gt.shape[1] == 0 else torch.from_numpy(field_start_gt)
         field_end_gt = None if field_end_gt.shape[1] == 0 else torch.from_numpy(field_end_gt)
 
+        ##print('__getitem__: '+str(timeit.default_timer()-ticFull))
         return {
             "img": img,
             "sol_eol_gt": {
@@ -258,8 +282,8 @@ class FormsDetect(torch.utils.data.Dataset):
             end_gt[:,j,2] = ebX*s
             end_gt[:,j,3] = ebY*s
             #if j<10:
-            #    print('f {},{}   {},{}'.format(tX,tY,bX,bY))
-            #    print('s {},{}   {},{}'.format(start_gt[:,j,0],start_gt[:,j,1],start_gt[:,j,2],start_gt[:,j,3]))
+            #    ##print('f {},{}   {},{}'.format(tX,tY,bX,bY))
+            #    ##print('s {},{}   {},{}'.format(start_gt[:,j,0],start_gt[:,j,1],start_gt[:,j,2],start_gt[:,j,3]))
             j+=1
         return start_gt, end_gt
 

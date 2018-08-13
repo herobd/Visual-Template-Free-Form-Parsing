@@ -194,7 +194,7 @@ class FormsDetect(torch.utils.data.Dataset):
         field_start_gt, field_end_gt = self.getStartEndGT(annotations['fieldBBs'],s,fields=True)
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
-        ##tic=timeit.default_timer()
+        ##ticTr=timeit.default_timer()
         if self.transform is not None:
             out = self.transform({
                 "img": org_img,
@@ -211,9 +211,11 @@ class FormsDetect(torch.utils.data.Dataset):
             field_start_gt = out['sol_eol_gt']['field_start_gt']
             field_end_gt = out['sol_eol_gt']['field_end_gt']
 
+            ##tic=timeit.default_timer()
             org_img = augmentation.apply_random_color_rotation(org_img)
             org_img = augmentation.apply_tensmeyer_brightness(org_img)
-        ##print('transform: {}  [{}, {}]'.format(timeit.default_timer()-tic,org_img.shape[0],org_img.shape[1]))
+            ##print('augmentation: {}'.format(timeit.default_timer()-tic))
+        ##print('transform: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
 
 
         img = org_img.transpose([2,0,1])[None,...] #from [row,col,color] to [batch,color,row,col]

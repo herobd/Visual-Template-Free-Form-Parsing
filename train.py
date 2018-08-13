@@ -7,10 +7,11 @@ import argparse
 import torch
 from model.model import *
 from model.unet import UNet
+from model.sol_eol_finder import SOL_EOL_Finder
 from model.loss import *
 from model.metric import *
 from data_loader import getDataLoader
-from trainer import Trainer
+from trainer import *
 from logger import Logger
 
 logging.basicConfig(level=logging.INFO, format='')
@@ -29,8 +30,11 @@ def main(config, resume):
     loss = eval(config['loss'])
     metrics = [eval(metric) for metric in config['metrics']]
 
-
-    trainer = Trainer(model, loss, metrics,
+    if 'class' in config['trainer']:
+        trainerClass = eval(config['trainer']['class'])
+    else:
+        trainerClass = Trainer
+    trainer = trainerClass(model, loss, metrics,
                       resume=resume,
                       config=config,
                       data_loader=data_loader,

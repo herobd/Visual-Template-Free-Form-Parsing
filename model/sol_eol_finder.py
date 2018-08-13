@@ -34,16 +34,19 @@ class SOL_EOL_Finder(BaseModel):
 
         allPreds=[]
         for i in range(self.predCount):
+            offset = i*5
+            #print(offset)
+            #print(y.size())
             predictions = torch.cat([
-                torch.sigmoid(y[:,0+i:1+i,:,:]),    #confidence
-                y[:,1+i:2+i,:,:] + priors_1,        #x-center
-                y[:,2+i:3+i,:,:] + priors_0,        #y-center
-                y[:,3+i:4+i,:,:],                   #rotation (radians)
-                y[:,4+i:5+i,:,:]                    #scale (half-height?)
+                torch.sigmoid(y[:,0+offset:1+offset,:,:]),    #confidence
+                y[:,1+offset:2+offset,:,:] + priors_1,        #x-center
+                y[:,2+offset:3+offset,:,:] + priors_0,        #y-center
+                y[:,3+offset:4+offset,:,:],                   #rotation (radians)
+                y[:,4+offset:5+offset,:,:]                    #scale (half-height?)
             ], dim=1)
-
-            predictions = predictions.transpose(1,3).contiguous()
-            predictions = predictions.view(predictions.size(0),-1,5)
+            
+            predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
+            predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
             allPreds.append(predictions)
 
-        return allPreds
+        return allPreds     

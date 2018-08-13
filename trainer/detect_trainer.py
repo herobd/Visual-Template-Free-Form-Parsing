@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from base import BaseTrainer
 import timeit
+from utils import util
 
 
 class DetectTrainer(BaseTrainer):
@@ -14,8 +15,12 @@ class DetectTrainer(BaseTrainer):
     """
     def __init__(self, model, loss, metrics, resume, config,
                  data_loader, valid_data_loader=None, train_logger=None):
-        super(Trainer, self).__init__(model, loss, metrics, resume, config, train_logger)
+        super(DetectTrainer, self).__init__(model, loss, metrics, resume, config, train_logger)
         self.config = config
+        if 'loss_params' in config:
+            self.loss_params=config['loss_params']
+        else:
+            self.loss_params={}
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
         self.data_loader_iter = iter(data_loader)
@@ -27,24 +32,31 @@ class DetectTrainer(BaseTrainer):
     def _to_tensor(self, instance):
         data = instance['img']
         targets = instance['sol_eol_gt']
-        target_sizes instance['label_sizes']
+        target_sizes = instance['label_sizes']
         if type(data) is np.ndarray:
             data = torch.FloatTensor(data.astype(np.float32))
         elif type(data) is torch.Tensor:
             data = data.type(torch.FloatTensor)
         if self.with_cuda:
             data = data.to(self.gpu)
+            new_targets={}
             for name, target in targets.items():
-                target = target.to(self.gpu)
+                new_targets[name] = target.to(self.gpu)
+            return data, new_targets, target_sizes
         return data, targets, target_sizes
 
     def _eval_metrics(self, output, target):
-        acc_metrics = np.zeros(len(self.metrics))
-        output = output.cpu().data.numpy()
-        target = target.cpu().data.numpy()
-        for i, metric in enumerate(self.metrics):
-            acc_metrics[i] += metric(output, target)
-        return acc_metrics
+        if len(self.metrics)>0:
+            acc_metrics = np.zeros(len(self.metrics))
+            cpu_output=[]
+            for pred in output:
+                cpu_output.append(output.cpu().data.numpy())
+            target = target.cpu().data.numpy()
+            for i, metric in enumerate(self.metrics):
+                acc_metrics[i] += metric(cpu_output, target)
+            return acc_metrics
+        else:
+            return np.zeros(0)
 
     def _train_iteration(self, iteration):
         """
@@ -64,50 +76,58 @@ class DetectTrainer(BaseTrainer):
         """
         self.model.train()
 
-        #tic=timeit.default_timer()
+        ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
             data, targets, target_sizes = self._to_tensor(self.data_loader_iter.next())
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
             data, targets, target_sizes = self._to_tensor(self.data_loader_iter.next())
-        #toc=timeit.default_timer()
-        #print('data: '+str(toc-tic))
+        ##toc=timeit.default_timer()
+        ##print('data: '+str(toc-tic))
         
-        #tic=timeit.default_timer()
+        ##tic=timeit.default_timer()
 
         self.optimizer.zero_grad()
         output = self.model(data)
+
+        ##toc=timeit.default_timer()
+        ##print('for: '+str(toc-tic))
         #loss = self.loss(output, target)
         loss = 0
         index=0
-        metrics={}
+        losses={}
+        ##tic=timeit.default_timer()
         for name, target in targets.items():
-            predictions = utils.pt_xyrs_2_xyxy(output[index])
-            this_loss = self.loss(predictions,target,target_sizes[name])
+            predictions = util.pt_xyrs_2_xyxy(output[index])
+            this_loss = self.loss(predictions,target,target_sizes[name], **self.loss_params)
             loss+=this_loss
-            metrics[name+'_loss']=this_loss.item()
+            losses[name+'_loss']=this_loss.item()
             index+=1
+        ##toc=timeit.default_timer()
+        ##print('loss: '+str(toc-tic))
+        ##tic=timeit.default_timer()
         loss.backward()
         self.optimizer.step()
 
-        #toc=timeit.default_timer()
-        #print('for/bac: '+str(toc-tic))
+        ##toc=timeit.default_timer()
+        ##print('bac: '+str(toc-tic))
 
-        #tic=timeit.default_timer()
-        metrics = {**metrics, **self._eval_metrics(output, target)}
-        #toc=timeit.default_timer()
-        #print('metric: '+str(toc-tic))
+        ##tic=timeit.default_timer()
+        metrics = self._eval_metrics(output, target)
+        ##toc=timeit.default_timer()
+        ##print('metric: '+str(toc-tic))
 
-        #tic=timeit.default_timer()
+        ##tic=timeit.default_timer()
         loss = loss.item()
-        #toc=timeit.default_timer()
-        #print('item: '+str(toc-tic))
+        ##toc=timeit.default_timer()
+        ##print('item: '+str(toc-tic))
 
 
         log = {
             'loss': loss,
-            'metrics': metrics
+            'metrics': metrics,
+            **losses
         }
 
 
@@ -118,9 +138,9 @@ class DetectTrainer(BaseTrainer):
         for key,val in log.items():
             ls += key
             if type(val) is float:
-                ls +=': {:.6f}, '.format(val)
+                ls +=': {:.6f},\t'.format(val)
             else:
-                ls +=': {}, '.format(val)
+                ls +=': {},\t'.format(val)
         self.logger.info('Train '+ls)
 
     def _valid_epoch(self):

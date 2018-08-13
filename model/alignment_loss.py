@@ -33,7 +33,7 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
 
     C = C.data.cpu().numpy()
     X = np.zeros_like(C)
-    for b in xrange(C.shape[0]):
+    for b in range(C.shape[0]):
         l = label_sizes[b]
         if l == 0:
             continue

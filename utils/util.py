@@ -1,5 +1,6 @@
 import os
 import struct
+import torch
 
 
 def ensure_dir(path):
@@ -8,7 +9,7 @@ def ensure_dir(path):
 
 
 def pt_xyrs_2_xyxy(state):
-    out = Variable(torch.ones(state.data.shape[0], 5).type(state.data.type()))
+    out = torch.ones(state.data.shape[0], 5).type(state.data.type())
 
     x = state[:,:,1:2]
     y = state[:,:,2:3]
@@ -25,8 +26,8 @@ def pt_xyrs_2_xyxy(state):
         x0, y0, x1, y1
     ], 2)
 def pt_xyxy_2_xyrs(state):
-    out = Variable(torch.ones(state.data.shape[0], 5).type(state.data.type()))
-
+    out = torch.ones(state.data.shape[0], 5).type(state.data.type())
+            
     x0 = state[:,0:1]
     y0 = state[:,1:2]
     x1 = state[:,2:3]

@@ -70,7 +70,7 @@ def vgg11(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = VGG(make_layers(cfg['A']), **kwargs)
+    model = VGG(make_layers(cfg['A'], **kwargs))
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['vgg11']))
     return model
@@ -81,7 +81,7 @@ def vgg11_custOut(numOut,pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = VGG(make_layers(cfg["A'"]+[numOut]), **kwargs)
+    model = VGG(make_layers(cfg["A'"]+[numOut], **kwargs))
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['vgg11']))
     scale=1

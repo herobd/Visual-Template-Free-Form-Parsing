@@ -42,21 +42,28 @@ def generate_random_crop(img, gts, params):
             gt_match[name][...,1][gt[...,3] > dim0+cs] = 1
 
             gt_match[name] = 1-gt_match[name]
-            gt_match[name] = np.logical_and(gt_match[name][...,0], gt_match[name][...,1], gt_match[name][...,2], gt_match[name][...,3])
+            gt_match[name] = np.logical_and.reduce((gt_match[name][...,0], gt_match[name][...,1], gt_match[name][...,2], gt_match[name][...,3]))
             if gt_match[name].sum() > 0:
                 hit=True
         
         if contains_label is not None:
             if hit and contains_label or cnt > 100:
                 cropped_gt_img = perform_crop(img, crop)
-                return crop, cropped_gt_img, np.where(gt_match != 0)
+                for name in gts:
+                    gt_match[name] = np.where(gt_match[name]!=0)
+                return crop, cropped_gt_img, gt_match
 
             if not hit and not contains_label:
                 cropped_gt_img = perform_crop(img, crop)
-                return crop, cropped_gt_img, np.where(gt_match != 0)
+                for name in gts:
+                    gt_match[name] = np.where(gt_match[name]!=0)
+                return crop, cropped_gt_img, gt_match
+
         else:
             cropped_gt_img = perform_crop(img, crop)
-            return crop, cropped_gt_img, np.where(gt_match != 0)
+            for name in gts:
+                gt_match[name] = np.where(gt_match[name]!=0)
+            return crop, cropped_gt_img, gt_match
 
         cnt += 1
 
@@ -73,6 +80,7 @@ class CropTransform(object):
         #pad out to allow random samples to take space off of the page
         org_img = np.pad(org_img, self.pad_params, 'mean')
         
+        j=0
         #pad the points accordingly
         for name, gt in gts.items():
             gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
@@ -80,18 +88,29 @@ class CropTransform(object):
 
             gt[:,:,2] = gt[:,:,2] + self.pad_params[0][0]
             gt[:,:,3] = gt[:,:,3] + self.pad_params[1][0]
+            #if 'start' in name:
+                #for j in range(10):
+                #    print('p {},{}   {},{}'.format(gt[:,j,0],gt[:,j,1],gt[:,j,2],gt[:,j,3]))
 
-        crop_params, org_img, gt_match = generate_random_crop(org_img, gt, self.random_crop_params)
-
+        crop_params, org_img, gt_match = generate_random_crop(org_img, gts, self.random_crop_params)
+        #print(crop_params)
+        #print(gt_match)
+        
+        new_gts={}
         for name, gt in gts.items():
-            gt = gt[gt_match][None,...]
+            gt = gt[gt_match[name]][None,...] #add batch dim (?)
             gt[...,0] = gt[...,0] - crop_params['dim1'][0]
             gt[...,1] = gt[...,1] - crop_params['dim0'][0]
 
             gt[...,2] = gt[...,2] - crop_params['dim1'][0]
             gt[...,3] = gt[...,3] - crop_params['dim0'][0]
+            new_gts[name]=gt
+
+            #if 'start' in name:
+            #    for j in range(min(10,gt.size(1))):
+            #        print('a {},{}   {},{}'.format(gt[:,j,0],gt[:,j,1],gt[:,j,2],gt[:,j,3]))
 
         return {
             "img": org_img,
-            "sol_eol_gt": gts
+            "sol_eol_gt": new_gts
         }

@@ -8,13 +8,13 @@
         "data_dir": "/home/ubuntu/brian/data/forms",
         "batch_size": 16,
         "shuffle": true,
-        "num_workers": 3,
+        "num_workers": 5,
         "crop_to_page":false,
         "crop_params": {
-            "prob_label": 0.75
-            "crop_size":256
+            "crop_size":512
         },
-        "rescale_range": [384, 640]
+        "rescale_range": [450,800],
+        "no_blanks": true
 
     },
     "validation": {
@@ -32,13 +32,18 @@
         "weight_decay": 0
     },
     "loss": "detect_alignment_loss",
+    "loss_params": {
+        "alpha_alignment": 0.1,
+        "alpha_backprop": 0.1
+    },
     "metrics": [],
     "trainer": {
+        "class": "DetectTrainer",
         "iterations": 1000000,
         "save_dir": "saved/",
-        "val_step": 5000,
-        "save_step": 10000,
-        "log_step": 500,
+        "val_step": 2000,
+        "save_step": 5000,
+        "log_step": 100,
         "verbosity": 2,
         "monitor": "loss",
         "monitor_mode": "none"

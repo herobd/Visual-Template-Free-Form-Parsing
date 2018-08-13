@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import timeit
 
 def perform_crop(img, crop):
     cs = crop['crop_size']
@@ -28,6 +29,7 @@ def generate_random_crop(img, gts, params):
         gt_match={}
         hit=False
         for name, gt in gts.items():
+            ##tic=timeit.default_timer()
             gt_match[name] = np.zeros_like(gt)
             gt_match[name][...,0][gt[...,0] < dim1] = 1
             gt_match[name][...,0][gt[...,0] > dim1+cs] = 1
@@ -45,6 +47,7 @@ def generate_random_crop(img, gts, params):
             gt_match[name] = np.logical_and.reduce((gt_match[name][...,0], gt_match[name][...,1], gt_match[name][...,2], gt_match[name][...,3]))
             if gt_match[name].sum() > 0:
                 hit=True
+            ##print('match: {}'.format(timeit.default_timer()-##tic))
         
         if contains_label is not None:
             if hit and contains_label or cnt > 100:
@@ -60,9 +63,13 @@ def generate_random_crop(img, gts, params):
                 return crop, cropped_gt_img, gt_match
 
         else:
+            ##tic=timeit.default_timer()
             cropped_gt_img = perform_crop(img, crop)
+            ##print('perform_crop: {}'.format(timeit.default_timer()-##tic))
+            ##tic=timeit.default_timer()
             for name in gts:
                 gt_match[name] = np.where(gt_match[name]!=0)
+            ##print('where: {}'.format(timeit.default_timer()-##tic))
             return crop, cropped_gt_img, gt_match
 
         cnt += 1
@@ -78,8 +85,12 @@ class CropTransform(object):
         gts = sample['sol_eol_gt']
 
         #pad out to allow random samples to take space off of the page
-        org_img = np.pad(org_img, self.pad_params, 'mean')
+        ##tic=timeit.default_timer()
+        #org_img = np.pad(org_img, self.pad_params, 'mean')
+        org_img = np.pad(org_img, self.pad_params, 'constant')
+        ##print('pad: {}'.format(timeit.default_timer()-##tic))
         
+        ##tic=timeit.default_timer()
         j=0
         #pad the points accordingly
         for name, gt in gts.items():
@@ -90,12 +101,14 @@ class CropTransform(object):
             gt[:,:,3] = gt[:,:,3] + self.pad_params[1][0]
             #if 'start' in name:
                 #for j in range(10):
-                #    print('p {},{}   {},{}'.format(gt[:,j,0],gt[:,j,1],gt[:,j,2],gt[:,j,3]))
+                #    ##print('p {},{}   {},{}'.format(gt[:,j,0],gt[:,j,1],gt[:,j,2],gt[:,j,3]))
+        ##print('pad-add: {}'.format(timeit.default_timer()-##tic))
 
         crop_params, org_img, gt_match = generate_random_crop(org_img, gts, self.random_crop_params)
         #print(crop_params)
         #print(gt_match)
         
+        ##tic=timeit.default_timer()
         new_gts={}
         for name, gt in gts.items():
             gt = gt[gt_match[name]][None,...] #add batch dim (?)
@@ -105,10 +118,11 @@ class CropTransform(object):
             gt[...,2] = gt[...,2] - crop_params['dim1'][0]
             gt[...,3] = gt[...,3] - crop_params['dim0'][0]
             new_gts[name]=gt
+        ##print('pad-minus: {}'.format(timeit.default_timer()-##tic))
 
             #if 'start' in name:
             #    for j in range(min(10,gt.size(1))):
-            #        print('a {},{}   {},{}'.format(gt[:,j,0],gt[:,j,1],gt[:,j,2],gt[:,j,3]))
+            #        ##print('a {},{}   {},{}'.format(gt[:,j,0],gt[:,j,1],gt[:,j,2],gt[:,j,3]))
 
         return {
             "img": org_img,

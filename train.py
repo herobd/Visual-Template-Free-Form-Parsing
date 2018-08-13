@@ -5,8 +5,9 @@ import json
 import logging
 import argparse
 import torch
-from model.model import *
+#from model.model import *
 from model.unet import UNet
+from model.unet_dilated import UNetDilated
 from model.loss import *
 from model.metric import *
 from data_loader import getDataLoader
@@ -54,6 +55,8 @@ if __name__ == '__main__':
                         help='config file path (default: None)')
     parser.add_argument('-r', '--resume', default=None, type=str,
                         help='path to latest checkpoint (default: None)')
+    parser.add_argument('-g', '--gpu', default=None, type=int,
+                        help='gpu to use (overrides config) (default: None)')
 
     args = parser.parse_args()
 
@@ -68,5 +71,9 @@ if __name__ == '__main__':
         path = os.path.join(config['trainer']['save_dir'], config['name'])
         assert not os.path.exists(path), "Path {} already exists!".format(path)
     assert config is not None
+
+    if args.gpu is not None:
+        config['gpu']=args.gpu
+        print('override gpu to '+str(config['gpu']))
 
     main(config, args.resume)

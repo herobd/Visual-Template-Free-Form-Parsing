@@ -15,7 +15,7 @@ class Trainer(BaseTrainer):
     def __init__(self, model, loss, metrics, resume, config,
                  data_loader, valid_data_loader=None, train_logger=None):
         super(Trainer, self).__init__(model, loss, metrics, resume, config, train_logger)
-        self.config = config
+        #self.config = config #uggh, why is this getting overwritten everywhere? We'll let super handle it
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
         self.data_loader_iter = iter(data_loader)

@@ -92,7 +92,8 @@ class BaseTrainer:
                         log[key] = value
 
             if self.iteration%self.log_step==0:
-                print()#clear inplace text
+                #prinpt()#clear inplace text
+                print('                   ', end='\r')
                 if self.iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
                     for key in sumLog:
                         sumLog[key] /= self.log_step
@@ -116,7 +117,8 @@ class BaseTrainer:
 
                 if self.train_logger is not None:
                     if self.iteration%self.log_step!=0:
-                        print()#clear inplace text
+                        print('                   ', end='\r')
+                    #    print()#clear inplace text
                     self.train_logger.add_entry(log)
                     if self.verbosity >= 1:
                         for key, value in log.items():
@@ -128,13 +130,15 @@ class BaseTrainer:
             if self.iteration % self.save_step == 0:
                 self._save_checkpoint(self.iteration, log)
                 if self.iteration%self.log_step!=0:
-                    print()#clear inplace text
+                    print('                   ', end='\r')
+                #    print()#clear inplace text
                 self.logger.info('Checkpoint saved for iteration '+str(self.iteration))
             if self.lr_scheduler and self.iteration % self.lr_scheduler_step == 0:
                 self.lr_scheduler.step(self.iteration)
                 lr = self.lr_scheduler.get_lr()[0]
                 if self.iteration%self.log_step!=0:
-                    print()#clear inplace text
+                    print('                   ', end='\r')
+                #    print()#clear inplace text
                 self.logger.info('New Learning Rate: {:.6f}'.format(lr))
             
 

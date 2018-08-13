@@ -2,6 +2,8 @@ import torch
 import torch.utils.data
 import numpy as np
 from datasets.ai2d import AI2D
+from datasets import forms_detect
+from datasets.forms_detect import FormsDetect
 from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -62,6 +64,7 @@ def getDataLoader(config,split):
         else:
             numDataWorkers = 1
         shuffleValid = config['validation']['shuffle']
+
         if data_set_name=='AI2D':
             dataset=AI2D(dirPath=data_dir, split=split, config=config)
             if split=='train':
@@ -69,6 +72,17 @@ def getDataLoader(config,split):
             else:
                 validation=None
             return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers), validation
+        elif data_set_name=='FormsDetect':
+            if split=='train':
+                trainData = FormsDetect(dirPath=data_dir, split='train', config=config['data_loader'])
+                trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
+                validData = FormsDetect(dirPath=data_dir, split='valid', config=config['validation'])
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
+                return trainLoader, validLoader
+            elif split=='test':
+                testData = FormsDetect(dirPath=data_dir, split='test', config=config)
+                testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
+                return testLoader, None
 
 
 

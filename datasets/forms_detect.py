@@ -27,8 +27,8 @@ def collate(batch):
         if b is None:
             continue
         imgs.append(b["img"])
-        max_h = max(max_h,b["img"].size(1))
-        max_w = max(max_w,b["img"].size(2))
+        max_h = max(max_h,b["img"].size(2))
+        max_w = max(max_w,b["img"].size(3))
         for name,gt in b['sol_eol_gt'].items():
             if gt is None:
                 label_sizes[name].append(0)
@@ -46,17 +46,17 @@ def collate(batch):
 
     resized_imgs = []
     for img in imgs:
-        if img.size(1)<max_h or img.size(2)<max_w:
-            resized = torch.zeros([1,image.size(0),max_h,max_w]).type(img.type())
-            diff_h = max_h-img.size(1)
-            pos_r = np.random.randint(0,diff_h+1)
-            diff_w = max_w-img.size(2)
-            pos_c = np.random.randint(0,diff_w+1)
+        if img.size(2)<max_h or img.size(3)<max_w:
+            resized = torch.zeros([1,img.size(1),max_h,max_w]).type(img.type())
+            diff_h = max_h-img.size(2)
+            pos_r = 0#np.random.randint(0,diff_h+1)
+            diff_w = max_w-img.size(3)
+            pos_c = 0#np.random.randint(0,diff_w+1)
             #if len(img.size())==3:
                 #    resized[:,pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
             #else:
                 #    resized[pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
-            resized[:,:,pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
+            resized[:,:,pos_r:pos_r+img.size(2), pos_c:pos_c+img.size(3)]=img
             resized_imgs.append(resized)
         else:
             resized_imgs.append(img)
@@ -112,6 +112,10 @@ class FormsDetect(torch.utils.data.Dataset):
                 os.mkdir(self.cache_path)
         else:
             self.cache_resized = False
+        if 'only_types' in config:
+            self.only_types = config['only_types']
+        else:
+            self.only_types=None
 
         if images is not None:
             self.images=images
@@ -133,13 +137,20 @@ class FormsDetect(torch.utils.data.Dataset):
                     jsonPath = org_path[:org_path.rfind('.')]+'.json'
                     #print(jsonPath)
                     if os.path.exists(jsonPath):
-                        self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath})
+                        rescale=1.0
                         if self.cache_resized and not os.path.exists(path):
                             org_img = cv2.imread(org_path)
                             target_dim1 = self.rescale_range[1]
                             target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
                             resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
                             cv2.imwrite(path,resized)
+                            rescale = target_dim1/float(org_img.shape[1])
+                        elif self.cache_resized:
+                            org_img = cv2.imread(org_path)
+                            target_dim1 = self.rescale_range[1]
+                            rescale = target_dim1/float(org_img.shape[1])
+
+                        self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath, 'rescaled':rescale})
                             
                         # with open(path+'.json') as f:
                         #    annotations = json.loads(f.read())
@@ -167,6 +178,7 @@ class FormsDetect(torch.utils.data.Dataset):
         ##ticFull=timeit.default_timer()
         imagePath = self.images[index]['imagePath']
         annotationPath = self.images[index]['annotationPath']
+        rescaled = self.images[index]['rescaled']
         with open(annotationPath) as annFile:
             annotations = json.loads(annFile.read())
 
@@ -183,6 +195,7 @@ class FormsDetect(torch.utils.data.Dataset):
             org_img = org_img[yt:yb+1,xl:xr+1,:]
         target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
         s = target_dim1 / float(org_img.shape[1])
+        s *= rescaled
         #print(s)
         target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
         ##tic=timeit.default_timer()
@@ -230,15 +243,32 @@ class FormsDetect(torch.utils.data.Dataset):
         field_end_gt = None if field_end_gt.shape[1] == 0 else torch.from_numpy(field_end_gt)
 
         ##print('__getitem__: '+str(timeit.default_timer()-ticFull))
-        return {
-            "img": img,
-            "sol_eol_gt": {
-                    "text_start_gt": text_start_gt,
-                    "text_end_gt": text_end_gt,
-                    "field_start_gt": field_start_gt,
-                    "field_end_gt": field_end_gt
-                    }
-        }
+        if self.only_types is None:
+            return {
+                "img": img,
+                "sol_eol_gt": {
+                        "text_start_gt": text_start_gt,
+                        "text_end_gt": text_end_gt,
+                        "field_start_gt": field_start_gt,
+                        "field_end_gt": field_end_gt
+                        }
+                }
+        else:
+            gt={}
+            for ent in self.only_types:
+                if type(ent)==list:
+                    toComb=[]
+                    for inst in ent:
+                        toComb.append(eval(inst))
+                    comb = torch.cat(toComb,dim=1)
+                    gt[ent[0]]=comb
+                else:
+                    gt[ent]=eval(ent)
+
+            return {
+                "img": img,
+                "sol_eol_gt": gt
+                }
 
 
 

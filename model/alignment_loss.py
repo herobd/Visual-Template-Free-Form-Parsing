@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0):
+def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0, return_alignment=False):
     batch_size = predictions.size(0)
     # This should probably be computed using the log_softmax
     confidences = predictions[:,:,0]
@@ -33,14 +33,24 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
 
     C = C.data.cpu().numpy()
     X = np.zeros_like(C)
+    if return_alignment:
+        target_ind_bs=[]
+        location_ind_bs=[]
     for b in range(C.shape[0]):
         l = label_sizes[b]
         if l == 0:
+            if return_alignment:
+                target_ind_bs.append([])
+                location_ind_bs.append([])
             continue
 
         C_i = C[b,:,:l]
         row_ind, col_ind = linear_sum_assignment(C_i.T)
         X[b][(col_ind, row_ind)] = 1.0
+        if return_alignment:
+            target_ind_bs.append(row_ind)
+            location_ind_bs.append(col_ind)
+
 
     X = torch.from_numpy(X).type(predictions.data.type())
     X2 = 1.0 - torch.sum(X, 2)
@@ -52,4 +62,15 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
 
     loss = loss/batch_size
 
+    if return_alignment:
+        #for b in range(C.shape[0]):
+        #    print('alignemnt')
+        #    for i in range(len(target_ind_bs[b])):
+        #        print('b={}, i={}, lenlocation={}, lentarget={}, lenlocation[b]={}, lentarget[b]={}'.format(b,i,len(location_ind_bs),len(target_ind_bs),len(location_ind_bs[b]),len(target_ind_bs[b])))
+        #        print('location_ind_bs[b][i]={}, target_ind_bs[b][i]={}, targetsize={}, locationsize={}'.format(location_ind_bs[b][i],target_ind_bs[b][i],target.size(1),locations.size(1)))
+        #        print(' gt:{},{}\tpred:{},{}'.format(locations[b,location_ind_bs[b][i],0],
+        #                                             locations[b,location_ind_bs[b][i],1],
+        #                                             target[b,target_ind_bs[b][i],0],
+        #                                             target[b,target_ind_bs[b][i],1]))
+        return loss, location_ind_bs, target_ind_bs
     return loss

@@ -80,7 +80,7 @@ def getDataLoader(config,split):
                 validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
                 return trainLoader, validLoader
             elif split=='test':
-                testData = FormsDetect(dirPath=data_dir, split='test', config=config)
+                testData = FormsDetect(dirPath=data_dir, split='test', config=config['data_loader'])
                 testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
                 return testLoader, None
 

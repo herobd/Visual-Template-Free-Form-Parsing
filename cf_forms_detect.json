@@ -14,7 +14,8 @@
             "crop_size":512
         },
         "rescale_range": [450,800],
-        "no_blanks": true
+        "no_blanks": true,
+        "cache_resized_images": true
 
     },
     "validation": {
@@ -28,7 +29,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.001,
+        "lr": 0.0001,
         "weight_decay": 0
     },
     "loss": "detect_alignment_loss",
@@ -42,8 +43,8 @@
         "iterations": 1000000,
         "save_dir": "saved/",
         "val_step": 2000,
-        "save_step": 5000,
-        "log_step": 100,
+        "save_step": 4000,
+        "log_step": 200,
         "verbosity": 2,
         "monitor": "loss",
         "monitor_mode": "none"

@@ -5,9 +5,13 @@ import argparse
 import torch
 from model.model import *
 from model.unet import UNet
+from model.sol_eol_finder import SOL_EOL_Finder
 from model.metric import *
 from data_loader import getDataLoader
 from utils.printers import *
+
+from datasets.forms_detect import FormsDetect
+from datasets import forms_detect
 
 logging.basicConfig(level=logging.INFO, format='')
 
@@ -40,7 +44,10 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
     config['data_loader']['shuffle']=False
     config['validation']['shuffle']=False
 
+    #print(config['data_loader'])
     data_loader, valid_data_loader = getDataLoader(config,'train')
+    #ttt=FormsDetect(dirPath='/home/ubuntu/brian/data/forms',split='train',config={'crop_to_page':False,'rescale_range':[450,800],'crop_params':{"crop_size":512},'no_blanks':True, "only_types": ["text_start_gt"], 'cache_resized_images': True})
+    #data_loader = torch.utils.data.DataLoader(ttt, batch_size=16, shuffle=False, num_workers=5, collate_fn=forms_detect.collate)
     #valid_data_loader = data_loader.split_validation()
 
     model = eval(config['arch'])(config['model'])
@@ -78,26 +85,26 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
         for index in range(0,numberOfImages,step*batchSize):
             for trainIndex in range(index,index+step*batchSize, batchSize):
                 if trainIndex/batchSize < len(data_loader):
-                    data, target = train_iter.next() #data_loader[trainIndex]
-                    dataT = _to_tensor(gpu,data)
-                    output = model(dataT)
-                    data = data.cpu().data.numpy()
-                    output = output.cpu().data.numpy()
-                    target = target.data.numpy()
-                    metricsO = _eval_metrics_ind(metrics,output, target)
-                    saveFunc(data,target,output,metricsO,trainDir,trainIndex)
+                    #data, target = train_iter.next() #data_loader[trainIndex]
+                    #dataT = _to_tensor(gpu,data)
+                    #output = model(dataT)
+                    #data = data.cpu().data.numpy()
+                    #output = output.cpu().data.numpy()
+                    #target = target.data.numpy()
+                    #metricsO = _eval_metrics_ind(metrics,output, target)
+                    saveFunc(train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
             
             for validIndex in range(index,index+step*batchSize, batchSize):
                 if validIndex/batchSize < len(valid_data_loader):
-                    data, target = valid_iter.next() #valid_data_loader[validIndex]
+                    #data, target = valid_iter.next() #valid_data_loader[validIndex]
                     curVI+=0
-                    dataT  = _to_tensor(gpu,data)
-                    output = model(dataT)
-                    data = data.cpu().data.numpy()
-                    output = output.cpu().data.numpy()
-                    target = target.data.numpy()
-                    metricsO = _eval_metrics_ind(metrics,output, target)
-                    saveFunc(data,target,output,metricsO,validDir,validIndex)
+                    #dataT  = _to_tensor(gpu,data)
+                    #output = model(dataT)
+                    #data = data.cpu().data.numpy()
+                    #output = output.cpu().data.numpy()
+                    #target = target.data.numpy()
+                    #metricsO = _eval_metrics_ind(metrics,output, target)
+                    metricsO = saveFunc(valid_iter.next(),model,gpu,metrics,validDir,validIndex)
 
                     val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
@@ -105,11 +112,12 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
             try:
                 for vi in range(curVI,len(valid_data_loader)):
                     data, target = valid_iter.next() #valid_data_loader[validIndex]
-                    data  = _to_tensor(gpu,data)
-                    output = model(data)
-                    output = output.cpu().data.numpy()
-                    target = target.data.numpy()
-                    metricsO = _eval_metrics(metrics,output, target)
+                    #data  = _to_tensor(gpu,data)
+                    #output = model(data)
+                    #output = output.cpu().data.numpy()
+                    #target = target.data.numpy()
+                    #metricsO = _eval_metrics(metrics,output, target)
+                    metricsO = saveFunc(train_iter.next(),model,gpu,metrics)
                     val_metrics_sum += metricsO
             except StopIteration:
                 print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))
@@ -123,19 +131,19 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
         batchIndex = index//batchSize
         inBatchIndex = index%batchSize
         for i in range(batchIndex+1):
-            data, target = train_iter.next()
-        data, target = data[inBatchIndex:inBatchIndex+1], target[inBatchIndex:inBatchIndex+1]
-        dataT = _to_tensor(gpu,data)
-        output = model(dataT)
-        data = data.cpu().data.numpy()
-        output = output.cpu().data.numpy()
-        target = target.data.numpy()
+            instance= train_iter.next()
+        #data, target = data[inBatchIndex:inBatchIndex+1], target[inBatchIndex:inBatchIndex+1]
+        #dataT = _to_tensor(gpu,data)
+        #output = model(dataT)
+        #data = data.cpu().data.numpy()
+        #output = output.cpu().data.numpy()
+        #target = target.data.numpy()
         #print (output.shape)
         #print ((output.min(), output.amin()))
         #print (target.shape)
         #print ((target.amin(), target.amin()))
-        metricsO = _eval_metrics_ind(metrics,output, target)
-        saveFunc(data,target,output,metricsO,saveDir,index)
+        #metricsO = _eval_metrics_ind(metrics,output, target)
+        saveFunc(instance,model,gpu,metrics,saveDir,batchIndex*batchSize)
 
 
 if __name__ == '__main__':

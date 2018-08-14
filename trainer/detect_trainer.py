@@ -3,6 +3,7 @@ import torch
 from base import BaseTrainer
 import timeit
 from utils import util
+from collections import defaultdict
 
 
 class DetectTrainer(BaseTrainer):
@@ -159,16 +160,26 @@ class DetectTrainer(BaseTrainer):
         total_val_loss = 0
         total_val_metrics = np.zeros(len(self.metrics))
         with torch.no_grad():
-            for batch_idx, (data, target) in enumerate(self.valid_data_loader):
-                data, target = self._to_tensor(data, target)
+            losses = defaultdict(lambda: 0)
+            for batch_idx, instance in enumerate(self.valid_data_loader):
+                data, targets, target_sizes = self._to_tensor(instance)
 
                 output = self.model(data)
-                loss = self.loss(output, target)
+                #loss = self.loss(output, target)
+                loss=0
+                index=0
+                for name, target in targets.items():
+                    predictions = util.pt_xyrs_2_xyxy(output[index])
+                    this_loss = self.loss(predictions,target,target_sizes[name], **self.loss_params)
+                    loss+=this_loss
+                    losses['val_'+name+'_loss']+=this_loss.item()
+                    index+=1
 
                 total_val_loss += loss.item()
                 total_val_metrics += self._eval_metrics(output, target)
 
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
-            'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist()
+            'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
+            **losses
         }

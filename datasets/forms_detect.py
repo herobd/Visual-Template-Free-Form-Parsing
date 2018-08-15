@@ -14,6 +14,8 @@ import timeit
 
 import cv2
 
+IAIN_CATCH=['131','131_2','132','133','193','194','197','200']
+
 def collate(batch):
 
     ##tic=timeit.default_timer()
@@ -128,6 +130,9 @@ class FormsDetect(torch.utils.data.Dataset):
                 groupsToUse = json.loads(f.read())[split]
             self.images=[]
             for groupName, imageNames in groupsToUse.items():
+                if groupName in IAIN_CATCH:
+                    print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
+                    continue
                 for imageName in imageNames:
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
                     if self.cache_resized:
@@ -258,7 +263,7 @@ class FormsDetect(torch.utils.data.Dataset):
             for ent in self.only_types:
                 if type(ent)==list:
                     toComb=[]
-                    for inst in ent:
+                    for inst in ent[1:]:
                         toComb.append(eval(inst))
                     comb = torch.cat(toComb,dim=1)
                     gt[ent[0]]=comb

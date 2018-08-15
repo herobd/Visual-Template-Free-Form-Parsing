@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0, return_alignment=False):
+def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0, return_alignment=False, debug=None):
     batch_size = predictions.size(0)
     # This should probably be computed using the log_softmax
     confidences = predictions[:,:,0]
@@ -50,6 +50,22 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
         if return_alignment:
             target_ind_bs.append(row_ind)
             location_ind_bs.append(col_ind)
+        if debug is not None and b==debug:
+            for i in range(locations.size(1)):
+                print('loc{}: {}, {},  dist={}'.format(i,locations[b,i,0],locations[b,i,1],normed_difference[b,i,0]))
+            for i in range(len(row_ind)):
+                targ_i = row_ind[i]
+                loc_i = col_ind[i]
+                print('size locations={}, size target={}'.format(locations.size(1), l))
+                print('targ_i={}, loc_i={}'.format(targ_i,loc_i))
+                print('gt location={}, {}'.format(target[b,targ_i,0],target[b,targ_i,1]))
+                print('aligned C={}, normed_difference={}, expanded_log_confidences={}, expanded_log_one_minus_confidences={}'.format(C_i[loc_i,targ_i],normed_difference[b,loc_i,targ_i],expanded_log_confidences[b,loc_i,targ_i],expanded_log_one_minus_confidences[b,loc_i,targ_i]))
+                print('aligned pred location={}, {}'.format(locations[b,loc_i,0],locations[b,loc_i,1]))
+
+                closest_loc_i = normed_difference[b,:,targ_i].argmin()
+                print('closest C={}, normed_difference={}, expanded_log_confidences={}, expanded_log_one_minus_confidences={}'.format(C_i[closest_loc_i,targ_i],normed_difference[b,closest_loc_i,targ_i],expanded_log_confidences[b,closest_loc_i,targ_i],expanded_log_one_minus_confidences[b,closest_loc_i,targ_i]))
+                print('closest pred location={}, {}'.format(locations[b,closest_loc_i,0],locations[b,closest_loc_i,1]))
+                exit()
 
 
     X = torch.from_numpy(X).type(predictions.data.type())

@@ -78,22 +78,33 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
     #print(instance)
     #data, target, targetSizes = instance
     data = instance['img']
+    batchSize = data.shape[0]
     target = instance['sol_eol_gt']
     targetSizes = instance['label_sizes']
 
 
     dataT = __to_tensor(data,gpu)
     output = model(dataT)
+    index=0
+    for name, targ in target.items():
+        output[index] = util.pt_xyrs_2_xyxy(output[index])
+        index+=1
 
     alignmentPred={}
     alignmentTarg={}
     loss=0
     index=0
+    ttt_hit=None
+    #if 22>=startIndex and 22<startIndex+batchSize:
+    #    ttt_hit=22-startIndex
+    #else:
+    #    return 0
     for name,targ in target.items():
         if gpu is not None:
-            lossThis, predIndexes, targetIndexes = alignment_loss(output[index],targ.to(gpu),targetSizes[name],return_alignment=True)
+            sendTarg=targ.to(gpu)
         else:
-            lossThis, predIndexes, targetIndexes = alignment_loss(output[index],targ,targetSizes[name],return_alignment=True)
+            sendTarg=targ
+        lossThis, predIndexes, targetIndexes = alignment_loss(output[index],sendTarg,targetSizes[name],return_alignment=True, debug=ttt_hit)
         alignmentPred[name]=predIndexes
         alignmentTarg[name]=targetIndexes
         index+=1
@@ -107,39 +118,41 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
     i=0
     for name,targ in targetOld.items():
         target[name] = targ.data.numpy()
-        output[name] = util.pt_xyrs_2_xyxy(outputOld[i]).cpu().data.numpy()
+        output[name] = outputOld[i].cpu().data.numpy()
         i+=1
     #metricsOut = __eval_metrics(output,target)
-    metricsOut = {}
+    metricsOut = 0
     if outDir is None:
         return metricsOut
     
-    batchSize = data.shape[0]
     for b in range(batchSize):
-        image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()
-        print('image {} has {} {}'.format(startIndex+b,targetSizes[name][b],name))
-        for j in range(targetSizes[name][b]):
-            p1 = (target[name][b,j,0], target[name][b,j,1])
-            p2 = (target[name][b,j,2], target[name][b,j,3])
-            #mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
-            #rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
-            #print(mid)
-            #print(rad)
-            #cv2.circle(image,mid,rad,(1,0.5,0),1)
-            cv2.line(image,p1,p2,(1,0.5,0),1)
-        lineImage = np.ones_like(image)
+        #print('image {} has {} {}'.format(startIndex+b,targetSizes[name][b],name))
+        #lineImage = np.ones_like(image)
         for name, out in output.items():
+            image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()
+            #if name=='text_start_gt':
+            for j in range(targetSizes[name][b]):
+                p1 = (target[name][b,j,0], target[name][b,j,1])
+                p2 = (target[name][b,j,2], target[name][b,j,3])
+                #mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
+                #rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
+                #print(mid)
+                #print(rad)
+                #cv2.circle(image,mid,rad,(1,0.5,0),1)
+                cv2.line(image,p1,p2,(1,0.5,0),1)
             lines=[]
             maxConf = out[b,:,0].max()
+            threshConf = maxConf*0.1
             for j in range(out.shape[1]):
                 conf = out[b,j,0]
-                if conf>0:
+                if conf>threshConf:
                     p1 = (out[b,j,1],out[b,j,2])
                     p2 = (out[b,j,3],out[b,j,4])
                     lines.append((conf,p1,p2,j))
             lines.sort(key=lambda a: a[0]) #so most confident lines are draw last (on top)
             for conf, p1, p2, j in lines:
-                shade = 1.0-conf/maxConf
+                shade = 0.0+conf/maxConf
+                #print(shade)
                 #if name=='text_start_gt' or name=='field_end_gt':
                 #    cv2.line(lineImage[:,:,1],p1,p2,shade,2)
                 #if name=='text_end_gt':
@@ -147,34 +160,33 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
                 #elif name=='field_end_gt' or name=='field_start_gt':
                 #    cv2.line(lineImage[:,:,0],p1,p2,shade,2)
                 if name=='text_start_gt':
-                    cv2.line(image,p1,p2,(0,shade,0),1)
+                    color=(0,shade,0)
                 elif name=='text_end_gt':
-                    cv2.line(image,p1,p2,(0,0,shade),1)
+                    color=(0,0,shade)
                 elif name=='field_end_gt':
-                    cv2.line(image,p1,p2,(shade,shade,0),1)
+                    color=(shade,shade,0)
                 elif name=='field_start_gt':
-                    cv2.line(image,p1,p2,(shade,0,0),1)
-                
+                    color=(shade,0,0)
+                cv2.line(image,p1,p2,color,1)
                 if j in alignmentPred[name][b]:
                     mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
                     rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
                     #print(mid)
                     #print(rad)
                     cv2.circle(image,mid,rad,(0,1,1),1)
-            for j in alignmentTarg[name][b]:
-                p1 = (target[name][b,j,0], target[name][b,j,1])
-                p2 = (target[name][b,j,0], target[name][b,j,1])
-                mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
-                rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
-                #print(mid)
-                #print(rad)
-                cv2.circle(image,mid,rad,(1,0,1),1)
-        #image *= lineImage
+            #for j in alignmentTarg[name][b]:
+            #    p1 = (target[name][b,j,0], target[name][b,j,1])
+            #    p2 = (target[name][b,j,0], target[name][b,j,1])
+            #    mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
+            #    rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
+            #    #print(mid)
+            #    #print(rad)
+            #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-        saveName = '{:06}'.format(startIndex+b)
-        #for j in range(metricsOut.shape[1]):
-        #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
-        saveName+='.png'
-        io.imsave(os.path.join(outDir,saveName),image)
+            saveName = '{:06}_{}'.format(startIndex+b,name)
+            #for j in range(metricsOut.shape[1]):
+            #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
+            saveName+='.png'
+            io.imsave(os.path.join(outDir,saveName),image)
         
     return metricsOut

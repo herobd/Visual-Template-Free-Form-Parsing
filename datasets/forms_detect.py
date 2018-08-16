@@ -151,9 +151,12 @@ class FormsDetect(torch.utils.data.Dataset):
                             cv2.imwrite(path,resized)
                             rescale = target_dim1/float(org_img.shape[1])
                         elif self.cache_resized:
-                            org_img = cv2.imread(org_path)
+                            with open(os.path.join(jsonPath) as f:
+                                annotations = json.loads(f.read())
+                            imW = annotations['width']
+
                             target_dim1 = self.rescale_range[1]
-                            rescale = target_dim1/float(org_img.shape[1])
+                            rescale = target_dim1/float(imW)
 
                         self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath, 'rescaled':rescale})
                             

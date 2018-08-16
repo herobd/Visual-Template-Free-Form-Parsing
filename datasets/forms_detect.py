@@ -21,32 +21,42 @@ def collate(batch):
     ##tic=timeit.default_timer()
     batch_size = len(batch)
     imgs = []
+    pixel_gt=[]
     max_h=0
     max_w=0
-    label_sizes = defaultdict(list)
-    largest_label = {}
+    line_label_sizes = defaultdict(list)
+    largest_line_label = {}
     for b in batch:
         if b is None:
             continue
         imgs.append(b["img"])
+        pixel_gt.append(b['pixel_gt']
         max_h = max(max_h,b["img"].size(2))
         max_w = max(max_w,b["img"].size(3))
-        for name,gt in b['sol_eol_gt'].items():
+        for name,gt in b['line_gt'].items():
             if gt is None:
-                label_sizes[name].append(0)
-                #print('b {}, {}: {}    None'.format(len(label_sizes[name])-1, name, label_sizes[name][-1]))
+                line_label_sizes[name].append(0)
             else:
-                label_sizes[name].append(gt.size(1)) 
-                #print('b {}, {}: {}    {}'.format(len(label_sizes[name])-1, name, label_sizes[name][-1],gt.size()))
-    for name in b['sol_eol_gt']:
-        largest_label[name] = max(label_sizes[name])
-
+                line_label_sizes[name].append(gt.size(1)) 
+        for name,gt in b['point_gt'].items():
+            if gt is None:
+                point_label_sizes[name].append(0)
+            else:
+                point_label_sizes[name].append(gt.size(1)) 
     if len(imgs) == 0:
         return None
+
+    for name in b['line_gt']:
+        largest_line_label[name] = max(line_label_sizes[name])
+    for name in b['point_gt']:
+        largest_point_label[name] = max(point_label_sizes[name])
+
     ##print(' col channels: {}'.format(len(imgs[0].size())))
     batch_size = len(imgs)
 
     resized_imgs = []
+    resized_pixel_gt = []
+    index=0
     for img in imgs:
         if img.size(2)<max_h or img.size(3)<max_w:
             resized = torch.zeros([1,img.size(1),max_h,max_w]).type(img.type())
@@ -60,32 +70,56 @@ def collate(batch):
                 #    resized[pos_r:pos_r+img.size(1), pos_c:pos_c+img.size(2)]=img
             resized[:,:,pos_r:pos_r+img.size(2), pos_c:pos_c+img.size(3)]=img
             resized_imgs.append(resized)
+
+            resized_gt = torch.zeros([1,pixel_gt[index].size(1),max_h,max_w]).type(pixel_gt[index].type())
+            resized_gt[:,:,pos_r:pos_r+img.size(2), pos_c:pos_c+img.size(3)]=pixel_gt[index]
+            resized_pixel_gt.append(resized_gt)
         else:
             resized_imgs.append(img)
+            resized_pixel_gt.append(pixel_gt[index])
+        index+=1
 
-    labels = {}
-    for name,count in largest_label.items():
+            
+
+    line_labels = {}
+    for name,count in largest_line_label.items():
         if count != 0:
-            labels[name] = torch.zeros(batch_size, count, 4)
+            line_labels[name] = torch.zeros(batch_size, count, 4)
         else:
-            labels[name]=None
+            line_labels[name]=None
     for i, b in enumerate(batch):
-        for name,gt in b['sol_eol_gt'].items():
-            if label_sizes[name][i] == 0:
+        for name,gt in b['line_gt'].items():
+            if line_label_sizes[name][i] == 0:
                 continue
             #if gt is None:
-            #    ##print('n {}, {}: {}    None'.format(i, name, label_sizes[name][i]))
+            #    ##print('n {}, {}: {}    None'.format(i, name, line_label_sizes[name][i]))
             #else:
-            #    ##print('n {}, {}: {}    {}'.format(i, name, label_sizes[name][i],gt.size()))
-            labels[name][i, :label_sizes[name][i]] = gt
+            #    ##print('n {}, {}: {}    {}'.format(i, name, line_label_sizes[name][i],gt.size()))
+            line_labels[name][i, :line_label_sizes[name][i]] = gt
+
+    point_labels = {}
+    for name,count in largest_point_label.items():
+        if count != 0:
+            point_labels[name] = torch.zeros(batch_size, count, 4)
+        else:
+            point_labels[name]=None
+    for i, b in enumerate(batch):
+        for name,gt in b['point_gt'].items():
+            if point_label_sizes[name][i] == 0:
+                continue
+            point_labels[name][i, :point_label_sizes[name][i]] = gt
 
     imgs = torch.cat(resized_imgs)
+    pixel_gt = torch.cat(resized_pixel_gt)
 
     ##print('collate: '+str(timeit.default_timer()-tic))
     return {
-        'sol_eol_gt': labels,
         'img': imgs,
-        "label_sizes": label_sizes
+        'line_gt': line_labels,
+        "line_label_sizes": line_label_sizes,
+        'point_gt': point_labels,
+        "point_label_sizes": point_label_sizes,
+        'pixel_gt': pixel_gt
     }
 
 
@@ -213,24 +247,31 @@ class FormsDetect(torch.utils.data.Dataset):
         ##tic=timeit.default_timer()
         text_start_gt, text_end_gt = self.getStartEndGT(annotations['textBBs'],s)
         field_start_gt, field_end_gt = self.getStartEndGT(annotations['fieldBBs'],s,fields=True)
+        table_points, table_pixels = self.getTables(annotations['fieldBBs'],s)
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
         ##ticTr=timeit.default_timer()
         if self.transform is not None:
             out = self.transform({
                 "img": org_img,
-                "sol_eol_gt": {
+                "line_gt": {
                         "text_start_gt": text_start_gt,
                         "text_end_gt": text_end_gt,
                         "field_start_gt": field_start_gt,
                         "field_end_gt": field_end_gt
-                        }
+                        },
+                "point_gt": {
+                        "table_points": table_points
+                        },
+                "pixel_gt": pixel_gt
             })
             org_img = out['img']
-            text_start_gt = out['sol_eol_gt']['text_start_gt']
-            text_end_gt = out['sol_eol_gt']['text_end_gt']
-            field_start_gt = out['sol_eol_gt']['field_start_gt']
-            field_end_gt = out['sol_eol_gt']['field_end_gt']
+            text_start_gt = out['line_gt']['text_start_gt']
+            text_end_gt = out['line_gt']['text_end_gt']
+            field_start_gt = out['line_gt']['field_start_gt']
+            field_end_gt = out['line_gt']['field_end_gt']
+            table_points = out['point_gt']['table_points']
+            pixel_gt = out['pixel_gt']
 
             ##tic=timeit.default_timer()
             org_img = augmentation.apply_random_color_rotation(org_img)
@@ -250,32 +291,61 @@ class FormsDetect(torch.utils.data.Dataset):
         field_start_gt = None if field_start_gt.shape[1] == 0 else torch.from_numpy(field_start_gt)
         field_end_gt = None if field_end_gt.shape[1] == 0 else torch.from_numpy(field_end_gt)
 
+        table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
+
         ##print('__getitem__: '+str(timeit.default_timer()-ticFull))
         if self.only_types is None:
             return {
                 "img": img,
-                "sol_eol_gt": {
+                "line_gt": {
                         "text_start_gt": text_start_gt,
                         "text_end_gt": text_end_gt,
                         "field_start_gt": field_start_gt,
                         "field_end_gt": field_end_gt
+                        },
+                "point_gt": {
+                        "table_points":table_points
+                        },
+                "pixel_gt": {
+                        "table_pixels":table_pixels
                         }
                 }
         else:
-            gt={}
-            for ent in self.only_types:
+            line_gt={}
+            for ent in self.only_types['line']:
                 if type(ent)==list:
                     toComb=[]
                     for inst in ent[1:]:
                         toComb.append(eval(inst))
                     comb = torch.cat(toComb,dim=1)
-                    gt[ent[0]]=comb
+                    line_gt[ent[0]]=comb
                 else:
-                    gt[ent]=eval(ent)
+                    line_gt[ent]=eval(ent)
+            point_gt={}
+            for ent in self.only_types['point']:
+                if type(ent)==list:
+                    toComb=[]
+                    for inst in ent[1:]:
+                        toComb.append(eval(inst))
+                    comb = torch.cat(toComb,dim=1)
+                    point_gt[ent[0]]=comb
+                else:
+                    point_gt[ent]=eval(ent)
+            pixel_gt={}
+            for ent in self.only_types['pixel']:
+                if type(ent)==list:
+                    comb = ent[1]
+                    for inst in ent[2:]:
+                        comb = (comb + inst):eq(2) #pixel-wise AND
+                    pixel_gt[ent[0]]=comb
+                else:
+                    pixel_gt[ent]=eval(ent)
 
             return {
                 "img": img,
-                "sol_eol_gt": gt
+                "line_gt": line_gt,
+                "point_gt": point_gt,
+                "pixel_gt": pixel_gt
                 }
 
 
@@ -331,3 +401,51 @@ class FormsDetect(torch.utils.data.Dataset):
             j+=1
         return start_gt, end_gt
 
+    def getTables(self,bbs,s):
+        #start_gt = np.zeros((1,len(bbs), 4), dtype=np.float32)
+        #end_gt = np.zeros((1,len(bbs), 4), dtype=np.float32)
+        j=0
+        for bb in bbs:
+            if bb['type'] != 'col' and bb['type'] != 'row'
+                continue
+            tlX = bb['poly_points'][0][0]
+            tlY = bb['poly_points'][0][1]
+            trX = bb['poly_points'][1][0]
+            trY = bb['poly_points'][1][1]
+            brX = bb['poly_points'][2][0]
+            brY = bb['poly_points'][2][1]
+            blX = bb['poly_points'][3][0]
+            blY = bb['poly_points'][3][1]
+
+            lX = (tlX+blX)/2.0
+            lY = (tlY+blY)/2.0
+            rX = (trX+brX)/2.0
+            rY = (trY+brY)/2.0
+            d=math.sqrt((lX-rX)**2 + (lY-rY)**2)
+
+            hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
+            hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
+            h = (hl+hr)/2.0
+
+            tX = lX + h*-(rY-lY)/d
+            tY = lY + h*(rX-lX)/d
+            bX = lX - h*-(rY-lY)/d
+            bY = lY - h*(rX-lX)/d
+            start_gt[:,j,0] = tX*s
+            start_gt[:,j,1] = tY*s
+            start_gt[:,j,2] = bX*s
+            start_gt[:,j,3] = bY*s
+
+            etX =tX + rX-lX
+            etY =tY + rY-lY
+            ebX =bX + rX-lX
+            ebY =bY + rY-lY
+            end_gt[:,j,0] = etX*s
+            end_gt[:,j,1] = etY*s
+            end_gt[:,j,2] = ebX*s
+            end_gt[:,j,3] = ebY*s
+            #if j<10:
+            #    ##print('f {},{}   {},{}'.format(tX,tY,bX,bY))
+            #    ##print('s {},{}   {},{}'.format(start_gt[:,j,0],start_gt[:,j,1],start_gt[:,j,2],start_gt[:,j,3]))
+            j+=1
+        return start_gt, end_gt

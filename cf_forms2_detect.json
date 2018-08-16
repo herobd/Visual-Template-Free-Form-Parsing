@@ -32,10 +32,14 @@
         "lr": 0.0001,
         "weight_decay": 0
     },
-    "loss": "detect_alignment_loss",
+    "loss": {
+        "line":"detect_alignment_loss"
+    },
     "loss_params": {
-        "alpha_alignment": 0.1,
-        "alpha_backprop": 0.1
+        "line": {
+            "alpha_alignment": 0.1,
+            "alpha_backprop": 0.1
+        }
     },
     "metrics": [],
     "trainer": {

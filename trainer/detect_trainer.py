@@ -22,6 +22,10 @@ class DetectTrainer(BaseTrainer):
             self.loss_params=config['loss_params']
         else:
             self.loss_params={}
+        if 'loss_weights' in config:
+            self.loss_weight=config['loss_weights']
+        else:
+            self.loss_weight={'line':0.6, 'point':0.5, 'pixel':0.05}
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
         self.data_loader_iter = iter(data_loader)
@@ -32,22 +36,42 @@ class DetectTrainer(BaseTrainer):
 
     def _to_tensor(self, instance):
         data = instance['img']
-        targets = instance['sol_eol_gt']
-        target_sizes = instance['label_sizes']
+        if 'line_gt' in instance:
+            targetLines = instance['line_gt']
+            targetLines_sizes = instance['line_label_sizes']
+        else:
+            targetLines = {}
+            targetLines_sizes = {}
+        if 'point_gt' in instance:
+            targetPoints = instance['point_gt']
+            targetPoints_sizes = instance['point_label_sizes']
+        else:
+            targetPoints = {}
+            targetPoints_sizes = {}
+        if 'pixel_gt' in instance:
+            targetPixels = instance['pixel_gt']
+        else:
+            targetPixels = None
         if type(data) is np.ndarray:
             data = torch.FloatTensor(data.astype(np.float32))
         elif type(data) is torch.Tensor:
             data = data.type(torch.FloatTensor)
-        if self.with_cuda:
-            data = data.to(self.gpu)
+
+        def sendToGPU(target):
             new_targets={}
             for name, target in targets.items():
                 if target is not None:
                     new_targets[name] = target.to(self.gpu)
                 else:
                     new_targets[name] = None
-            return data, new_targets, target_sizes
-        return data, targets, target_sizes
+            return new_targets
+
+        if self.with_cuda:
+            data = data.to(self.gpu)
+            targetLines=sendToGPU(targetLines)
+            targetPoints=sendToGPU(targetPoints)
+            targetPixels=sendToGPU(targetPixels)
+        return data, targetLines, targetLines_sizes, targetPoints, targetPoint_sizes, targetPixels
 
     def _eval_metrics(self, output, target):
         if len(self.metrics)>0:
@@ -83,10 +107,10 @@ class DetectTrainer(BaseTrainer):
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
-            data, targets, target_sizes = self._to_tensor(self.data_loader_iter.next())
+            data, targetLines, targetLines_sizes, targetPoints, targetPoint_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
-            data, targets, target_sizes = self._to_tensor(self.data_loader_iter.next())
+            data, targetLines, targetLines_sizes, targetPoints, targetPoint_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
         ##toc=timeit.default_timer()
         ##print('data: '+str(toc-tic))
         
@@ -102,12 +126,23 @@ class DetectTrainer(BaseTrainer):
         index=0
         losses={}
         ##tic=timeit.default_timer()
-        for name, target in targets.items():
-            predictions = util.pt_xyrs_2_xyxy(output[index])
-            this_loss = self.loss(predictions,target,target_sizes[name], **self.loss_params)
-            loss+=this_loss
+        for name, target in targetLines.items():
+            predictions = util.pt_xyrs_2_xyxy(outputLines[index])
+            this_loss = self.loss['line'](predictions,target,targetLines_sizes[name], **self.loss_params['line'])
+            loss+=this_loss*self.self.loss_weight['line']
             losses[name+'_loss']=this_loss.item()
             index+=1
+        index=0
+        for name, target in targetPoints.items():
+            predictions = outputPoints[index]
+            this_loss = self.loss['point'](predictions,target,targetPoints_sizes[name], **self.loss_params['point'])
+            loss+=this_loss*self.self.loss_weight['point']
+            losses[name+'_loss']=this_loss.item()
+            index+=1
+        if targetPixels is not None:
+            this_loss = self.loss['pixel'](outputPixels,targetPixels, **self.loss_params['pixel'])
+            loss+=this_loss*self.self.loss_weight['pixel']
+            losses['pixel_loss']=this_loss.item()
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
@@ -164,7 +199,7 @@ class DetectTrainer(BaseTrainer):
             for batch_idx, instance in enumerate(self.valid_data_loader):
                 data, targets, target_sizes = self._to_tensor(instance)
 
-                output = self.model(data)
+                outputLines, outputPoints, outputPixels = self.model(data)
                 #loss = self.loss(output, target)
                 loss=0
                 index=0

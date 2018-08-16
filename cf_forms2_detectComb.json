@@ -16,16 +16,20 @@
         "rescale_range": [450,800],
         "no_blanks": true,
         "cache_resized_images": true,
-        "only_types": [ ["start_gt", "text_start_gt", "field_start_gt"], 
+        "only_types": {
+            "line":[ ["start_gt", "text_start_gt", "field_start_gt"], 
                         ["end_gt", "text_end_gt", "field_end_gt"] ]
+        }
 
     },
     "validation": {
         "shuffle": false,
         "crop_to_page":false,
         "rescale_range": [512,512],
-        "only_types": [ ["start_gt", "text_start_gt", "field_start_gt"], 
+        "only_types": {
+            "line":[ ["start_gt", "text_start_gt", "field_start_gt"], 
                         ["end_gt", "text_end_gt", "field_end_gt"] ]
+        }
     },
 
     
@@ -36,10 +40,14 @@
         "lr": 0.0001,
         "weight_decay": 0
     },
-    "loss": "detect_alignment_loss",
+    "loss": {
+        "line":"detect_alignment_loss"
+    },
     "loss_params": {
-        "alpha_alignment": 0.1,
-        "alpha_backprop": 0.1
+        "line": {
+            "alpha_alignment": 0.1,
+            "alpha_backprop": 0.1
+        }
     },
     "metrics": [],
     "trainer": {

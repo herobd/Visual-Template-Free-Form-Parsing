@@ -79,8 +79,8 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
     #data, target, targetSizes = instance
     data = instance['img']
     batchSize = data.shape[0]
-    target = instance['sol_eol_gt']
-    targetSizes = instance['label_sizes']
+    target = instance['line_gt']
+    targetSizes = instance['line_label_sizes']
 
 
     dataT = __to_tensor(data,gpu)
@@ -139,6 +139,8 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
                 #print(mid)
                 #print(rad)
                 #cv2.circle(image,mid,rad,(1,0.5,0),1)
+                #print(p1)
+                #print(p2)
                 cv2.line(image,p1,p2,(1,0.5,0),1)
             lines=[]
             maxConf = out[b,:,0].max()
@@ -168,12 +170,12 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
                 elif name=='field_start_gt':
                     color=(shade,0,0)
                 cv2.line(image,p1,p2,color,1)
-                if j in alignmentPred[name][b]:
-                    mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
-                    rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
-                    #print(mid)
-                    #print(rad)
-                    cv2.circle(image,mid,rad,(0,1,1),1)
+                #if j in alignmentPred[name][b]:
+                #    mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
+                #    rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
+                #    #print(mid)
+                #    #print(rad)
+                #    cv2.circle(image,mid,rad,(0,1,1),1)
             #for j in alignmentTarg[name][b]:
             #    p1 = (target[name][b,j,0], target[name][b,j,1])
             #    p2 = (target[name][b,j,0], target[name][b,j,1])

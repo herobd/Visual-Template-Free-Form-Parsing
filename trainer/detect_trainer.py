@@ -57,7 +57,7 @@ class DetectTrainer(BaseTrainer):
         elif type(data) is torch.Tensor:
             data = data.type(torch.FloatTensor)
 
-        def sendToGPU(target):
+        def sendToGPU(targets):
             new_targets={}
             for name, target in targets.items():
                 if target is not None:
@@ -70,8 +70,8 @@ class DetectTrainer(BaseTrainer):
             data = data.to(self.gpu)
             targetLines=sendToGPU(targetLines)
             targetPoints=sendToGPU(targetPoints)
-            targetPixels=sendToGPU(targetPixels)
-        return data, targetLines, targetLines_sizes, targetPoints, targetPoint_sizes, targetPixels
+            targetPixels=targetPixels.to(self.gpu)
+        return data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels
 
     def _eval_metrics(self, output, target):
         if len(self.metrics)>0:

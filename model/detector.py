@@ -8,13 +8,18 @@ def make_layers(cfg, batch_norm=False, weight_norm=False):
     in_channels = cfg[0]
     
     layers=[]
+    layerCodes=[]
     for i,v in enumerate(cfg[1:]):
         if v == 'M':
-            moduels.append(nn.Sequential(*layers))
+            modules.append(nn.Sequential(*layers))
             layers = [nn.MaxPool2d(kernel_size=2, stride=2)]
+            layerCodes = [v]
         elif v == 'U+':
-            moduels.append(nn.Sequential(*layers))
+            if len(layers)>0:
+                modules.append(layers[0].addConv(nn.Sequential(*layers[1:])))
             layers = [up(in_channels[-2])]
+            layerCodes = [v]
+
             in_channels.append(in_channels[-2]+in_channels[-1])
         else:
             conv2d = nn.Conv2d(in_channels[-1], v, kernel_size=3, padding=1)
@@ -27,9 +32,10 @@ def make_layers(cfg, batch_norm=False, weight_norm=False):
                 layers += [weight_norm(conv2d), nn.ReLU(inplace=True)]
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
+            layerCodes.append(v)
             in_channels.append(v)
     if len(layers)>0:
-        moduels.append(nn.Sequential(*layers))
+        modules.append(nn.Sequential(*layers))
     return modules #nn.Sequential(*layers)
 
 class up(nn.Module):
@@ -42,6 +48,9 @@ class up(nn.Module):
         else:
             self.up = nn.ConvTranspose2d(in_ch//2, in_ch//2, 2, stride=2)
 
+    def addConv(self,conv):
+        self.conv=conv
+
     def forward(self, x1, x2):
         x1 = self.up(x1)
         diffY = x2.size()[2] - x1.size()[2]
@@ -49,7 +58,7 @@ class up(nn.Module):
         x1 = F.pad(x1, (diffX // 2, math.ceil(diffX / 2),
                         diffY // 2, math.ceil(diffY / 2)))
         x = torch.cat([x2, x1], dim=1)
-        return x
+        return self.conv(x)
 
 
 class Detector(BaseModel):
@@ -69,7 +78,7 @@ class Detector(BaseModel):
         if 'down_layers_cfg' in config:
             layers_cfg = config['down_layers_cfg']+[self.numOutEnd]
         else:
-            layers_cfg=a[[3],64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, self.numOutEnd]
+            layers_cfg=[[3],64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, self.numOutEnd]
         if self.predPixelCount>0:
             if 'up_layers_cfg' in config:
                 up_layers_cfg =  config['up_layers_cfg']+[self.predPixelCount]
@@ -77,12 +86,14 @@ class Detector(BaseModel):
                 up_layers_cfg=[[512,512], 'U+', 256, 'U+', 128, 'U+', 64, 'U+', self.predPixelCount]
 
         self.net_down_modules = make_layers(layers_cfg, batch_norm, weight_norm)
+        self._hack_down = nn.Sequential(*self.net_down_modules)
         self.scale=1
         for a in layers_cfg:
             if a=='M':
                 self.scale*=2
 
         self.net_up_modules = make_layers(up_layers_cfg, batch_norm, weight_norm)
+        self._hack_up = nn.Sequential(*self.net_up_modules)
 
         #self.base_0 = config['base_0']
         #self.base_1 = config['base_1']
@@ -131,7 +142,7 @@ class Detector(BaseModel):
             ], dim=1)
             
             predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
-            predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
+            predictions = predictions.view(predictions.size(0),-1,3)#flatten to [batch, instances, channel]
             pointPreds.append(predictions)
 
         pixelPreds=None

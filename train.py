@@ -5,10 +5,7 @@ import json
 import logging
 import argparse
 import torch
-#from model.model import *
-from model.unet import UNet
-from model.unet_dilated import UNetDilated
-from model.sol_eol_finder import SOL_EOL_Finder
+from model import *
 from model.loss import *
 from model.metric import *
 from data_loader import getDataLoader
@@ -27,8 +24,12 @@ def main(config, resume):
 
     model = eval(config['arch'])(config['model'])
     model.summary()
-
-    loss = eval(config['loss'])
+    if type(config['loss'])==dict:
+        loss={}#[eval(l) for l in config['loss']]
+        for name,l in config['loss'].items():
+            loss[name]=eval(l)
+    else:
+        loss = eval(config['loss'])
     metrics = [eval(metric) for metric in config['metrics']]
 
     if 'class' in config['trainer']:

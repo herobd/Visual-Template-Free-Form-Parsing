@@ -45,6 +45,8 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
             continue
 
         C_i = C[b,:,:l]
+        isnan_ = np.isnan(C_i)
+        C_i[isnan_]=C_i[np.logical_not(isnan_)].max()
         row_ind, col_ind = linear_sum_assignment(C_i.T)
         X[b][(col_ind, row_ind)] = 1.0
         if return_alignment:

@@ -1,8 +1,24 @@
 import torch
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+import timeit
+from random import shuffle
 
-def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0, return_alignment=False, debug=None):
+
+def greedy_assignment(scores):
+    target_ind=list(range(scores.shape[1]))
+    location_ind=min_indexes = np.argmin(scores,axis=0)
+    targets = list(range(scores.shape[1]))
+    shuffle(targets) #shuffle so there isn't any bias to the greediness
+    used = np.zeros(scores.shape[0])
+    for target_i in targets:
+        if used[location_ind[target_i]]: #has this location been taken already?
+            scores[location_ind[target_i],target_i]=np.inf #dont find this as the min
+            location_ind[target_i] = np.argmin(scores[:,target_i])
+        used[location_ind[target_i]]=1
+    return location_ind, target_ind
+
+def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0, return_alignment=False, debug=None, points=False, allow_greedy_speedup=True):
     batch_size = predictions.size(0)
     # This should probably be computed using the log_softmax
     confidences = predictions[:,:,0]
@@ -10,9 +26,15 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
 
     if target is None:
         return -log_one_minus_confidences.sum()
-
-    locations = predictions[:,:,1:5]
-    target = target[:,:,0:4]
+    
+    if points:
+        locations = predictions[:,:,1:5]
+        target = target[:,:,0:4]
+    else:
+        locations = predictions[:,:,1:3]
+        target = target[:,:,0:2]
+    #print('loc {},   tar {}'.format(locations.shape,target.shape))
+    #tic=timeit.default_timer()
 
     log_confidences = torch.log(confidences + 1e-10)
 
@@ -33,6 +55,7 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
 
     C = C.data.cpu().numpy()
     X = np.zeros_like(C)
+    #print(' pre-batch comp: {}'.format(timeit.default_timer()-tic))
     if return_alignment:
         target_ind_bs=[]
         location_ind_bs=[]
@@ -45,19 +68,27 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
             continue
 
         C_i = C[b,:,:l]
-        isnan_ = np.isnan(C_i)
-        C_i[isnan_]=C_i[np.logical_not(isnan_)].max()
-        row_ind, col_ind = linear_sum_assignment(C_i.T)
-        X[b][(col_ind, row_ind)] = 1.0
+        #isnan_ = np.isnan(C_i)
+        #if isnan_.any():
+        #    print('NaN! {}'.format(C_i.shape))
+        #    maxV=C_i[np.logical_not(isnan_)].max()
+        #    C_i[isnan_]=maxV
+        #tic=timeit.default_timer()
+        if allow_greedy_speedup and l > 200:
+            location_ind, target_ind = greedy_assignment(C_i)
+        else:
+            target_ind, location_ind = linear_sum_assignment(C_i.T)
+        #print(' batch {} of size {} linear_sum_assign: {}'.format(b,l,timeit.default_timer()-tic))
+        X[b][(location_ind, target_ind)] = 1.0
         if return_alignment:
-            target_ind_bs.append(row_ind)
-            location_ind_bs.append(col_ind)
+            target_ind_bs.append(target_ind)
+            location_ind_bs.append(location_ind)
         if debug is not None and b==debug:
             for i in range(locations.size(1)):
                 print('loc{}: {}, {},  dist={}'.format(i,locations[b,i,0],locations[b,i,1],normed_difference[b,i,0]))
-            for i in range(len(row_ind)):
-                targ_i = row_ind[i]
-                loc_i = col_ind[i]
+            for i in range(len(target_ind)):
+                targ_i = target_ind[i]
+                loc_i = location_ind[i]
                 print('size locations={}, size target={}'.format(locations.size(1), l))
                 print('targ_i={}, loc_i={}'.format(targ_i,loc_i))
                 print('gt location={}, {}'.format(target[b,targ_i,0],target[b,targ_i,1]))
@@ -92,3 +123,6 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
         #                                             target[b,target_ind_bs[b][i],1]))
         return loss, location_ind_bs, target_ind_bs
     return loss
+
+def alignment_loss_points(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0, return_alignment=False, debug=None):
+    return alignment_loss(predictions, target, label_sizes, alpha_alignment,alpha_backprop,return_alignment,debug,points=True)

@@ -1,11 +1,14 @@
 import torch
 from torch import nn
 from base import BaseModel
+import torch.nn.functional as F
+from torch.nn.utils.weight_norm import weight_norm
+import math
 
 
 def make_layers(cfg, batch_norm=False, weight_norm=False):
     modules = []
-    in_channels = cfg[0]
+    in_channels = [cfg[0]]
     
     layers=[]
     layerCodes=[]
@@ -14,18 +17,22 @@ def make_layers(cfg, batch_norm=False, weight_norm=False):
             modules.append(nn.Sequential(*layers))
             layers = [nn.MaxPool2d(kernel_size=2, stride=2)]
             layerCodes = [v]
-        elif v == 'U+':
+        elif type(v)==str and v[:2] == 'U+':
             if len(layers)>0:
-                modules.append(layers[0].addConv(nn.Sequential(*layers[1:])))
-            layers = [up(in_channels[-2])]
+                if type(layerCodes[0])==str and layerCodes[0][:2]=='U+':
+                    layers[0].addConv(nn.Sequential(*layers[1:]))
+                    modules.append(layers[0])
+                else:
+                    modules.append(nn.Sequential(*layers))
+            layers = [up(in_channels[-1])]
             layerCodes = [v]
 
-            in_channels.append(in_channels[-2]+in_channels[-1])
+            in_channels.append(int(v[2:])+in_channels[-1])
         else:
             conv2d = nn.Conv2d(in_channels[-1], v, kernel_size=3, padding=1)
-            if i == len(cfg)-1:
-                layers += [conv2d]
-                break
+            #if i == len(cfg)-1:
+            #    layers += [conv2d]
+            #    break
             if batch_norm:
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
             elif weight_norm:
@@ -35,8 +42,12 @@ def make_layers(cfg, batch_norm=False, weight_norm=False):
             layerCodes.append(v)
             in_channels.append(v)
     if len(layers)>0:
-        modules.append(nn.Sequential(*layers))
-    return modules #nn.Sequential(*layers)
+        if type(layerCodes[0])==str and layerCodes[0][:2]=='U+':
+            layers[0].addConv(nn.Sequential(*layers[1:]))
+            modules.append(layers[0])
+        else:
+            modules.append(nn.Sequential(*layers))
+    return modules, in_channels[-1] #nn.Sequential(*layers)
 
 class up(nn.Module):
     def __init__(self, in_ch, bilinear=True):
@@ -76,24 +87,26 @@ class Detector(BaseModel):
         #self.cnn, self.scale = vgg.vgg11_custOut(self.predLineCount*5+self.predPointCount*3,batch_norm=batch_norm, weight_norm=weight_norm)
         self.numOutEnd = self.predLineCount*5+self.predPointCount*3
         if 'down_layers_cfg' in config:
-            layers_cfg = config['down_layers_cfg']+[self.numOutEnd]
+            layers_cfg = config['down_layers_cfg']
         else:
-            layers_cfg=[[3],64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, self.numOutEnd]
-        if self.predPixelCount>0:
-            if 'up_layers_cfg' in config:
-                up_layers_cfg =  config['up_layers_cfg']+[self.predPixelCount]
-            else:
-                up_layers_cfg=[[512,512], 'U+', 256, 'U+', 128, 'U+', 64, 'U+', self.predPixelCount]
+            layers_cfg=[3,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
 
-        self.net_down_modules = make_layers(layers_cfg, batch_norm, weight_norm)
+        self.net_down_modules, down_last_channels = make_layers(layers_cfg, batch_norm, weight_norm)
+        self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutEnd, kernel_size=3, padding=1))
         self._hack_down = nn.Sequential(*self.net_down_modules)
         self.scale=1
         for a in layers_cfg:
             if a=='M':
                 self.scale*=2
 
-        self.net_up_modules = make_layers(up_layers_cfg, batch_norm, weight_norm)
-        self._hack_up = nn.Sequential(*self.net_up_modules)
+        if self.predPixelCount>0:
+            if 'up_layers_cfg' in config:
+                up_layers_cfg =  config['up_layers_cfg']
+            else:
+                up_layers_cfg=[512, 'U+512', 256, 'U+256', 128, 'U+128', 64, 'U+64']
+            self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, batch_norm, weight_norm)
+            self.net_up_modules.append(nn.Conv2d(up_last_channels, self.predPixelCount, kernel_size=3, padding=1))
+            self._hack_up = nn.Sequential(*self.net_up_modules)
 
         #self.base_0 = config['base_0']
         #self.base_1 = config['base_1']
@@ -147,9 +160,10 @@ class Detector(BaseModel):
 
         pixelPreds=None
         if self.predPixelCount>0:
-            y2=y
-            p=-2
+            y2=levels[-2]
+            p=-3
             for module in self.net_up_modules[:-1]:
+                #print('uping {} , {}'.format(y2.size(), levels[p].size()))
                 y2 = module(y2,levels[p])
                 p-=1
             pixelPreds = self.net_up_modules[-1](y2)

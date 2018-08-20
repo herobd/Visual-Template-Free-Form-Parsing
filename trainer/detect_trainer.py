@@ -25,7 +25,7 @@ class DetectTrainer(BaseTrainer):
         if 'loss_weights' in config:
             self.loss_weight=config['loss_weights']
         else:
-            self.loss_weight={'line':0.6, 'point':0.5, 'pixel':0.05}
+            self.loss_weight={'line':0.8, 'point':0.4, 'pixel':10}
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
         self.data_loader_iter = iter(data_loader)
@@ -70,7 +70,8 @@ class DetectTrainer(BaseTrainer):
             data = data.to(self.gpu)
             targetLines=sendToGPU(targetLines)
             targetPoints=sendToGPU(targetPoints)
-            targetPixels=targetPixels.to(self.gpu)
+            if targetPixels is not None:
+                targetPixels=targetPixels.to(self.gpu)
         return data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels
 
     def _eval_metrics(self, output, target):
@@ -107,17 +108,17 @@ class DetectTrainer(BaseTrainer):
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
-            data, targetLines, targetLines_sizes, targetPoints, targetPoint_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
+            data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
-            data, targetLines, targetLines_sizes, targetPoints, targetPoint_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
+            data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
         ##toc=timeit.default_timer()
         ##print('data: '+str(toc-tic))
         
         ##tic=timeit.default_timer()
 
         self.optimizer.zero_grad()
-        output = self.model(data)
+        outputLines, outputPoints, outputPixels = self.model(data)
 
         ##toc=timeit.default_timer()
         ##print('for: '+str(toc-tic))
@@ -127,21 +128,27 @@ class DetectTrainer(BaseTrainer):
         losses={}
         ##tic=timeit.default_timer()
         for name, target in targetLines.items():
+            #print('line')
             predictions = util.pt_xyrs_2_xyxy(outputLines[index])
             this_loss = self.loss['line'](predictions,target,targetLines_sizes[name], **self.loss_params['line'])
-            loss+=this_loss*self.self.loss_weight['line']
+            this_loss*=self.loss_weight['line']
+            loss+=this_loss
             losses[name+'_loss']=this_loss.item()
             index+=1
         index=0
         for name, target in targetPoints.items():
+            #print('point')
             predictions = outputPoints[index]
             this_loss = self.loss['point'](predictions,target,targetPoints_sizes[name], **self.loss_params['point'])
-            loss+=this_loss*self.self.loss_weight['point']
+            this_loss*=self.loss_weight['point']
+            loss+=this_loss
             losses[name+'_loss']=this_loss.item()
             index+=1
         if targetPixels is not None:
+            #print('pixel')
             this_loss = self.loss['pixel'](outputPixels,targetPixels, **self.loss_params['pixel'])
-            loss+=this_loss*self.self.loss_weight['pixel']
+            this_loss*=self.loss_weight['pixel']
+            loss+=this_loss
             losses['pixel_loss']=this_loss.item()
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
@@ -152,10 +159,10 @@ class DetectTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('bac: '+str(toc-tic))
 
-        ##tic=timeit.default_timer()
-        metrics = self._eval_metrics(output, target)
-        ##toc=timeit.default_timer()
-        ##print('metric: '+str(toc-tic))
+        #tic=timeit.default_timer()
+        #metrics = self._eval_metrics(output, target)
+        #toc=timeit.default_timer()
+        #print('metric: '+str(toc-tic))
 
         ##tic=timeit.default_timer()
         loss = loss.item()
@@ -165,7 +172,7 @@ class DetectTrainer(BaseTrainer):
 
         log = {
             'loss': loss,
-            'metrics': metrics,
+            #'metrics': metrics,
             **losses
         }
 
@@ -194,25 +201,38 @@ class DetectTrainer(BaseTrainer):
         self.model.eval()
         total_val_loss = 0
         total_val_metrics = np.zeros(len(self.metrics))
+        losses={}
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
-                data, targets, target_sizes = self._to_tensor(instance)
+                data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
 
                 outputLines, outputPoints, outputPixels = self.model(data)
                 #loss = self.loss(output, target)
-                loss=0
+                loss = 0
                 index=0
-                for name, target in targets.items():
-                    predictions = util.pt_xyrs_2_xyxy(output[index])
-                    this_loss = self.loss(predictions,target,target_sizes[name], **self.loss_params)
-                    loss+=this_loss
+                for name, target in targetLines.items():
+                    predictions = util.pt_xyrs_2_xyxy(outputLines[index])
+                    this_loss = self.loss['line'](predictions,target,targetLines_sizes[name], **self.loss_params['line'])
+                    loss+=this_loss*self.loss_weight['line']
                     losses['val_'+name+'_loss']+=this_loss.item()
                     index+=1
+                index=0
+                for name, target in targetPoints.items():
+                    predictions = outputPoints[index]
+                    this_loss = self.loss['point'](predictions,target,targetPoints_sizes[name], **self.loss_params['point'])
+                    loss+=this_loss*self.loss_weight['point']
+                    losses['val_'+name+'_loss']+=this_loss.item()
+                    index+=1
+                if targetPixels is not None:
+                    this_loss = self.loss['pixel'](outputPixels,targetPixels, **self.loss_params['pixel'])
+                    loss+=this_loss*self.loss_weight['pixel']
+                    losses['val_pixel_loss']+=this_loss.item()
 
                 total_val_loss += loss.item()
                 total_val_metrics += self._eval_metrics(output, target)
-
+        for name in losses:
+            losses[name]/=len(self.valid_data_loader)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),

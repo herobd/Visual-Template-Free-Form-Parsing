@@ -128,6 +128,8 @@ class CropTransform(object):
         j=0
         #pad the points accordingly
         for name, gt in line_gts.items():
+            #if np.isnan(gt).any():
+            #    print('gt has nan, {}'.format(name))
             gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
             gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 

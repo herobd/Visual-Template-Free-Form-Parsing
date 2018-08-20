@@ -131,12 +131,14 @@ def collate(batch):
             resized[:,:,pos_r:pos_r+img.size(2), pos_c:pos_c+img.size(3)]=img
             resized_imgs.append(resized)
 
-            resized_gt = torch.zeros([1,pixel_gt[index].size(1),max_h,max_w]).type(pixel_gt[index].type())
-            resized_gt[:,:,pos_r:pos_r+img.size(2), pos_c:pos_c+img.size(3)]=pixel_gt[index]
-            resized_pixel_gt.append(resized_gt)
+            if pixel_gt[index] is not None:
+                resized_gt = torch.zeros([1,pixel_gt[index].size(1),max_h,max_w]).type(pixel_gt[index].type())
+                resized_gt[:,:,pos_r:pos_r+img.size(2), pos_c:pos_c+img.size(3)]=pixel_gt[index]
+                resized_pixel_gt.append(resized_gt)
         else:
             resized_imgs.append(img)
-            resized_pixel_gt.append(pixel_gt[index])
+            if pixel_gt[index] is not None:
+                resized_pixel_gt.append(pixel_gt[index])
         index+=1
 
             
@@ -172,7 +174,12 @@ def collate(batch):
             point_labels[name][i, :point_label_sizes[name][i]] = gt
 
     imgs = torch.cat(resized_imgs)
-    pixel_gt = torch.cat(resized_pixel_gt)
+    if len(resized_pixel_gt)==1:
+        pixel_gt = resized_pixel_gt
+    elif len(resized_pixel_gt)>1:
+        pixel_gt = torch.cat(resized_pixel_gt)
+    else:
+        pixel_gt = None
 
     ##print('collate: '+str(timeit.default_timer()-tic))
     return {
@@ -378,35 +385,37 @@ class FormsDetect(torch.utils.data.Dataset):
                 }
         else:
             line_gt={}
-            for ent in self.only_types['line']:
-                if type(ent)==list:
-                    toComb=[]
-                    for inst in ent[1:]:
-                        einst = eval(inst)
-                        if einst is not None:
-                            toComb.append(einst)
-                    if len(toComb)>0:
-                        comb = torch.cat(toComb,dim=1)
-                        line_gt[ent[0]]=comb
+            if 'line' in self.only_types:
+                for ent in self.only_types['line']:
+                    if type(ent)==list:
+                        toComb=[]
+                        for inst in ent[1:]:
+                            einst = eval(inst)
+                            if einst is not None:
+                                toComb.append(einst)
+                        if len(toComb)>0:
+                            comb = torch.cat(toComb,dim=1)
+                            line_gt[ent[0]]=comb
+                        else:
+                            line_gt[ent[0]]=None
                     else:
-                        line_gt[ent[0]]=None
-                else:
-                    line_gt[ent]=eval(ent)
+                        line_gt[ent]=eval(ent)
             point_gt={}
-            for ent in self.only_types['point']:
-                if type(ent)==list:
-                    toComb=[]
-                    for inst in ent[1:]:
-                        einst = eval(inst)
-                        if einst is not None:
-                            toComb.append(einst)
-                    if len(toComb)>0:
-                        comb = torch.cat(toComb,dim=1)
-                        point_gt[ent[0]]=comb
+            if 'point' in self.only_types:
+                for ent in self.only_types['point']:
+                    if type(ent)==list:
+                        toComb=[]
+                        for inst in ent[1:]:
+                            einst = eval(inst)
+                            if einst is not None:
+                                toComb.append(einst)
+                        if len(toComb)>0:
+                            comb = torch.cat(toComb,dim=1)
+                            point_gt[ent[0]]=comb
+                        else:
+                            line_gt[ent[0]]=None
                     else:
-                        line_gt[ent[0]]=None
-                else:
-                    point_gt[ent]=eval(ent)
+                        point_gt[ent]=eval(ent)
             pixel_gtR=None
             #for ent in self.only_types['pixel']:
             #    if type(ent)==list:
@@ -416,7 +425,7 @@ class FormsDetect(torch.utils.data.Dataset):
             #        pixel_gt[ent[0]]=comb
             #    else:
             #        pixel_gt[ent]=eval(ent)
-            if self.only_types['pixel'][0]=='table_pixels':
+            if 'pixel' in self.only_types and self.only_types['pixel'][0]=='table_pixels':
                 pixel_gtR=pixel_gt
 
             return {
@@ -429,9 +438,8 @@ class FormsDetect(torch.utils.data.Dataset):
 
 
     def getStartEndGT(self,bbs,s, fields=False):
-        start_gt = np.empty((1,len(bbs), 4), dtype=np.float32)
-        end_gt = np.empty((1,len(bbs), 4), dtype=np.float32)
-        j=0
+
+        useBBs=[]
         for bb in bbs:
             if ( fields and (
                     (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
@@ -439,6 +447,12 @@ class FormsDetect(torch.utils.data.Dataset):
                     bb['type'] == 'fieldRow' or
                     bb['type'] == 'fieldCol' )):
                 continue
+            else:
+                useBBs.append(bb)
+        start_gt = np.empty((1,len(useBBs), 4), dtype=np.float32)
+        end_gt = np.empty((1,len(useBBs), 4), dtype=np.float32)
+        j=0
+        for bb in useBBs:
             tlX = bb['poly_points'][0][0]
             tlY = bb['poly_points'][0][1]
             trX = bb['poly_points'][1][0]

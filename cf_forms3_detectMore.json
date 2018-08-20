@@ -1,0 +1,90 @@
+{
+    "name": "Forms3_detectMore",
+    "cuda": true,
+    "gpu": 0,
+    "override": true,
+    "data_loader": {
+        "data_set_name": "FormsDetect",
+        "data_dir": "/home/ubuntu/brian/data/forms",
+        "batch_size": 8,
+        "shuffle": true,
+        "num_workers": 5,
+        "crop_to_page":false,
+        "crop_params": {
+            "crop_size":512
+        },
+        "rescale_range": [450,800],
+        "no_blanks": true,
+        "cache_resized_images": true,
+        "only_types": {
+            "line":[ ["start_gt", "text_start_gt", "field_start_gt"], 
+                     ["end_gt", "text_end_gt", "field_end_gt"],
+                     "text_start_gt",
+                     "field_start_gt",
+                     "text_end_gt",
+                     "field_end_gt" ],
+            "point":[ "table_points" ],
+            "pixel":[ "table_pixels" ]
+        }
+
+    },
+    "validation": {
+        "shuffle": false,
+        "crop_to_page":false,
+        "rescale_range": [512,512],
+        "only_types": {
+            "line":[ ["start_gt", "text_start_gt", "field_start_gt"], 
+                     ["end_gt", "text_end_gt", "field_end_gt"],
+                     "text_start_gt",
+                     "field_start_gt",
+                     "text_end_gt",
+                     "field_end_gt" ],
+            "point":[ "table_points" ],
+            "pixel":[ "table_pixels" ]
+        }
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.00001,
+        "weight_decay": 0
+    },
+    "loss": {
+        "line":"detect_alignment_loss",
+        "point":"detect_alignment_loss_points",
+        "pixel":"sigmoid_BCE_loss"
+    },
+    "loss_params": {
+        "line": {
+            "alpha_alignment": 0.1,
+            "alpha_backprop": 0.1
+        },
+        "point": {
+            "alpha_alignment": 0.1,
+            "alpha_backprop": 0.1
+        },
+        "pixel":{}
+    },
+    "metrics": [],
+    "trainer": {
+        "class": "DetectTrainer",
+        "iterations": 1000000,
+        "save_dir": "saved/",
+        "val_step": 2000,
+        "save_step": 4000,
+        "log_step": 200,
+        "verbosity": 2,
+        "monitor": "loss",
+        "monitor_mode": "none"
+    },
+    "arch": "Detector", 
+    "model": {
+        "number_of_line_types": 6,
+        "number_of_point_types": 1,
+        "number_of_pixel_types": 1,
+        "norm_type": "weightNorm"
+    }
+}

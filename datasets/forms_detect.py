@@ -445,7 +445,8 @@ class FormsDetect(torch.utils.data.Dataset):
                     (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
                     (self.no_print_fields and (bb['isBlank']=='print' or bb['isBlank']==2)) or
                     bb['type'] == 'fieldRow' or
-                    bb['type'] == 'fieldCol' )):
+                    bb['type'] == 'fieldCol' or
+                    bb['type'] == 'fieldRegion' )):
                 continue
             else:
                 useBBs.append(bb)

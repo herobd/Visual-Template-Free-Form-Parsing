@@ -13,48 +13,18 @@ class FormsPair(torch.utils.data.Dataset):
     Class for reading AI2D dataset and creating query/result masks from bounding polygons
     """
 
-    def __getResponsePolyList(self,queryId,annotations):
-        responsePolyList=[]
-        for relId in annotations['relationships']:
-            if queryId in relId:
-                #print('query: '+queryId)
-                #print('rel:   '+relId)
-                pos = relId.find(queryId)
-                if pos+len(queryId)<len(relId) and relId[pos+len(queryId)]!='+': #ensure 'B1' doesnt match 'B10'
-                    continue
-                #only the objects listed immediatley before or after this one are important
-                if pos>0 and relId[pos-1]=='+':
-                    nextPlus = relId.rfind('+',0,pos-1)
-                    #print('nextP: '+str(nextPlus))
-                    neighborId = relId[nextPlus+1:pos-1]
-                    #print('neBe:  '+neighborId)
-                    poly = self.__getResponsePoly(neighborId,annotations)
-                    if poly is not None:
-                        responsePolyList.append(poly)
-                if pos+len(queryId)+1<len(relId) and relId[pos+len(queryId)]=='+':
-                    nextPlus = relId.find('+',pos+len(queryId)+1)
-                    if nextPlus==-1:
-                        neighborId=relId[pos+len(queryId)+1:]
-                        #print('neAf1: '+neighborId)
-                    else:
-                        neighborId=relId[pos+len(queryId)+1:nextPlus]
-                        #print('neAf2: '+neighborId)
-                    poly = self.__getResponsePoly(neighborId,annotations)
-                    if poly is not None:
-                        responsePolyList.append(poly)
-        return responsePolyList
+    def __getResponseBBList(self,queryId,annotations):
+        responseBBList=[]
+        for pair in annotations['pairs']:
+            if queryId in pair:
+                if pair[0]==queryId:
+                    otherId=pair[1]
+                else:
+                    otherId=pair[0]
+                poly = np.array(annotations['byId'][otherId]['point_points']) #self.__getResponseBB(otherId,annotations)  
+                responseBBList.append(poly)
+        return responseBBList
 
-    def __getResponsePoly(self, neighborId,annotations):
-        if neighborId[0]=='T':
-            rect=annotations['text'][neighborId]['rectangle']
-            poly = [ rect[0], [rect[1][0],rect[0][1]], rect[1], [rect[0][0],rect[1][1]] ]#, rect[0] ]
-            return np.array(poly)
-        elif neighborId[0]=='A':
-            return np.array(annotations['arrows'][neighborId]['polygon'])
-        elif neighborId[0]=='B':
-            return np.array(annotations['blobs'][neighborId]['polygon'])
-        else:
-            return None
 
     def __init__(self, dirPath=None, split=None, config=None, instances=None, test=False):
         if 'augmentation_params' in config['data_loader']:
@@ -121,6 +91,11 @@ class FormsPair(torch.utils.data.Dataset):
                             aH+=imH
                             aW+=imW
                             aA+=imH*imW
+                        annotations['byId']={}
+                        for bb in annotations['textBBs']:
+                            annotations['byId'][bb['id']]=bb
+                        for bb in annotations['fieldBBs']:
+                            annotations['byId'][bb['id']]=bb
                         for bb in annotations['textBBs']:
                             bbPoints = np.array(bb['poly_points'])
                             responseBBList = self.__getResponseBBList(bb['id'],annotations)
@@ -157,8 +132,8 @@ class FormsPair(torch.utils.data.Dataset):
                 elif test:
                     with open(os.path.join(dirPath,'annotationsMod',image+'.json')) as f:
                         annotations = json.loads(f.read())
-                        imH = annotations['imageConsts']['height']
-                        imW = annotations['imageConsts']['width']
+                        imH = annotations['height']
+                        imW = annotations['width']
                         aH+=imH
                         aW+=imW
                         aA+=imH*imW
@@ -182,7 +157,7 @@ class FormsPair(torch.utils.data.Dataset):
         #print(index)
         #print(self.imagePaths[index])
         #print(self.ids[index])
-        image = io.imread(imagePath)/255.0
+        image = 1.0 - io.imread(imagePath)/128.0
         #TODO color jitter, rotation?, skew?
         queryMask = np.zeros([image.shape[0],image.shape[1]])
         rr, cc = draw.polygon(queryPoly[:, 1], queryPoly[:, 0], queryMask.shape)
@@ -199,16 +174,6 @@ class FormsPair(torch.utils.data.Dataset):
         if self.augmentation_params is not None:
             sample = self.augment(sample)
         return sample #+ (imagePath+' '+id,)
-
-    def splitValidation(self, config):
-        validation_split = config['validation']['validation_split']
-        split = int(len(self) * validation_split)
-        perm = np.random.permutation(len(self))
-        instances = [self.instances[x] for x in perm]
-
-        self.instances=instances[split:]
-
-        return AI2D(config=config, instances=instances[:split])
 
     def __getHelperStats(self, queryPoly, polyList, imH, imW):
         """

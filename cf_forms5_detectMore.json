@@ -1,5 +1,5 @@
 {
-    "name": "Forms3_detectMore",
+    "name": "Forms5_detectMore",
     "cuda": true,
     "gpu": 0,
     "override": true,
@@ -15,6 +15,7 @@
         },
         "rescale_range": [450,800],
         "no_blanks": true,
+        "swap_circle":true,
         "cache_resized_images": true,
         "only_types": {
             "line":[ ["start_gt", "text_start_gt", "field_start_gt"], 
@@ -86,6 +87,8 @@
         "number_of_line_types": 6,
         "number_of_point_types": 1,
         "number_of_pixel_types": 1,
-        "norm_type": "weightNorm"
+        "norm_type": "weightNorm",
+        "down_layers_cfg": [3,64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 1024, 1024, 1024],
+        "up_layers_cfg":[1024, "U+512", 128, "U+256", 64, "U+128", 32, "U+64"]
     }
 }

@@ -132,6 +132,7 @@ class Detector(BaseModel):
 
         linePreds=[]
         for i in range(self.predLineCount):
+
             offset = i*5
             predictions = torch.cat([
                 torch.sigmoid(y[:,0+offset:1+offset,:,:]),    #confidence
@@ -147,7 +148,7 @@ class Detector(BaseModel):
 
         pointPreds=[]
         for i in range(self.predPointCount):
-            offset = i*3
+            offset = i*3 + 5*self.predLineCount
             predictions = torch.cat([
                 torch.sigmoid(y[:,0+offset:1+offset,:,:]),    #confidence
                 y[:,1+offset:2+offset,:,:] + priors_1,        #x

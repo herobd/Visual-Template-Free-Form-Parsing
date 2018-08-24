@@ -20,6 +20,7 @@ def graph(log):
                 graphs[metric]['iters'].append(iteration)
                 graphs[metric]['values'].append(value)
     
+    print('summed')
     i=1
     for metric, data in graphs.items():
         plt.figure(i)
@@ -44,6 +45,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     assert args.checkpoint is not None
-    log = torch.load(args.checkpoint)['logger']
+    log = torch.load(args.checkpoint,map_location=lambda storage, loc: storage)['logger']
+    print('loaded')
 
     graph(log)

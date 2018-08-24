@@ -6,9 +6,11 @@ import torch
 from model.model import *
 from model.unet import UNet
 from model.sol_eol_finder import SOL_EOL_Finder
+from model.detector import Detector
 from model.metric import *
 from data_loader import getDataLoader
 from utils.printers import *
+import math
 
 from datasets.forms_detect import FormsDetect
 from datasets import forms_detect
@@ -41,8 +43,10 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
     np.random.seed(1234)
     checkpoint = torch.load(resume)
     config = checkpoint['config']
+    config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
     config['data_loader']['shuffle']=False
     config['validation']['shuffle']=False
+    #config['validation']
 
     #print(config['data_loader'])
     data_loader, valid_data_loader = getDataLoader(config,'train')
@@ -61,12 +65,19 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
 
     model.load_state_dict(checkpoint['state_dict'])
 
+    #if "class" in config["trainer"]:
+    #    trainer_class = config["trainer"]["class"]
+    #else:
+    #    trainer_class = "Trainer"
+
+    #saveFunc = eval(trainer_class+'_printer')
     saveFunc = eval(config['data_loader']['data_set_name']+'_printer')
 
     step=5
     batchSize = config['data_loader']['batch_size']
 
     #numberOfImages = numberOfImages//config['data_loader']['batch_size']
+    print(len(data_loader))
     train_iter = iter(data_loader)
     valid_iter = iter(valid_data_loader)
 
@@ -106,7 +117,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
                     #metricsO = _eval_metrics_ind(metrics,output, target)
                     metricsO = saveFunc(valid_iter.next(),model,gpu,metrics,validDir,validIndex)
 
-                    val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
+                    #val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
         if gpu is not None:
             try:

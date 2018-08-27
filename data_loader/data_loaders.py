@@ -4,6 +4,7 @@ import numpy as np
 from datasets.ai2d import AI2D
 from datasets import forms_detect
 from datasets.forms_detect import FormsDetect
+from datasets.forms_pair import FormsPair
 from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -82,6 +83,17 @@ def getDataLoader(config,split):
             elif split=='test':
                 testData = FormsDetect(dirPath=data_dir, split='test', config=config['data_loader'])
                 testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
+                return testLoader, None
+        elif data_set_name=='FormsPair':
+            if split=='train':
+                trainData = FormsPair(dirPath=data_dir, split='train', config=config['data_loader'])
+                trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers)
+                validData = FormsPair(dirPath=data_dir, split='valid', config=config['validation'])
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
+                return trainLoader, validLoader
+            elif split=='test':
+                testData = FormsPair(dirPath=data_dir, split='test', config=config['data_loader'])
+                testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers)
                 return testLoader, None
 
 

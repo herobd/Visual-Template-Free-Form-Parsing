@@ -39,7 +39,7 @@ def AI2D_printer(instance, model, gpu, metrics, outDir=None, startIndex=None):
 
     batchSize = data.shape[0]
     for i in range(batchSize):
-        image = np.transpose(data[i][0:3,:,:],(1,2,0))
+        image = (1-np.transpose(data[i][0:3,:,:],(1,2,0)))/2.0
         queryMask = data[i][3,:,:]
 
         grayIm = color.rgb2grey(image)
@@ -58,6 +58,9 @@ def AI2D_printer(instance, model, gpu, metrics, outDir=None, startIndex=None):
         io.imsave(os.path.join(outDir,saveName),highlightIm)
         
     return metricsOut
+
+def FormsPair_printer(instance, model, gpu, metrics, outDir=None, startIndex=None):
+    return AI2D_printer(instance, model, gpu, metrics, outDir, startIndex)
 
 def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=None):
     def __eval_metrics(data,target):

@@ -7,6 +7,84 @@ from skimage import draw
 import skimage.transform as sktransform
 import os
 import math
+import cv2
+
+IAIN_CATCH=['193','194','197','200']
+
+def fixAssumptions(annotations):
+    #print('TODO')
+    toAdd=[]
+    toAddSame=[]
+
+    for pair in annotations['samePairs']:
+        notNum=num=None
+        if annotations['byId'][pair[0]]['type']=='textNumber':
+            num=annotations['byId'][pair[0]]
+            notNum=annotations['byId'][pair[1]]
+        elif annotations['byId'][pair[1]]['type']=='textNumber':
+            num=annotations['byId'][pair[1]]
+            notNum=annotations['byId'][pair[0]]
+
+        if notNum is not None and notNum['type']!='textNumber':
+            for pair2 in annotations['pairs']:
+                if notNum['id'] in pair2:
+                    if notNum['id'] == pair2[0]:
+                        otherId=pair2[1]
+                    else:
+                        otherId=pair2[0]
+                    if annotations[otherId]['type']=='fieldCol' or annotations[otherId]['type']=='fieldRow':
+                        toAdd.append([num['id'],otherId)
+
+    #heirarchy labels.
+    #for pair in annotations['samePairs']:
+    #    text=textMinor=None
+    #    if annotations['byId'][pair[0]]['type']=='text':
+    #        text=pair[0]
+    #        if annotations['byId'][pair[1]]['type']=='textMinor':
+    #            textMinor=pair[1]
+    #    elif annotations['byId'][pair[1]]['type']=='text':
+    #        text=pair[1]
+    #        if annotations['byId'][pair[0]]['type']=='textMinor':
+    #            textMinor=pair[0]
+    #    else:#catch case of minor-minor-field
+    #        if annotations['byId'][pair[1]]['type']=='textMinor' and annotations['byId'][pair[0]]['type']=='textMinor':
+    #            a=pair[0]
+    #            b=pair[1]
+    #            for pair2 in annotations['pairs']:
+    #                if a in pair2:
+    #                    if pair2[0]==a:
+    #                        otherId=pair2[1]
+    #                    else:
+    #                        otherId=pair2[0]
+    #                    toAdd.append([b,otherId])
+    #                if b in pair2:
+    #                    if pair2[0]==b:
+    #                        otherId=pair2[1]
+    #                    else:
+    #                        otherId=pair2[0]
+    #                    toAdd.append([a,otherId])
+
+    #    
+    #    if text is not None and textMinor is not None:
+    #        for pair2 in annotations['pairs']:
+    #            if textMinor in pair2:
+    #                if pair2[0]==textMinor:
+    #                    otherId=pair2[1]
+    #                else:
+    #                    otherId=pair2[0]
+    #                toAdd.append([text,otherId])
+    #        for pair2 in annotations['samePairs']:
+    #            if textMinor in pair2:
+    #                if pair2[0]==textMinor:
+    #                    otherId=pair2[1]
+    #                else:
+    #                    otherId=pair2[0]
+    #                if annotations['byId'][otherId]['type']=='textMinor':
+    #                    toAddSame.append([text,otherId])
+
+    annotations['samePairs']+=toAddSame
+    annotations['pairs']+=toAdd
+
 
 class FormsPair(torch.utils.data.Dataset):
     """
@@ -15,23 +93,24 @@ class FormsPair(torch.utils.data.Dataset):
 
     def __getResponseBBList(self,queryId,annotations):
         responseBBList=[]
-        for pair in annotations['pairs']:
+        for pair in annotations['pairs']+annotations['samePairs']:
             if queryId in pair:
                 if pair[0]==queryId:
                     otherId=pair[1]
                 else:
                     otherId=pair[0]
-                poly = np.array(annotations['byId'][otherId]['point_points']) #self.__getResponseBB(otherId,annotations)  
+                poly = np.array(annotations['byId'][otherId]['poly_points']) #self.__getResponseBB(otherId,annotations)  
                 responseBBList.append(poly)
         return responseBBList
 
 
     def __init__(self, dirPath=None, split=None, config=None, instances=None, test=False):
-        if 'augmentation_params' in config['data_loader']:
-            self.augmentation_params=config['data_loader']['augmentation_params']
+        self.cache_resized=False
+        if 'augmentation_params' in config:
+            self.augmentation_params=config['augmentation_params']
         else:
             self.augmentation_params=None
-	if 'no_blanks' in config:
+        if 'no_blanks' in config:
             self.no_blanks = config['no_blanks']
         else:
             self.no_blanks = False
@@ -39,16 +118,16 @@ class FormsPair(torch.utils.data.Dataset):
             self.no_print_fields = config['no_print_fields']
         else:
             self.no_print_fields = False
-        patchSize=config['data_loader']['patch_size']
+        patchSize=config['patch_size']
         if instances is not None:
             self.instances=instances
             self.cropResize = self.__cropResizeF(patchSize,0,0)
         else:
-            centerJitterFactor=config['data_loader']['center_jitter']
-            sizeJitterFactor=config['data_loader']['size_jitter']
+            centerJitterFactor=config['center_jitter']
+            sizeJitterFactor=config['size_jitter']
             self.cropResize = self.__cropResizeF(patchSize,centerJitterFactor,sizeJitterFactor)
             with open(os.path.join(dirPath,'train_valid_test_split.json')) as f:
-		groupsToUse = json.loads(f.read())[split]
+                groupsToUse = json.loads(f.read())[split]
             self.instances=[]
             if test:
                 aH=0
@@ -65,6 +144,7 @@ class FormsPair(torch.utils.data.Dataset):
                     else:
                         path = org_path
                     jsonPath = org_path[:org_path.rfind('.')]+'.json'
+                    annotations=None
                     if os.path.exists(jsonPath):
                         rescale=1.0
                         if self.cache_resized and not os.path.exists(path):
@@ -75,15 +155,16 @@ class FormsPair(torch.utils.data.Dataset):
                             cv2.imwrite(path,resized)
                             rescale = target_dim1/float(org_img.shape[1])
                         elif self.cache_resized:
-                            with open(os.path.join(jsonPath) as f:
+                            with open(os.path.join(jsonPath)) as f:
                                 annotations = json.loads(f.read())
                             imW = annotations['width']
                                     
                             target_dim1 = self.rescale_range[1]
                             rescale = target_dim1/float(imW)
                         if annotations is None:
-                            with open(os.path.join(jsonPath) as f:
+                            with open(os.path.join(jsonPath)) as f:
                                 annotations = json.loads(f.read())
+                            #print(os.path.join(jsonPath))
                         imH = annotations['height']
                         imW = annotations['width']
                         #startCount=len(self.instances)
@@ -96,9 +177,16 @@ class FormsPair(torch.utils.data.Dataset):
                             annotations['byId'][bb['id']]=bb
                         for bb in annotations['fieldBBs']:
                             annotations['byId'][bb['id']]=bb
+
+                        #fix assumptions made in GTing
+                        #fixAssumptions(annotations)
+
+                        #print(path)
                         for bb in annotations['textBBs']:
                             bbPoints = np.array(bb['poly_points'])
                             responseBBList = self.__getResponseBBList(bb['id'],annotations)
+                            #print(bb['id'])
+                            #print(responseBBList)
                             self.instances.append({
                                                 'id': bb['id'],
                                                 'imagePath': path,
@@ -129,7 +217,7 @@ class FormsPair(torch.utils.data.Dataset):
                         #        print(os.path.join(dirPath,'annotationsMod',image+'.json'))
                         #        print(err)
                         #        exit(2)
-                elif test:
+                if test:
                     with open(os.path.join(dirPath,'annotationsMod',image+'.json')) as f:
                         annotations = json.loads(f.read())
                         imH = annotations['height']
@@ -157,7 +245,7 @@ class FormsPair(torch.utils.data.Dataset):
         #print(index)
         #print(self.imagePaths[index])
         #print(self.ids[index])
-        image = 1.0 - io.imread(imagePath)/128.0
+        image = 1.0 - cv2.imread(imagePath)/128.0
         #TODO color jitter, rotation?, skew?
         queryMask = np.zeros([image.shape[0],image.shape[1]])
         rr, cc = draw.polygon(queryPoly[:, 1], queryPoly[:, 0], queryMask.shape)
@@ -284,11 +372,15 @@ class FormsPair(torch.utils.data.Dataset):
                     radius = np.random.randint(radius, yc-y0 +1)
 
             
+            #are to going to expand the image? Don't
+            if radius < patchSize/2.0:
+                radius = patchSize/2.0 + abs(np.random.normal(0,reach*sizeJitterFactor/2))
 
             cropOutX0 = int(max(xc-radius,0))
             cropOutY0 = int(max(yc-radius,0))
             cropOutX1 = int(min(xc+radius+1,image.shape[2]))
             cropOutY1 = int(min(yc+radius+1,image.shape[1]))
+
             size = (cropOutY1-cropOutY0,cropOutX1-cropOutX0)
             if size[0]!=size[1]:
                 #force square, if possible

@@ -139,6 +139,7 @@ class FormsPair(torch.utils.data.Dataset):
                     continue
                 for imageName in imageNames:
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
+                    print(org_path)
                     if self.cache_resized:
                         path = os.path.join(self.cache_path,imageName)
                     else:
@@ -243,7 +244,7 @@ class FormsPair(torch.utils.data.Dataset):
         responsePolyList = self.instances[index]['responsePolyList']
         xQueryC,yQueryC,reach,x0,y0,x1,y1 = self.instances[index]['helperStats']
         #print(index)
-        #print(self.imagePaths[index])
+        #print(self.imagePath)
         #print(self.ids[index])
         image = 1.0 - cv2.imread(imagePath)/128.0
         #TODO color jitter, rotation?, skew?

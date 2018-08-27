@@ -25,7 +25,7 @@ class DetectTrainer(BaseTrainer):
         if 'loss_weights' in config:
             self.loss_weight=config['loss_weights']
         else:
-            self.loss_weight={'line':0.8, 'point':0.4, 'pixel':10}
+            self.loss_weight={'line':0.7, 'point':0.5, 'pixel':10}
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
         self.data_loader_iter = iter(data_loader)
@@ -230,7 +230,7 @@ class DetectTrainer(BaseTrainer):
                     losses['val_pixel_loss']+=this_loss.item()
 
                 total_val_loss += loss.item()
-                total_val_metrics += self._eval_metrics(output, target)
+                #total_val_metrics += self._eval_metrics(output, target)
         for name in losses:
             losses[name]/=len(self.valid_data_loader)
         return {

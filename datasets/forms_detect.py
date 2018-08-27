@@ -13,7 +13,8 @@ import timeit
 
 import cv2
 
-IAIN_CATCH=['131','131_2','132','133','193','194','197','200']
+IAIN_CATCH=['193','194','197','200']
+ONE_DONE=[]
 
 def polyIntersect(poly1, poly2):
     prevPoint = poly1[-1]
@@ -175,7 +176,7 @@ def collate(batch):
 
     imgs = torch.cat(resized_imgs)
     if len(resized_pixel_gt)==1:
-        pixel_gt = resized_pixel_gt
+        pixel_gt = resized_pixel_gt[0]
     elif len(resized_pixel_gt)>1:
         pixel_gt = torch.cat(resized_pixel_gt)
     else:
@@ -221,6 +222,10 @@ class FormsDetect(torch.utils.data.Dataset):
             self.only_types = config['only_types']
         else:
             self.only_types=None
+        if 'swap_circle' in config:
+            self.swapCircle = config['swap_circle']
+        else:
+            self.swapCircle = False
 
         if images is not None:
             self.images=images
@@ -233,10 +238,21 @@ class FormsDetect(torch.utils.data.Dataset):
                 groupsToUse = json.loads(f.read())[split]
             self.images=[]
             for groupName, imageNames in groupsToUse.items():
+                oneonly=False
                 if groupName in IAIN_CATCH:
-                    print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
-                    continue
+                    if groupName in ONE_DONE:
+                        oneonly=True
+                        with open(os.path.join(dirPath,'groups',groupName,'template'+groupName+'.json')) as f:
+                            T_annotations = json.loads(f.read())
+                    else:
+                        print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
+                        continue
                 for imageName in imageNames:
+                    if oneonly and T_annotations['imageFilename']!=imageName:
+                        #print('skipped {} {}'.format(imageName,groupName))
+                        continue
+                    elif oneonly:
+                        print('only {} from {}'.format(imageName,groupName))
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
                     if self.cache_resized:
                         path = os.path.join(self.cache_path,imageName)
@@ -294,6 +310,15 @@ class FormsDetect(torch.utils.data.Dataset):
         rescaled = self.images[index]['rescaled']
         with open(annotationPath) as annFile:
             annotations = json.loads(annFile.read())
+        #swap to-be-circled from field to text (?)
+        if self.swapCircle:
+            indexToSwap=[]
+            for i in range(len(annotations['fieldBBs'])):
+                if annotations['fieldBBs'][i]['type']=='fieldCircle':
+                    indexToSwap.append(i)
+            for i in indexToSwap:
+                annotations['textBBs'].append(annotations['fieldBBs'][i])
+                del annotations['fieldBBs'][i]
 
         ##tic=timeit.default_timer()
         org_img = cv2.imread(imagePath)#/255.0

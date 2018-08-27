@@ -176,7 +176,7 @@ def collate(batch):
 
     imgs = torch.cat(resized_imgs)
     if len(resized_pixel_gt)==1:
-        pixel_gt = resized_pixel_gt
+        pixel_gt = resized_pixel_gt[0]
     elif len(resized_pixel_gt)>1:
         pixel_gt = torch.cat(resized_pixel_gt)
     else:

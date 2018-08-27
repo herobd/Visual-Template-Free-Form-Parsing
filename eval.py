@@ -103,7 +103,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics_ind(metrics,output, target)
-                    saveFunc(train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
+                    saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
             
             for validIndex in range(index,index+step*batchSize, batchSize):
                 if validIndex/batchSize < len(valid_data_loader):
@@ -115,7 +115,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics_ind(metrics,output, target)
-                    metricsO = saveFunc(valid_iter.next(),model,gpu,metrics,validDir,validIndex)
+                    metricsO = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
 
                     #val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
@@ -128,7 +128,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None):
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics(metrics,output, target)
-                    metricsO = saveFunc(train_iter.next(),model,gpu,metrics)
+                    metricsO = saveFunc(config,train_iter.next(),model,gpu,metrics)
                     val_metrics_sum += metricsO
             except StopIteration:
                 print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))

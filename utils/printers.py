@@ -7,7 +7,7 @@ from utils import util
 from model.alignment_loss import alignment_loss
 import math
 
-def AI2D_printer(instance, model, gpu, metrics, outDir=None, startIndex=None):
+def AI2D_printer(config, instance, model, gpu, metrics, outDir=None, startIndex=None):
     #for key, value in metrics.items():
     #    print(key+': '+value)
     def __eval_metrics(data,target):
@@ -59,7 +59,7 @@ def AI2D_printer(instance, model, gpu, metrics, outDir=None, startIndex=None):
         
     return metricsOut
 
-def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=None):
+def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
     def __eval_metrics(data,target):
         acc_metrics = np.zeros((output.shape[0],len(metrics)))
         for ind in range(output.shape[0]):
@@ -139,7 +139,7 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
     alignmentLinesTarg={}
     loss=0
     index=0
-    ttt_hit=None
+    ttt_hit=True
     #if 22>=startIndex and 22<startIndex+batchSize:
     #    ttt_hit=22-startIndex
     #else:
@@ -149,19 +149,21 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
         #    sendTarg=targ.to(gpu)
         #else:
         #    sendTarg=targ
-        lossThis, predIndexes, targetLinesIndexes = alignment_loss(outputLines[index],targ,targetLinesSizes[name],return_alignment=True, debug=ttt_hit)
+        lossThis, predIndexes, targetLinesIndexes = alignment_loss(outputLines[index],targ,targetLinesSizes[name],**config['loss_params']['line'],return_alignment=True, debug=ttt_hit)
         alignmentLinesPred[name]=predIndexes
         alignmentLinesTarg[name]=targetLinesIndexes
         index+=1
     alignmentPointsPred={}
     alignmentPointsTarg={}
     index=0
-    #for name,targ in targetPointsT.items():
-    #    #print(outputPoints)
-    #    lossThis, predIndexes, targetPointsIndexes = alignment_loss(outputPoints[index],targ,targetPointsSizes[name],return_alignment=True, debug=ttt_hit, points=True)
-    #    alignmentPointsPred[name]=predIndexes
-    #    alignmentPointsTarg[name]=targetPointsIndexes
-    #    index+=1
+    for name,targ in targetPointsT.items():
+        #print(outputPoints[0].shape)
+        #print(targetPointsSizes)
+        #print('{} {}'.format(index, name))
+        lossThis, predIndexes, targetPointsIndexes = alignment_loss(outputPoints[index],targ,targetPointsSizes[name],**config['loss_params']['point'],return_alignment=True, debug=ttt_hit, points=True)
+        alignmentPointsPred[name]=predIndexes
+        alignmentPointsTarg[name]=targetPointsIndexes
+        index+=1
 
     data = data.cpu().data.numpy()
     #outputLine = outputLine.cpu().data.numpy()
@@ -171,7 +173,10 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
     targetLines={}
     i=0
     for name,targ in targetLinesOld.items():
-        targetLines[name] = targ.data.numpy()
+        if targ is not None:
+            targetLines[name] = targ.data.numpy()
+        else:
+             targetLines[name]=None
         outputLines[name] = outputLinesOld[i].cpu().data.numpy()
         i+=1
     outputPointsOld = outputPoints
@@ -239,12 +244,13 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
                 else:
                     color=(shade,0,0)
                 cv2.line(image,p1,p2,color,1)
-                #if j in alignmentLinesPred[name][b]:
-                #    mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
-                #    rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
-                #    #print(mid)
-                #    #print(rad)
-                #    cv2.circle(image,mid,rad,(0,1,1),1)
+                #circle aligned predictions
+                if alignmentLinesPred[name] is not None and j in alignmentLinesPred[name][b]:
+                    mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
+                    rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
+                    #print(mid)
+                    #print(rad)
+                    cv2.circle(image,mid,rad,(0,1,1),1)
             #for j in alignmentLinesTarg[name][b]:
             #    p1 = (targetLines[name][b,j,0], targetLines[name][b,j,1])
             #    p2 = (targetLines[name][b,j,0], targetLines[name][b,j,1])
@@ -275,19 +281,19 @@ def FormsDetect_printer(instance, model, gpu, metrics, outDir=None, startIndex=N
                     p1 = (out[b,j,1],out[b,j,2])
                     points.append((conf,p1,j))
             points.sort(key=lambda a: a[0]) #so most confident lines are draw last (on top)
-            for conf, p1, p2, j in lines:
+            for conf, p1, j in points:
                 shade = 0.0+conf/maxConf
                 if name=='table_points':
                     color=(0,0,shade)
                 else:
                     color=(shade,0,0)
                 cv2.circle(image,p1,2,color,-1)
-                #if j in alignmentLinesPred[name][b]:
-                #    mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
-                #    rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
-                #    #print(mid)
-                #    #print(rad)
-                #    cv2.circle(image,mid,rad,(0,1,1),1)
+                if alignmentPointsPred[name] is not None and j in alignmentPointsPred[name][b]:
+                    mid = p1 #( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
+                    rad = 4 #round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
+                    #print(mid)
+                    #print(rad)
+                    cv2.circle(image,mid,rad,(0,1,1),1)
             #for j in alignmentLinesTarg[name][b]:
             #    p1 = (targetLines[name][b,j,0], targetLines[name][b,j,1])
             #    p2 = (targetLines[name][b,j,0], targetLines[name][b,j,1])

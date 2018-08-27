@@ -66,7 +66,8 @@ if __name__ == "__main__":
         'crop_params':{"crop_size":512}, 
         'no_blanks':True, #"only_types": ["text_start_gt"]
 })
-    dataLoader = torch.utils.data.DataLoader(data, batch_size=16, shuffle=False, num_workers=0, collate_fn=forms_detect.collate)
+    display(data[0])
+    dataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False, num_workers=0, collate_fn=forms_detect.collate)
     dataLoaderIter = iter(dataLoader)
 
         #if start==0:
@@ -77,6 +78,7 @@ if __name__ == "__main__":
         #display(data[i])
     try:
         while True:
+            #print('?')
             display(dataLoaderIter.next())
     except StopIteration:
         print('done')

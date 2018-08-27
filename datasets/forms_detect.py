@@ -46,7 +46,7 @@ def perp( a ) :
     b[1] = a[0]
     return b
 
-def lineIntersection(line1, line2):
+def lineIntersection(line1, line2, thresh=10, both=False):
     a1=line1[0]
     a2=line1[1]
     b1=line2[0]
@@ -68,12 +68,16 @@ def lineIntersection(line1, line2):
     p_B = np.dot(point,vecB)
     b1_B = np.dot(b1,vecB)
     b2_B = np.dot(b2,vecB)
-
-    if ( (p_A+10>min(a1_A,a2_A) and p_A-10<max(a1_A,a2_A)) or
-         (p_B+10>min(b1_B,b2_B) and p_B-10<max(b1_B,b2_B)) ):
-        return point
+    
+    if both:
+        if ( (p_A+thresh>min(a1_A,a2_A) and p_A-thresh<max(a1_A,a2_A)) and
+             (p_B+thresh>min(b1_B,b2_B) and p_B-thresh<max(b1_B,b2_B)) ):
+            return point
     else:
-        return None
+        if ( (p_A+thresh>min(a1_A,a2_A) and p_A-thresh<max(a1_A,a2_A)) or
+             (p_B+thresh>min(b1_B,b2_B) and p_B-thresh<max(b1_B,b2_B)) ):
+            return point
+    return None
 
 def collate(batch):
 
@@ -238,6 +242,7 @@ class FormsDetect(torch.utils.data.Dataset):
                 groupsToUse = json.loads(f.read())[split]
             self.images=[]
             for groupName, imageNames in groupsToUse.items():
+                #print('{} {}'.format(groupName, imageNames))
                 oneonly=False
                 if groupName in IAIN_CATCH:
                     if groupName in ONE_DONE:
@@ -343,7 +348,7 @@ class FormsDetect(torch.utils.data.Dataset):
         ##tic=timeit.default_timer()
         text_start_gt, text_end_gt = self.getStartEndGT(annotations['textBBs'],s)
         field_start_gt, field_end_gt = self.getStartEndGT(annotations['fieldBBs'],s,fields=True)
-        table_points, table_pixels = self.getTables(annotations['fieldBBs'],s, target_dim0,target_dim1)
+        table_points, table_pixels = self.getTables(annotations['fieldBBs'],s, target_dim0,target_dim1,annotations['samePairs'])
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
         pixel_gt = table_pixels
@@ -521,7 +526,7 @@ class FormsDetect(torch.utils.data.Dataset):
             j+=1
         return start_gt, end_gt
 
-    def getTables(self,bbs,s, sH, sW):
+    def getTables(self,bbs,s, sH, sW,selfPairs):
         #find which rows and cols are part of the same tables
         groups={}
         #groupsT={}
@@ -572,37 +577,110 @@ class FormsDetect(torch.utils.data.Dataset):
         #print('num tables {}'.format(len(groups)))
         for _,tableBBs in groups.items():
             #print('tableBBs {}'.format(len(tableBBs)))
+            table = {}
+            for bb in tableBBs:
+                bb['poly_points'] = np.array( bb['poly_points'])
+                table[bb['id']]=bb
             rows=[]
             cols=[]
-            for bb in tableBBs:
-                npBB = np.array(bb['poly_points'])
+            combIds={}
+            idToComb={}
+            curComb=0
+            for pair in selfPairs:
+                if pair[0] in table and pair[1] in table and table[pair[0]]['type']==table[pair[1]]['type']:
+                    if pair[0] in idToComb:
+                        pair0Comb=idToComb[pair[0]]
+                        if pair[1] in idToComb:
+                            pair1Comb=idToComb[pair[1]]
+                            #merge
+                            combIds[pair0Comb] += combIds[pair1Comb]
+                            for id in combIds[pair1Comb]:
+                                idToComb[id]=pair0Comb
+                            del combIds[pair1Comb]
+                        else:
+                            combIds[pair0Comb].append(pair[1])
+                            idToComb[pair[1]]=pair0Comb
+                    elif pair[1] in idToComb:
+                        pair1Comb=idToComb[pair[1]]
+                        combIds[pair1Comb].append(pair[0])
+                        idToComb[pair[0]]=pair1Comb
+                    else:
+                        combIds[curComb]=[pair[0],pair[1]]
+                        idToComb[pair[0]]=curComb
+                        idToComb[pair[1]]=curComb
+                        curComb+=1
+            for _,ids in combIds.items():
+                    typ = table[ids[0]]['type']
+                    toApp=[]
+                    for id in ids:
+                        toApp.append(table[id]['poly_points'])
+                        del table[id]
+
+                    if typ=='fieldRow':
+                        toApp.sort(key=lambda a: a[0,0])#sort horz by top-left point
+                        rows.append(toApp)
+                    else:
+                        toApp.sort(key=lambda a: a[0,1])#sort vert by top-left point
+                        cols.append(toApp)
+
+            for id,bb in table.items():
+                #npBB = np.array(bb['poly_points'])
                 if bb['type']=='fieldRow':
-                    rows.append(npBB)
+                    rows.append([bb['poly_points']])
                 else:
-                    cols.append(npBB)
+                    cols.append([bb['poly_points']])
                 #print(npBB*s)
-                cv2.fillConvexPoly(pixelMap[:,:,0],(npBB*s).astype(int),1)
-            rows.sort(key=lambda a: a[0][1])#sort vertically by top-left point
-            cols.sort(key=lambda a: a[0][0])#sort horizontally by top-left point
+                cv2.fillConvexPoly(pixelMap[:,:,0],(bb['poly_points']*s).astype(int),1)
+            rows.sort(key=lambda a: a[0][0,1])#sort vertically by top-left point
+            cols.sort(key=lambda a: a[0][0,0])#sort horizontally by top-left point
             #print (len(rows))
             #print (len(cols))
-
-            rowLines=[ [rows[0][0], rows[0][1]] ]
+            nextInd=0
+            for lineComponent in rows[0]:
+                somePoints,nextInd = getIntersectsCols(lineComponent[0:2],cols,nextInd)
+                for p in somePoints:
+                    intersectionPoints.append(s*p)
             for i in range(len(rows)-1):
-                rowLines.append( [(rows[i][3]+rows[i+1][0])/2, (rows[i][2]+rows[i+1][1])/2] )
-            rowLines.append( [rows[-1][3], rows[-1][2]] )
+                nextInd=0
+                pointsU=[]
+                for lineComponent in rows[i]:
+                    somePoints,nextInd = getIntersectsCols(lineComponent[2:4],cols,nextInd)
+                    pointsU+=somePoints
+                pointsL=[]
+                nextInd=0
+                for lineComponent in rows[i+1]:
+                    somePoints,nextInd = getIntersectsCols(lineComponent[0:2],cols,nextInd)
+                    pointsL+=somePoints
+                print(i)
+                print(pointsU)
+                print(pointsL)
+                
+                assert(len(pointsU)==len(pointsL))
+                for pi in range(len(pointsU)):
+                    intersectionPoints.append(s*(pointsU[pi]+pointsL[pi])/2.0)
+                    
+            nextInd=0
+            for lineComponent in rows[-1]:
+                somePoints,nextInd = getIntersectsCols(lineComponent[2:4],cols,nextInd)
+                for p in somePoints:
+                    intersectionPoints.append(s*p)
 
-            colLines=[ [cols[0][0], cols[0][3]] ]
-            for i in range(len(cols)-1):
-                colLines.append( [(cols[i][1]+cols[i+1][0])/2, (cols[i][2]+cols[i+1][3])/2] )
-            colLines.append( [cols[-1][1], cols[-1][2]] )
+                    #rowLines=[ [rows[0][0], rows[0][1]] ]
+                    #for i in range(len(rows)-1):
+                    #    rowLines.append( [(rows[i][3]+rows[i+1][0])/2, (rows[i][2]+rows[i+1][1])/2] )
+                    #rowLines.append( [rows[-1][3], rows[-1][2]] )
 
-            for rowLine in rowLines:
-                for colLine in colLines:
-                    p = lineIntersection(rowLine,colLine)
-                    if p is not None:
-                        #print('{} {} = {}'.format(rowLine,colLine,p))
-                        intersectionPoints.append((p[0]*s,p[1]*s))
+                    #colLines=[ [cols[0][0], cols[0][3]] ]
+                    #for i in range(len(cols)-1):
+                    #    colLines.append( [(cols[i][1]+cols[i+1][0])/2, (cols[i][2]+cols[i+1][3])/2] )
+                    #colLines.append( [cols[-1][1], cols[-1][2]] )
+
+                    #for rowLine in rowLines:
+                    #    for colLine in colLines:
+                    #        p = lineIntersection(rowLine,colLine)
+                    #        if p is not None:
+                    #            #print('{} {} = {}'.format(rowLine,colLine,p))
+                    #            intersectionPoints.append((p[0]*s,p[1]*s))
 
         intersectionPointsM = np.empty((1,len(intersectionPoints), 2), dtype=np.float32)
         j=0
@@ -613,3 +691,47 @@ class FormsDetect(torch.utils.data.Dataset):
 
         return intersectionPointsM, pixelMap
 
+def getIntersectsCols(line,cols,startInd):
+    p=None
+    if startInd==0:
+        for lineComponent in cols[0]:
+            p = lineIntersection(line,[lineComponent[0],lineComponent[3]], thresh=20, both=True)
+            if p is not None:
+                break
+        if p is None:
+            return [], 0
+        iPoints=[p]
+        startInd=1
+    else:
+        iPoints=[]
+    done=False
+    i = startInd-1
+    for i in range(startInd-1,len(cols)-1):
+        pL=pR=None
+        for lineComponent in cols[i]:
+            pL = lineIntersection(line,lineComponent[1:3], thresh=20, both=True)
+            if pL is not None:
+                break
+        for lineComponent in cols[i+1]:
+            pR = lineIntersection(line,[lineComponent[0],lineComponent[3]], thresh=20, both=True)
+            if pR is not None:
+                break
+        #print(pL)
+        #print(pR)
+        assert((pL is None) == (pR is None))
+        if pL is None:
+            done=True
+            break
+        iPoints.append((pL+pR)/2.0)
+    if not done:
+        for lineComponent in cols[-1]:
+            p = lineIntersection(line,lineComponent[1:3], thresh=20, both=True)
+            if p is not None:
+                iPoints.append(p)
+                i = len(cols)+1
+                break
+            else:
+                i=len(cols)
+    else:
+        i+=1
+    return iPoints,i

@@ -2,6 +2,7 @@ import torch.nn.functional as F
 import utils
 #import torch.nn as nn
 from model.alignment_loss import alignment_loss
+from model.lf_loss import point_loss
 
 def my_loss(y_input, y_target):
     return F.nll_loss(y_input, y_target)
@@ -16,3 +17,5 @@ def detect_alignment_loss(predictions, target,label_sizes,alpha_alignment, alpha
 def detect_alignment_loss_points(predictions, target,label_sizes,alpha_alignment, alpha_backprop):
     return alignment_loss(predictions, target, label_sizes, alpha_alignment, alpha_backprop,points=True)
 
+def lf_point_loss(prediction,target):
+    return point_loss(prediction,target)

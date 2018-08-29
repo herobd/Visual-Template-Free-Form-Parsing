@@ -1,6 +1,7 @@
 import torch
+from base import BaseModel
 import torch.nn as nn
-from models.gridgen import AffineGridGen, PerspectiveGridGen, GridGen
+from model.gridgen import AffineGridGen, PerspectiveGridGen, GridGen
 import numpy as np
 from utils import transformation_utils
 #from lf_cnn import makeCnn
@@ -47,17 +48,21 @@ def makeCnn():
 
     return cnn
 
-class LineFollower(nn.Module):
-    def __init__(self, output_grid_size=32, dtype=torch.cuda.FloatTensor):
-        super(LineFollower, self).__init__()
+class LineFollower(BaseModel):
+    def __init__(self, config, dtype=torch.cuda.FloatTensor):
+        super(LineFollower, self).__init__(config)
+
         cnn = makeCnn()
         position_linear = nn.Linear(512,5)
         position_linear.weight.data.zero_()
         position_linear.bias.data[0] = 0
         position_linear.bias.data[1] = 0
         position_linear.bias.data[2] = 0
-
-        self.output_grid_size = output_grid_size
+        
+        if 'output_grid_size' in config:
+            self.output_grid_size = output_grid_size['output_grid_size']
+        else:
+            self.output_grid_size=32
 
         self.dtype = dtype
         self.cnn = cnn
@@ -110,7 +115,7 @@ class LineFollower(nn.Module):
         view_window_imgs = []
         next_windows = []
         reset_windows = True
-        for i in xrange(steps):
+        for i in range(steps):
 
             if i%reset_interval != 0 or reset_interval==-1:
                 p_0 = positions[-1]
@@ -188,14 +193,14 @@ class LineFollower(nn.Module):
         a_pt = a_pt.transpose(1,0)
         a_pt = a_pt.expand(batch_size, a_pt.size(0), a_pt.size(1))
 
-        for i in xrange(0, len(next_windows)-1):
+        for i in range(0, len(next_windows)-1):
 
             w_0 = next_windows[i]
             w_1 = next_windows[i+1]
 
             pts_0 = w_0.bmm(a_pt)
             pts_1 = w_1.bmm(a_pt)
-            xy_positions.append(pts_0)
+            xy_positions.append(pts_0) #[[xU,xL],[yU,yL],[1,1]]
 
             if skip_grid:
                 continue
@@ -212,7 +217,8 @@ class LineFollower(nn.Module):
         xy_positions.append(pts_1)
 
         if skip_grid:
-            grid_line = None
+            #grid_line = None
+            return xy_positions
         else:
             grid_line = torch.cat(grid_line, dim=1)
 
@@ -246,7 +252,7 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False):
         N = transformation_utils.compute_renorm_matrix(memory_space)
         all_skipped = True
 
-        for b_i in xrange(memory_space.size(0)):
+        for b_i in range(memory_space.size(0)):
 
             o = floored_idx_offsets[b_i]
 

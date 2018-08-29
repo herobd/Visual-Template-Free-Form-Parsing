@@ -33,7 +33,7 @@ def fixAssumptions(annotations):
                     else:
                         otherId=pair2[0]
                     if annotations[otherId]['type']=='fieldCol' or annotations[otherId]['type']=='fieldRow':
-                        toAdd.append([num['id'],otherId)
+                        toAdd.append([num['id'],otherId])
 
     #heirarchy labels.
     #for pair in annotations['samePairs']:

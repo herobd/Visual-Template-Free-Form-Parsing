@@ -24,21 +24,32 @@ class Trainer(BaseTrainer):
         self.valid = True if self.valid_data_loader is not None else False
         #self.log_step = int(np.sqrt(self.batch_size))
 
-    def _to_tensor(self, data, target):
+    #def _to_tensor(self, data, target):
+    #    return self._to_tensor_individual(data), _to_tensor_individual(target)
+    def _to_tensor(self, *datas):
+        ret=(self._to_tensor_individual(datas[0]),)
+        for i in range(1,len(datas)):
+            ret+=(self._to_tensor_individual(datas[i]),)
+        return ret
+    def _to_tensor_individual(self, data):
+        if type(data)==list:
+            return [self._to_tensor_individual(d) for d in data]
+
         if type(data) is np.ndarray:
-            data, target = torch.FloatTensor(data.astype(np.float32)), torch.FloatTensor(target.astype(np.float32))
+            data = torch.FloatTensor(data.astype(np.float32))
         elif type(data) is torch.Tensor:
-            data, target = data.type(torch.FloatTensor), target.type(torch.FloatTensor)
+            data = data.type(torch.FloatTensor)
         if self.with_cuda:
-            data, target = data.to(self.gpu), target.to(self.gpu)
-        return data, target
+            data = data.to(self.gpu)
+        return data
 
     def _eval_metrics(self, output, target):
         acc_metrics = np.zeros(len(self.metrics))
-        output = output.cpu().data.numpy()
-        target = target.cpu().data.numpy()
-        for i, metric in enumerate(self.metrics):
-            acc_metrics[i] += metric(output, target)
+        if len(self.metrics)>0:
+            output = output.cpu().data.numpy()
+            target = target.cpu().data.numpy()
+            for i, metric in enumerate(self.metrics):
+                acc_metrics[i] += metric(output, target)
         return acc_metrics
 
     def _train_iteration(self, iteration):

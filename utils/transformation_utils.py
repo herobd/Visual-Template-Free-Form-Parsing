@@ -3,7 +3,7 @@ import torch.nn as nn
 #from torch.autograd import Variable
 from torch.nn.modules.module import Module
 
-from fast_inverse import inverse_torch
+from utils.fast_inverse import inverse_torch
 import numpy as np
 
 def compute_renorm_matrix(img):
@@ -89,7 +89,7 @@ def compute_perspective(pts, target=None):
 
 def pt_ori_sca_2_pts(state):
     # Input: b x [x, y, theta, scale]
-    out = (torch.ones(state.data.shape[0], 3, 2).type(state.data.type())
+    out = torch.ones(state.data.shape[0], 3, 2).type(state.data.type())
     out[:,0,0] =  torch.sin(state[:,2]) * state[:,3] + state[:,0]
     out[:,1,0] =  torch.cos(state[:,2]) * state[:,3] + state[:,1]
     out[:,0,1] = -torch.sin(state[:,2]) * state[:,3] + state[:,0]
@@ -120,6 +120,7 @@ def get_init_matrix(input):
 
     return output
 
+#the input is a delta
 def get_step_matrix(input):
     output = torch.zeros((input.size(0), 3, 3)).type(input.data.type())
     output[:,0,0] = 1

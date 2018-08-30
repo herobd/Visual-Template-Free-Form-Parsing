@@ -2,6 +2,7 @@ import torch
 from base import BaseModel
 import torch.nn as nn
 from model.gridgen import AffineGridGen, PerspectiveGridGen, GridGen
+from model.lf_loss import getMinimumDists
 import numpy as np
 from utils import transformation_utils
 #from lf_cnn import makeCnn
@@ -53,11 +54,25 @@ class LineFollower(BaseModel):
         super(LineFollower, self).__init__(config)
 
         cnn = makeCnn()
-        position_linear = nn.Linear(512,5)
+        if "angle_only" in config and config["angle_only"]:
+            num_pos=1
+        else:
+            num_pos=3
+
+        if "pred_end" in config and config['pred_end']:
+            self.pred_end=True
+            #num_pos+=1
+        else:
+            self.pred_end=False
+
+        if 'noise_scale' in config:
+            self.noise_scale = config['noise_scale']
+        else:
+            self.noise_scale = 1
+
+        position_linear = nn.Linear(512,num_pos + int(self.pred_end))
         position_linear.weight.data.zero_()
-        position_linear.bias.data[0] = 0
-        position_linear.bias.data[1] = 0
-        position_linear.bias.data[2] = 0
+        position_linear.bias.data[0:num_pos] = 0
         
         if 'output_grid_size' in config:
             self.output_grid_size = output_grid_size['output_grid_size']
@@ -68,7 +83,7 @@ class LineFollower(BaseModel):
         self.cnn = cnn
         self.position_linear = position_linear
 
-    def forward(self, image, positions, steps=None, all_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False):
+    def forward(self, image, positions, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False):
 
         batch_size = image.size(0)
         renorm_matrix = transformation_utils.compute_renorm_matrix(image)
@@ -96,7 +111,7 @@ class LineFollower(BaseModel):
         ]).expand(batch_size,3,3)
 
         step_bias = torch.cuda.FloatTensor([
-            [1,0,2],
+            [1,0,-2],
             [0,1,0],
             [0,0,1]
         ]).expand(batch_size,3,3)
@@ -106,6 +121,15 @@ class LineFollower(BaseModel):
             [0,-1,0],
             [0,0,1]
         ]).expand(batch_size,3,3)
+
+        a_pt = torch.Tensor(
+            [
+                [0, 1,1],
+                [0,-1,1]
+            ]
+        ).cuda()
+        a_pt = a_pt.transpose(1,0)
+        a_pt = a_pt.expand(batch_size, a_pt.size(0), a_pt.size(1))
 
         if negate_lw:
             view_window = invert.bmm(view_window)
@@ -126,7 +150,23 @@ class LineFollower(BaseModel):
                     next_windows.append(p_0)
 
             else:
-                p_0 = all_positions[i].type(self.dtype)
+                #p_0 = all_positions[i].type(self.dtype)
+                if len(next_windows)>0:
+                    w_0 = next_windows[-1]
+                    cur_xy_pos = w_0.bmm(a_pt)
+                    d_t, p_t, d_t, p_b = getMinimumDists(cur_xy_pos[0,:2,0],cur_xy_pos[0,:2,1],all_xy_positions, return_points=True) #all_positions[i].type(self.dtype)
+                    d = p_t-p_b
+                    scale = d.norm()/2
+                    mx = (p_t[0]+p_b[0])/2.0
+                    my = (p_t[1]+p_b[1])/2.0
+                    theta = -torch.atan2(d[0],-d[1])
+                    #print('d={}, scale={}, mx={}, my={}, theta={}'.format(d.size(),scale.size(),mx.size(),my.size(),theta.size()))
+                    print('w_0={}, cur_xy_pos={}, d={}, scale={}, mx={}, my={}, theta={}'.format(w_0.requires_grad,cur_xy_pos.requires_grad,d.requires_grad,scale.requires_grad,mx.requires_grad,my.requires_grad,theta.requires_grad))
+                    #p_0 = torch.cat([mx,my,theta,scale,torch.ones_like(scale, requires_grad=True)])[None,...] #add batch dim
+                    p_0 = torch.tensor([mx,my,theta,scale,1.0], requires_grad=True).cuda()[None,...] #add batch dim
+                    #TODO may not requer grad
+                else:
+                    p_0 = all_positions[i].type(self.dtype) #this only occus an index 0 (?)
                 reset_windows = True
                 if randomize:
                     add_noise = p_0.clone()
@@ -134,9 +174,9 @@ class LineFollower(BaseModel):
                     mul_moise = p_0.clone()
                     mul_moise.data.fill_(1.0)
 
-                    add_noise[:,0].data.uniform_(-2, 2)
-                    add_noise[:,1].data.uniform_(-2, 2)
-                    add_noise[:,2].data.uniform_(-.1, .1)
+                    add_noise[:,0].data.uniform_(-2*self.noise_scale, 2*self.noise_scale)
+                    add_noise[:,1].data.uniform_(-2*self.noise_scale, 2*self.noise_scale)
+                    add_noise[:,2].data.uniform_(-.1*self.noise_scale, .1*self.noise_scale)
 
                     p_0 = p_0 * mul_moise + add_noise
 
@@ -151,6 +191,7 @@ class LineFollower(BaseModel):
                 current_window = next_windows[-1].detach()
 
             crop_window = current_window.bmm(view_window)
+            #I need the x,y cords from here
 
             resampled = get_patches(image, crop_window, grid_gen, allow_end_early)
 
@@ -179,19 +220,15 @@ class LineFollower(BaseModel):
 
             next_windows.append(current_window.bmm(next_window))
 
+            #if self.pred_end:
+
+
+
         grid_line = []
         mask_line = []
         line_done = []
         xy_positions = []
 
-        a_pt = torch.Tensor(
-            [
-                [0, 1,1],
-                [0,-1,1]
-            ]
-        ).cuda()
-        a_pt = a_pt.transpose(1,0)
-        a_pt = a_pt.expand(batch_size, a_pt.size(0), a_pt.size(1))
 
         for i in range(0, len(next_windows)-1):
 
@@ -226,7 +263,7 @@ class LineFollower(BaseModel):
 
 
 
-def get_patches(image, crop_window, grid_gen, allow_end_early=False):
+def get_patches(image, crop_window, grid_gen, allow_end_early=False, end_points=None):
 
 
         pts = torch.FloatTensor([
@@ -245,7 +282,7 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False):
         crop_size = torch.ceil(max_d_bounds).long()
         if image.is_cuda:
             crop_size = crop_size.cuda()
-        w = crop_size.data[0]
+        w = crop_size.data.item() #[0]
 
         memory_space = torch.zeros(d_bounds.size(0), 3, w, w).type_as(image.data)
         translations = []
@@ -302,6 +339,10 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False):
                 i_s  = image[b_i:b_i+1, :, s_x[0]:s_x[1], s_y[0]:s_y[1]]
                 memory_space[b_i:b_i+1, :, t_x[0]:t_x[1], t_y[0]:t_y[1]] = i_s
 
+                #if end_points is not None:
+                    #get all points in bounds
+                    #transform points
+
         if all_skipped and allow_end_early:
             return None
 
@@ -311,4 +352,7 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False):
 
         resampled = torch.nn.functional.grid_sample(memory_space.transpose(2,3), grid, mode='bilinear')
 
+        #if end_points is None:
         return resampled
+        #else:
+

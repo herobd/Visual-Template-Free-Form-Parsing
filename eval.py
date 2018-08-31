@@ -19,13 +19,13 @@ from datasets import forms_detect
 logging.basicConfig(level=logging.INFO, format='')
 
 
-def main(resume,saveDir,numberOfImages,index,gpu=None):
+def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
     np.random.seed(1234)
     checkpoint = torch.load(resume)
     config = checkpoint['config']
     config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
-    config['data_loader']['shuffle']=False
-    config['validation']['shuffle']=False
+    config['data_loader']['shuffle']=shuffle
+    config['validation']['shuffle']=shuffle
     #config['validation']
 
     #print(config['data_loader'])
@@ -151,6 +151,8 @@ if __name__ == '__main__':
                         help='number of images to save out (from each train and valid) (default: 100)')
     parser.add_argument('-g', '--gpu', default=None, type=int,
                         help='gpu number (default: cpu only)')
+    parser.add_argument('-s', '--shuffle', default=False, type=bool,
+                        help='shuffle data')
 
     args = parser.parse_args()
 
@@ -159,4 +161,4 @@ if __name__ == '__main__':
         print('Must provide checkpoint (with -c) and save dir (with -d)')
         exit()
 
-    main(args.checkpoint, args.savedir, args.number, args.index, gpu=args.gpu)
+    main(args.checkpoint, args.savedir, args.number, args.index, gpu=args.gpu, shuffle=args.shuffle)

@@ -4,7 +4,7 @@ import numpy as np
 import json
 from skimage import io
 from skimage import draw
-import skimage.transform as sktransform
+#import skimage.transform as sktransform
 import os
 import math
 import cv2
@@ -139,7 +139,7 @@ class FormsPair(torch.utils.data.Dataset):
                     continue
                 for imageName in imageNames:
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
-                    print(org_path)
+                    #print(org_path)
                     if self.cache_resized:
                         path = os.path.join(self.cache_path,imageName)
                     else:
@@ -424,8 +424,12 @@ class FormsPair(torch.utils.data.Dataset):
                 imagePatch = image[:,cropOutY0:cropOutY1,cropOutX0:cropOutX1]
                 labelPatch = label[cropOutY0:cropOutY1,cropOutX0:cropOutX1]
 
-            retImage = sktransform.resize(imagePatch.transpose((1, 2, 0)),(patchSize,patchSize)).transpose((2, 0, 1))
-            retLabel = sktransform.resize(labelPatch, (patchSize,patchSize))
+            #retImage = sktransform.resize(imagePatch.transpose((1, 2, 0)),(patchSize,patchSize)).transpose((2, 0, 1))
+            #retLabel = sktransform.resize(labelPatch, (patchSize,patchSize))
+            retImage = cv2.resize(imagePatch.transpose((1, 2, 0)),(patchSize,patchSize)).transpose((2, 0, 1))
+            retLabel = cv2.resize(labelPatch, (patchSize,patchSize))
+            retImage = torch.from_numpy(retImage.astype(np.float32))
+            retLabel = torch.from_numpy(retLabel.astype(np.float32))
             return (retImage, retLabel)
 
         return cropResize

@@ -30,7 +30,7 @@ def getMinimumDists(p0,p1,xy_positions, return_points=False):
                 min_p0 = point0
             else:
                 min_locs = d0<min_d0
-                min_p0 = torch.where(min_locs,points0,min_p0)
+                min_p0 = torch.where(min_locs,point0,min_p0)
                 min_d0 = torch.where(min_locs,d0,min_d0)
         else:
             d0 = compute_distance(s0,e0,p0)
@@ -49,7 +49,7 @@ def getMinimumDists(p0,p1,xy_positions, return_points=False):
                 min_p1 = point1
             else:
                 min_locs = d1<min_d1
-                min_p1 = torch.where(min_locs,points1,min_p1)
+                min_p1 = torch.where(min_locs,point1,min_p1)
                 min_d1 = torch.where(min_locs,d1,min_d1)
         else:
             d1 = compute_distance(s1,e1,p1)
@@ -65,6 +65,7 @@ def getMinimumDists(p0,p1,xy_positions, return_points=False):
 
 #special loss only works with batch size 1
 def special_loss(xy_output, xy_positions):
+    assert(xy_output[0].size(0)==1)
     loss = 0
     for i in range(len(xy_output)-1):
         p0 = xy_output[i][0,:2,0]

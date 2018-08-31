@@ -128,7 +128,7 @@ def get_step_matrix(input,no_xy,scale):
     output[:,2,2] = 1
 
     if scale is None:
-        scale=torch.ones(input.size(0))
+        scale=torch.ones_like(input[:,0])
     if no_xy:
         x = y = 0
         angles = input[:,0:1]

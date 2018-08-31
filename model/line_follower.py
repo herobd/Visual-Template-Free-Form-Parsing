@@ -271,6 +271,29 @@ class LineFollower(BaseModel):
             grid = grid.sum(dim=-1)[...,:2]
 
             grid_line.append(grid)
+        if len(next_windows)==1:
+            w_0 = next_windows[0]
+            pts_0 = w_0.bmm(a_pt)
+            b_pt = torch.Tensor(
+                [
+                    [-1,0,1],
+                    [ 1,0,1]
+                ]
+            ).cuda()
+            b_pt = a_pt.transpose(1,0)
+            b_pt = b_pt.expand(batch_size, b_pt.size(0), b_pt.size(1))
+            pts_1 = w_0.bmm(b_pt)
+            xy_positions.append(pts_0)
+            if not skip_grid:
+                pts = torch.cat([pts_0, pts_1], dim=2)
+
+                grid_pts = expanded_renorm_matrix.bmm(pts)
+
+                grid = interpolations[None,:,:,None,:] * grid_pts[:,None,None,:,:]
+                grid = grid.sum(dim=-1)[...,:2]
+
+                grid_line.append(grid)
+            
 
         xy_positions.append(pts_1)
 

@@ -67,7 +67,7 @@ def getMinimumDists(p0,p1,xy_positions, return_points=False):
 def special_loss(xy_output, xy_positions):
     assert(xy_output[0].size(0)==1)
     loss = 0
-    for i in range(len(xy_output)-1):
+    for i in range(len(xy_output)):
         p0 = xy_output[i][0,:2,0]
         p1 = xy_output[i][0,:2,1]
 

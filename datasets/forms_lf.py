@@ -321,4 +321,4 @@ def getNumSteps(points):
     avgH /= len(points)
     #if (math.ceil(max(topDist,botDist)/avgH) == 1):
     #    import pdb; pdb.set_trace();
-    return math.ceil(max(topDist,botDist)/avgH)+1
+    return math.ceil(max(topDist,botDist)/avgH)

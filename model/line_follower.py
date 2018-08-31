@@ -59,20 +59,21 @@ class LineFollower(BaseModel):
         else:
             num_pos=3
 
-        if "pred_end" in config and config['pred_end']:
-            self.pred_end=True
-            #num_pos+=1
-        else:
-            self.pred_end=False
+        self.pred_end = "pred_end" in config and config['pred_end']:
+
+        self.pred_scale = 'pred_scale' in config and config['pred_scale']:
+        
+        position_linear = nn.Linear(512,num_pos + int(self.pred_scale) + int(self.pred_end))
+        position_linear.weight.data.zero_()
+        position_linear.bias.data[0:num_pos] = 0 #dont shift or rotate
+        if self.pred_scale:
+            position_linear.bias.data[num_pos]=1 #keep scale the same
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
         else:
             self.noise_scale = 1
 
-        position_linear = nn.Linear(512,num_pos + int(self.pred_end))
-        position_linear.weight.data.zero_()
-        position_linear.bias.data[0:num_pos] = 0
         
         if 'output_grid_size' in config:
             self.output_grid_size = output_grid_size['output_grid_size']
@@ -213,7 +214,7 @@ class LineFollower(BaseModel):
             delta = self.position_linear(cnn_out)
 
 
-            next_window = transformation_utils.get_step_matrix(delta)
+            next_window = transformation_utils.get_step_matrix(delta,self.only_angle,self.pred_scale)
             next_window = next_window.bmm(step_bias)
             if negate_lw:
                 next_window = invert.bmm(next_window).bmm(invert)

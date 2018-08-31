@@ -59,9 +59,9 @@ class LineFollower(BaseModel):
         else:
             num_pos=3
 
-        self.pred_end = "pred_end" in config and config['pred_end']:
+        self.pred_end = "pred_end" in config and config['pred_end']
 
-        self.pred_scale = 'pred_scale' in config and config['pred_scale']:
+        self.pred_scale = 'pred_scale' in config and config['pred_scale']
         
         position_linear = nn.Linear(512,num_pos + int(self.pred_scale) + int(self.pred_end))
         position_linear.weight.data.zero_()

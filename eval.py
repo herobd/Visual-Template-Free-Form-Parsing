@@ -7,6 +7,7 @@ from model.model import *
 from model.unet import UNet
 from model.sol_eol_finder import SOL_EOL_Finder
 from model.detector import Detector
+from model.line_follower import LineFollower
 from model.metric import *
 from data_loader import getDataLoader
 from utils.printers import *
@@ -17,27 +18,6 @@ from datasets import forms_detect
 
 logging.basicConfig(level=logging.INFO, format='')
 
-def _to_tensor(gpu, data):
-    if type(data) is np.ndarray:
-        data = torch.FloatTensor(data.astype(np.float32))
-    elif type(data) is torch.Tensor:
-        data = data.type(torch.FloatTensor)
-    if gpu is not None:
-        data = data.to(gpu)
-    return data
-
-def _eval_metrics(metrics, output, target):
-    acc_metrics = np.zeros(len(metrics))
-    for i, metric in enumerate(metrics):
-        acc_metrics[i] += metric(output, target)
-    return acc_metrics
-
-def _eval_metrics_ind(metrics, output, target):
-    acc_metrics = np.zeros((output.shape[0],len(metrics)))
-    for ind in range(output.shape[0]):
-        for i, metric in enumerate(metrics):
-            acc_metrics[ind,i] += metric(output[ind:ind+1], target[ind:ind+1])
-    return acc_metrics
 
 def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
     np.random.seed(1234)

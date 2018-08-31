@@ -1,0 +1,50 @@
+{
+    "name": "Forms7_lf",
+    "cuda": true,
+    "gpu": 0,
+    "override": true,
+    "data_loader": {
+        "data_set_name": "FormsLF",
+        "data_dir": "/home/ubuntu/brian/data/forms",
+        "batch_size": 1,
+        "shuffle": true,
+        "num_workers": 5,
+        "crop_to_page":false,
+        "no_blanks": true,
+        "swap_circle":true,
+        "cache_resized_images": true,
+        "augment":true,
+        "only_types": ["text","field"]
+
+    },
+    "validation": {
+        "shuffle": false,
+        "only_types": ["text","field"]
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.00001,
+        "weight_decay": 0
+    },
+    "loss": "lf_line_loss",
+    "metrics": [],
+    "trainer": {
+        "class": "LFTrainer",
+        "iterations": 1000000,
+        "save_dir": "saved/",
+        "val_step": 2500,
+        "save_step": 5000,
+        "log_step": 250,
+        "verbosity": 2,
+        "monitor": "loss",
+        "monitor_mode": "none"
+    },
+    "arch": "LineFollower", 
+    "model": {
+        "angle_only": true
+    }
+}

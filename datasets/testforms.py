@@ -47,6 +47,7 @@ def display(data):
         for name, gt in data['point_gt'].items():
             if gt is not None:
                 #print (gt.size())
+                #print(data)
                 for i in range(data['point_label_sizes'][name][b]):
                     x0=gt[b,i,0]
                     y0=gt[b,i,1]
@@ -62,11 +63,12 @@ if __name__ == "__main__":
         start = int(sys.argv[2])
     else:
         start=0
-    data=FormsDetect(dirPath=dirPath,split='valid',config={'crop_to_page':False,'rescale_range':[450,800],
+    data=FormsDetect(dirPath=dirPath,split='train',config={'crop_to_page':False,'rescale_range':[450,800],
         'crop_params':{"crop_size":512}, 
         'no_blanks':True, #"only_types": ["text_start_gt"]
 })
-    dataLoader = torch.utils.data.DataLoader(data, batch_size=16, shuffle=False, num_workers=0, collate_fn=forms_detect.collate)
+    #display(data[0])
+    dataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False, num_workers=0, collate_fn=forms_detect.collate)
     dataLoaderIter = iter(dataLoader)
 
         #if start==0:
@@ -77,6 +79,7 @@ if __name__ == "__main__":
         #display(data[i])
     try:
         while True:
+            #print('?')
             display(dataLoaderIter.next())
     except StopIteration:
         print('done')

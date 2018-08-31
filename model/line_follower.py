@@ -304,6 +304,8 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False, end_points=
         if image.is_cuda:
             crop_size = crop_size.cuda()
         w = crop_size.data.item() #[0]
+        if w==0:
+            w=1
 
         memory_space = torch.zeros(d_bounds.size(0), 3, w, w).type_as(image.data)
         translations = []

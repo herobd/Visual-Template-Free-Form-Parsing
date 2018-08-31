@@ -121,24 +121,25 @@ def get_init_matrix(input):
     return output
 
 #the input is a delta, I allow either x,y,theta or just theta
-def get_step_matrix(input,no_xy,use_scale):
+def get_step_matrix(input,no_xy,scale):
     output = torch.zeros((input.size(0), 3, 3)).type(input.data.type())
     output[:,0,0] = 1
     output[:,1,1] = 1
     output[:,2,2] = 1
 
-    scale=torch.ones(input.size(0))
+    if scale is None:
+        scale=torch.ones(input.size(0))
     if no_xy:
         x = y = 0
         angles = input[:,0:1]
-        if use_scale:
-            scale = input[:,1:2]
+        #if use_scale:
+        #    scale = input[:,1:2]
     else:
         x = input[:,0:1]
         y = input[:,1:2]
         angles = input[:,2:3]
-        if use_scale:
-            scale = input[:,3:4]
+        #if use_scale:
+        #    scale = input[:,3:4]
 
     cosines = torch.cos(angles)
     sinuses = torch.sin(angles)

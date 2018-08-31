@@ -55,19 +55,23 @@ class LineFollower(BaseModel):
 
         cnn = makeCnn()
         if "angle_only" in config and config["angle_only"]:
+            self.no_xy=True
             num_pos=1
         else:
+            self.no_xy=False
             num_pos=3
 
-        self.pred_end = "pred_end" in config and config['pred_end']:
+        self.pred_end = "pred_end" in config and config['pred_end']
 
-        self.pred_scale = 'pred_scale' in config and config['pred_scale']:
+        self.pred_scale = 'pred_scale' in config and config['pred_scale']
         
-        position_linear = nn.Linear(512,num_pos + int(self.pred_scale) + int(self.pred_end))
+        position_linear = nn.Linear(512,num_pos + int(self.pred_end))
         position_linear.weight.data.zero_()
-        position_linear.bias.data[0:num_pos] = 0 #dont shift or rotate
+        position_linear.bias.data[0:num_pos] = 0 #dont shift or rotate, no scale is zero as well
         if self.pred_scale:
-            position_linear.bias.data[num_pos]=1 #keep scale the same
+            self.scale_linear = nn.Linear(512,1)
+            self.scale_linear.weight.data.zero_()
+            self.scale_linear.bias.data[0] = 0 #scale is zero as well
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
@@ -212,9 +216,25 @@ class LineFollower(BaseModel):
             cnn_out = torch.squeeze(cnn_out, dim=2)
             cnn_out = torch.squeeze(cnn_out, dim=2)
             delta = self.position_linear(cnn_out)
+            if self.pred_scale:
+                scale_out = self.scale_linear(cnn_out)
+                twos = 2*torch.ones_like(scale_out)
+                delta_scale = torch.pow(twos, scale_out)
+            else:
+                delta_scale = None
+
+            #if self.pred_scale:
+            #    if self.no_xy:
+            #        index=1
+            #    else:
+            #        index=3
+            #    twos = 2*torch.ones_like(delta[:,index])
+            #    #delta[:,index]=torch.pow(twos,torch.clamp(delta[:,index],-2,2)) #we clamp to prevent really weird things, having 2^x makes the scaling linear with respect the the nets linear output
+            #    delta[:,index]=torch.pow(twos,delta[:,index]).clone() #having 2^x makes the scaling linear with respect the the nets linear output
 
 
-            next_window = transformation_utils.get_step_matrix(delta,self.only_angle,self.pred_scale)
+
+            next_window = transformation_utils.get_step_matrix(delta,self.no_xy,delta_scale)
             next_window = next_window.bmm(step_bias)
             if negate_lw:
                 next_window = invert.bmm(next_window).bmm(invert)
@@ -317,11 +337,11 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False, end_points=
 
             if o[0]+w >= image.size(2):
                 s_x = (s_x[0], image.size(2))
-                t_x = (t_x[0], image.size(2) - s_x[0])
+                t_x = (t_x[0], t_x[0]+image.size(2) - s_x[0])
 
             if o[1]+w >= image.size(3):
                 s_y = (s_y[1], image.size(3))
-                t_y = (t_y[1], image.size(3) - s_y[1])
+                t_y = (t_y[1], t_y[1]+image.size(3) - s_y[1])
 
             if s_x[0] >= s_x[1]:
                 skip_slice = True
@@ -338,6 +358,8 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False, end_points=
             if not skip_slice:
                 all_skipped = False
                 i_s  = image[b_i:b_i+1, :, s_x[0]:s_x[1], s_y[0]:s_y[1]]
+                #print(i_s.size())
+                #print(memory_space.size())
                 memory_space[b_i:b_i+1, :, t_x[0]:t_x[1], t_y[0]:t_y[1]] = i_s
 
                 #if end_points is not None:

@@ -161,7 +161,7 @@ class LineFollower(BaseModel):
                     my = (p_t[1]+p_b[1])/2.0
                     theta = -torch.atan2(d[0],-d[1])
                     #print('d={}, scale={}, mx={}, my={}, theta={}'.format(d.size(),scale.size(),mx.size(),my.size(),theta.size()))
-                    print('w_0={}, cur_xy_pos={}, d={}, scale={}, mx={}, my={}, theta={}'.format(w_0.requires_grad,cur_xy_pos.requires_grad,d.requires_grad,scale.requires_grad,mx.requires_grad,my.requires_grad,theta.requires_grad))
+                    #print('w_0={}, cur_xy_pos={}, d={}, scale={}, mx={}, my={}, theta={}'.format(w_0.requires_grad,cur_xy_pos.requires_grad,d.requires_grad,scale.requires_grad,mx.requires_grad,my.requires_grad,theta.requires_grad))
                     #p_0 = torch.cat([mx,my,theta,scale,torch.ones_like(scale, requires_grad=True)])[None,...] #add batch dim
                     p_0 = torch.tensor([mx,my,theta,scale,1.0], requires_grad=True).cuda()[None,...] #add batch dim
                     #TODO may not requer grad

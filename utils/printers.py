@@ -119,9 +119,9 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                 targetPixels=targetPixels.to(gpu)
         return data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels
     #print(type(instance['pixel_gt']))
-    if type(instance['pixel_gt']) == list:
-        print(instance)
-        print(startIndex)
+    #if type(instance['pixel_gt']) == list:
+    #    print(instance)
+    #    print(startIndex)
     #data, targetLine, targetLineSizes = instance
     data = instance['img']
     batchSize = data.shape[0]
@@ -332,6 +332,8 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
     def _to_tensor_individual( data):
         if type(data)==list:
             return [_to_tensor_individual(d) for d in data]
+        if (len(data.size())==1 and data.size(0)==1):
+            return data[0]
 
         if type(data) is np.ndarray:
             data = torch.FloatTensor(data.astype(np.float32))
@@ -343,8 +345,9 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
 
     b=0 #assume batchsize of 1
 
-    data, positions_xyxy, positions_xyrs = _to_tensor(*instance)
-    output = model(data,positions_xyrs[:1],steps=len(positions_xyrs), skip_grid=True)
+    data, positions_xyxy, positions_xyrs, steps = _to_tensor(*instance)
+    #print(steps)
+    output = model(data,positions_xyrs[:1],steps=steps, skip_grid=True)
     loss = lf_line_loss(output, positions_xyxy)
     image = (1-((1+np.transpose(instance[0][b][:,:,:].numpy(),(1,2,0)))/2.0)).copy()
     #print(image.shape)

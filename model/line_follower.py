@@ -72,6 +72,7 @@ class LineFollower(BaseModel):
             self.scale_linear = nn.Linear(512,1)
             self.scale_linear.weight.data.zero_()
             self.scale_linear.bias.data[0] = 0 #scale is zero as well
+            self.scale_root = nn.Parameter(torch.tensor(2,dtype=torch.float), requires_grad=True)
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
@@ -218,8 +219,9 @@ class LineFollower(BaseModel):
             delta = self.position_linear(cnn_out)
             if self.pred_scale:
                 scale_out = self.scale_linear(cnn_out)
-                twos = 2*torch.ones_like(scale_out)
-                delta_scale = torch.pow(twos, scale_out)
+                #twos = 2*torch.ones_like(scale_out)
+                #delta_scale = torch.pow(twos, scale_out)
+                delta_scale = torch.pow(self.scale_root, scale_out)
             else:
                 delta_scale = None
 

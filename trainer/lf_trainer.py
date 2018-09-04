@@ -36,7 +36,8 @@ class LFTrainer(Trainer):
         self.optimizer.zero_grad()
         #step_count=len(positions_xyrs)
         #print(step_count)
-        output = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=True, skip_grid=True)
+        rand=True
+        output = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
         loss = self.loss(output, positions_xyxy)
         loss.backward()
         self.optimizer.step()

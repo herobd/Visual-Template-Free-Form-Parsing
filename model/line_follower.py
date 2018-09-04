@@ -71,7 +71,7 @@ class LineFollower(BaseModel):
         if self.pred_scale:
             self.scale_linear = nn.Linear(512,1)
             self.scale_linear.weight.data.zero_()
-            self.scale_linear.bias.data[0] = 0 #scale is zero as well
+            self.scale_linear.bias.data[0] = 1 #scale is zero as well
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
@@ -89,6 +89,9 @@ class LineFollower(BaseModel):
         self.position_linear = position_linear
 
     def forward(self, image, positions, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False):
+
+        ##ttt=[]
+        ##ttt2=[]
 
         batch_size = image.size(0)
         renorm_matrix = transformation_utils.compute_renorm_matrix(image)
@@ -218,6 +221,13 @@ class LineFollower(BaseModel):
             delta = self.position_linear(cnn_out)
             if self.pred_scale:
                 scale_out = self.scale_linear(cnn_out)
+                ##
+                ##ttt.append(scale_out.item())
+                scale_out = torch.clamp(scale_out,-0.1,0.1)
+                ##scale_out = torch.clamp(scale_out,0.8,1.3)
+                ##ttt2.append(scale_out.item())
+                ##delta_scale=scale_out
+                ##
                 twos = 2*torch.ones_like(scale_out)
                 delta_scale = torch.pow(twos, scale_out)
             else:
@@ -296,6 +306,8 @@ class LineFollower(BaseModel):
             
 
         xy_positions.append(pts_1)
+
+        #print('pre-clamp {}, post-clamp {}'.format(['{:0.3f}'.format(v) for v in ttt],['{:0.3f}'.format(v) for v in ttt2]))
 
         if skip_grid:
             #grid_line = None

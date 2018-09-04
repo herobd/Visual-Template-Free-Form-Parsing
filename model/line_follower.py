@@ -71,7 +71,7 @@ class LineFollower(BaseModel):
         if self.pred_scale:
             self.scale_linear = nn.Linear(512,1)
             self.scale_linear.weight.data.zero_()
-            self.scale_linear.bias.data[0] = 1 #scale is zero as well
+            self.scale_linear.bias.data[0] = 0 #scale is zero as well
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
@@ -138,6 +138,14 @@ class LineFollower(BaseModel):
         ).cuda()
         a_pt = a_pt.transpose(1,0)
         a_pt = a_pt.expand(batch_size, a_pt.size(0), a_pt.size(1))
+        b_pt = torch.Tensor(
+            [
+                [-1,0,1],
+                [ 1,0,1]
+            ]
+        ).cuda()
+        b_pt = b_pt.transpose(1,0)
+        b_pt = b_pt.expand(batch_size, b_pt.size(0), b_pt.size(1))
 
         if negate_lw:
             view_window = invert.bmm(view_window)
@@ -162,12 +170,13 @@ class LineFollower(BaseModel):
                 if len(next_windows)>0:
                     w_0 = next_windows[-1]
                     cur_xy_pos = w_0.bmm(a_pt)
-                    d_t, p_t, d_t, p_b = getMinimumDists(cur_xy_pos[0,:2,0],cur_xy_pos[0,:2,1],all_xy_positions, return_points=True) #all_positions[i].type(self.dtype)
+                    d_t, p_t, d_b, p_b = getMinimumDists(cur_xy_pos[0,:2,0],cur_xy_pos[0,:2,1],all_xy_positions, return_points=True) #all_positions[i].type(self.dtype)
                     d = p_t-p_b
                     scale = d.norm()/2
                     mx = (p_t[0]+p_b[0])/2.0
                     my = (p_t[1]+p_b[1])/2.0
-                    theta = -torch.atan2(d[0],-d[1])
+                    theta = torch.atan2(d[0],d[1])
+                    #theta = -torch.atan2(d[0],-d[1])
                     #print('d={}, scale={}, mx={}, my={}, theta={}'.format(d.size(),scale.size(),mx.size(),my.size(),theta.size()))
                     #print('w_0={}, cur_xy_pos={}, d={}, scale={}, mx={}, my={}, theta={}'.format(w_0.requires_grad,cur_xy_pos.requires_grad,d.requires_grad,scale.requires_grad,mx.requires_grad,my.requires_grad,theta.requires_grad))
                     #p_0 = torch.cat([mx,my,theta,scale,torch.ones_like(scale, requires_grad=True)])[None,...] #add batch dim
@@ -243,14 +252,20 @@ class LineFollower(BaseModel):
             #    delta[:,index]=torch.pow(twos,delta[:,index]).clone() #having 2^x makes the scaling linear with respect the the nets linear output
 
 
-
+            ##rint(delta)
+            ##rint(delta_scale)
             next_window = transformation_utils.get_step_matrix(delta,self.no_xy,delta_scale)
+            ##rint('{} delta'.format(i))
+            ##rint(next_window)
             next_window = next_window.bmm(step_bias)
+            ##rint('{} delta step'.format(i))
+            ##rint(next_window)
             if negate_lw:
                 next_window = invert.bmm(next_window).bmm(invert)
 
             next_windows.append(current_window.bmm(next_window))
-
+            ##rint('{} window'.format(i))
+            ##rint(next_windows[-1])
             #if self.pred_end:
 
 
@@ -284,14 +299,6 @@ class LineFollower(BaseModel):
         if len(next_windows)==1:
             w_0 = next_windows[0]
             pts_0 = w_0.bmm(a_pt)
-            b_pt = torch.Tensor(
-                [
-                    [-1,0,1],
-                    [ 1,0,1]
-                ]
-            ).cuda()
-            b_pt = a_pt.transpose(1,0)
-            b_pt = b_pt.expand(batch_size, b_pt.size(0), b_pt.size(1))
             pts_1 = w_0.bmm(b_pt)
             xy_positions.append(pts_0)
             if not skip_grid:

@@ -91,6 +91,9 @@ class LineFollower(BaseModel):
 
     def forward(self, image, positions, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False):
 
+        ##ttt=[]
+        ##ttt2=[]
+
         batch_size = image.size(0)
         renorm_matrix = transformation_utils.compute_renorm_matrix(image)
         expanded_renorm_matrix = renorm_matrix.expand(batch_size,3,3)
@@ -298,6 +301,8 @@ class LineFollower(BaseModel):
             
 
         xy_positions.append(pts_1)
+
+        #print('pre-clamp {}, post-clamp {}'.format(['{:0.3f}'.format(v) for v in ttt],['{:0.3f}'.format(v) for v in ttt2]))
 
         if skip_grid:
             #grid_line = None

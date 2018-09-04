@@ -102,13 +102,13 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
         if gpu is not None:
             try:
                 for vi in range(curVI,len(valid_data_loader)):
-                    data, target = valid_iter.next() #valid_data_loader[validIndex]
+                    #data, target = valid_iter.next() #valid_data_loader[validIndex]
                     #data  = _to_tensor(gpu,data)
                     #output = model(data)
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics(metrics,output, target)
-                    metricsO = saveFunc(config,train_iter.next(),model,gpu,metrics)
+                    metricsO = saveFunc(config,valid_iter.next(),model,gpu,metrics)
                     val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
             except StopIteration:
                 print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))

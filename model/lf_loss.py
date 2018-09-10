@@ -63,6 +63,41 @@ def getMinimumDists(p0,p1,xy_positions, return_points=False):
     else:
         return min_d0,min_d1
 
+def getMinimumDists_rs(p,xyrs_positions, return_points=False):
+    min_d = None
+    for j in range(len(xyrs_positions)-1):
+        #print(xy_positions[j].size())
+        s = xyrs_positions[j][0,:2]
+        e = xyrs_positions[j+1][0,:2]
+        if return_points:
+            d,point = compute_distance(s,e,p,True)
+            if min_d is None:
+                min_d = d
+                min_p = point
+                min_j=j
+            else:
+                if d<min_d:
+                    min_p = point #torch.where(min_locs,point,min_p)
+                    min_d = d #torch.where(min_locs,d,min_d)
+                    min_j=j
+        else:
+            d = compute_distance(s,e,p)
+
+            if min_d is None:
+                min_d = d
+                min_j=j
+            else:
+                min_d = torch.min(min_d, d)
+                if (d<min_d):
+                    min_j=j
+
+    rot = xyrs_positions[min_j][0,2]
+    scale = xyrs_positions[min_j][0,3]
+    if return_points:
+        return min_d, rot,scale, min_p
+    else:
+        return min_d, rot,scale
+
 #special loss only works with batch size 1
 def special_loss(xy_output, xy_positions):
     assert(xy_output[0].size(0)==1)
@@ -72,12 +107,29 @@ def special_loss(xy_output, xy_positions):
         p1 = xy_output[i][0,:2,1]
 
         min_d0,min_d1 = getMinimumDists(p0,p1,xy_positions)
-        #if min_d0>0.0001 or min_d1>0.0001:
-        #    print('min_d0:{}, min_d1:{}'.format(min_d0,min_d1))
-        #    import pdb; pdb.set_trace()
+        if (min_d0>14 or min_d1>14) and i!=len(xy_output)-1:
+            print('min_d0:{}, min_d1:{}'.format(min_d0,min_d1))
+            import pdb; pdb.set_trace()
 
         loss += min_d0
         loss += min_d1
+
+    return loss
+
+def xyrs_loss(xyrs_output, xyrs_positions):
+    #assert(xyrs_output[0].size(0)==1)
+    loss = 0
+    for i in range(len(xyrs_output)):
+        p = xyrs_output[i][0:2]
+
+        min_d, rot,scale = getMinimumDists_rs(p,xyrs_positions)
+        #if (min_d0>14 or min_d1>14) and i!=len(xy_output)-1:
+        #    print('min_d0:{}, min_d1:{}'.format(min_d0,min_d1))
+        #    import pdb; pdb.set_trace()
+        scale_dif = scale-xyrs_output[i][3]
+        rot_dif = rot-xyrs_output[i][2]
+
+        loss += torch.pow(min_d,2) + torch.pow(scale_dif,2) + 3*torch.pow(rot_dif,2)
 
     return loss
 

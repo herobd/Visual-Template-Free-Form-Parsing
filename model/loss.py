@@ -2,7 +2,7 @@ import torch.nn.functional as F
 import utils
 #import torch.nn as nn
 from model.alignment_loss import alignment_loss
-from model.lf_loss import point_loss, special_loss
+from model.lf_loss import point_loss, special_loss, xyrs_loss
 
 def my_loss(y_input, y_target):
     return F.nll_loss(y_input, y_target)
@@ -21,3 +21,5 @@ def lf_point_loss(prediction,target):
     return point_loss(prediction,target)
 def lf_line_loss(prediction,target):
     return special_loss(prediction,target)
+def lf_xyrs_loss(prediction,target):
+    return xyrs_loss(prediction,target)

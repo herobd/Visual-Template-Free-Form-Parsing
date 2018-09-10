@@ -8,6 +8,15 @@ from utils import transformation_utils
 #from lf_cnn import makeCnn
 #from fast_patch_view import get_patches
 
+
+def get_xyrs(mats):
+    x=mats[:,2,0]
+    y=mats[:,2,1]
+    s=mats[:,0:2,0].norm()
+    rot=torch.acos(mats[:,0,0]/s)
+    #return torch.cat([x[:,None,...],y[:,None,...],rot[:,None,...],s[:,None,...]],dim=1)
+    return torch.tensor([x,y,rot,s], requires_grad=True).cuda()
+
 def convRelu(i, batchNormalization=False, leakyRelu=False):
     nc = 3
     ks = [3, 3, 3, 3, 3, 3, 2]
@@ -90,6 +99,9 @@ class LineFollower(BaseModel):
         self.position_linear = position_linear
 
     def forward(self, image, positions, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False):
+
+        #if reset_interval>0:
+        #    reset_interval = random.randint(reset_interval-2,reset_interval+2)
 
         ##ttt=[]
         ##ttt2=[]
@@ -195,6 +207,8 @@ class LineFollower(BaseModel):
                     add_noise[:,0].data.uniform_(-2*self.noise_scale, 2*self.noise_scale)
                     add_noise[:,1].data.uniform_(-2*self.noise_scale, 2*self.noise_scale)
                     add_noise[:,2].data.uniform_(-.1*self.noise_scale, .1*self.noise_scale)
+                    if self.pred_scale:
+                        mul_moise[:,3].data.uniform_(0.86*self.noise_scale, 1.15*self.noise_scale)
 
                     p_0 = p_0 * mul_moise + add_noise
 
@@ -269,6 +283,7 @@ class LineFollower(BaseModel):
         mask_line = []
         line_done = []
         xy_positions = []
+        xyrs_pos =[]
 
 
         for i in range(0, len(next_windows)-1):
@@ -279,6 +294,7 @@ class LineFollower(BaseModel):
             pts_0 = w_0.bmm(a_pt)
             pts_1 = w_1.bmm(a_pt)
             xy_positions.append(pts_0) #[[xU,xL],[yU,yL],[1,1]]
+            xyrs_pos.append(get_xyrs(w_0))
 
             if skip_grid:
                 continue
@@ -308,16 +324,17 @@ class LineFollower(BaseModel):
             
 
         xy_positions.append(pts_1)
+        xyrs_pos.append(get_xyrs(next_windows[-1]))
 
         #print('pre-clamp {}, post-clamp {}'.format(['{:0.3f}'.format(v) for v in ttt],['{:0.3f}'.format(v) for v in ttt2]))
 
         if skip_grid:
             #grid_line = None
-            return xy_positions
+            return xy_positions, xyrs_pos
         else:
             grid_line = torch.cat(grid_line, dim=1)
 
-        return grid_line, view_window_imgs, next_windows, xy_positions
+        return grid_line, view_window_imgs, next_windows, xy_positions, xyrs_pos
 
 
 

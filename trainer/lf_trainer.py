@@ -37,8 +37,9 @@ class LFTrainer(Trainer):
         #step_count=len(positions_xyrs)
         #print(step_count)
         rand=True
-        output = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
+        output,outputrs = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
         loss = self.loss(output, positions_xyxy)
+        #loss = self.loss(outputrs, positions_xyrs)
         loss.backward()
         self.optimizer.step()
 
@@ -81,8 +82,9 @@ class LFTrainer(Trainer):
             for batch_idx, inst in enumerate(self.valid_data_loader):
                 data, positions_xyxy, positions_xyrs, step_count = self._to_tensor(*inst)
 
-                output = self.model(data,positions_xyrs[:1],steps=step_count, skip_grid=True)
+                output,outputrs = self.model(data,positions_xyrs[:1],steps=step_count, skip_grid=True)
                 loss = self.loss(output, positions_xyxy)
+                #loss = self.loss(outputrs, positions_xyrs)
 
                 total_val_loss += loss.item()
                 total_val_metrics += self._eval_metrics(output, positions_xyxy)

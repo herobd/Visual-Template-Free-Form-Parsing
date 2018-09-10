@@ -74,18 +74,20 @@ class DetectTrainer(BaseTrainer):
                 targetPixels=targetPixels.to(self.gpu)
         return data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels
 
-    def _eval_metrics(self, output, target):
-        if len(self.metrics)>0:
-            acc_metrics = np.zeros(len(self.metrics))
+    def _eval_metrics(self, typ,name,output, target):
+        if len(self.metrics[typ])>0:
+            #acc_metrics = np.zeros(len(self.metrics[typ]))
+            met={}
             cpu_output=[]
             for pred in output:
                 cpu_output.append(output.cpu().data.numpy())
             target = target.cpu().data.numpy()
-            for i, metric in enumerate(self.metrics):
-                acc_metrics[i] += metric(cpu_output, target)
+            for i, metric in enumerate(self.metrics[typ]):
+                met[name+metric.__name__] = metric(cpu_output, target)
             return acc_metrics
         else:
-            return np.zeros(0)
+            #return np.zeros(0)
+            return {}
 
     def _train_iteration(self, iteration):
         """
@@ -160,7 +162,13 @@ class DetectTrainer(BaseTrainer):
         ##print('bac: '+str(toc-tic))
 
         #tic=timeit.default_timer()
-        #metrics = self._eval_metrics(output, target)
+        metrics={}
+        #index=0
+        #for name, target in targetLines.items():
+        #    metrics = {**metrics, **self._eval_metrics('line',name,output, target)}
+        #for name, target in targetPoints.items():
+        #    metrics = {**metrics, **self._eval_metrics('point',name,output, target)}
+        #    metrics = self._eval_metrics(name,output, target)
         #toc=timeit.default_timer()
         #print('metric: '+str(toc-tic))
 
@@ -172,13 +180,12 @@ class DetectTrainer(BaseTrainer):
 
         log = {
             'loss': loss,
-            #'metrics': metrics,
+            **metrics,
             **losses
         }
 
 
-        return log
-
+        return log#
     def _minor_log(self, log):
         ls=''
         for key,val in log.items():

@@ -24,13 +24,13 @@ def polyIntersect(poly1, poly2):
         
         maxPoly1=np.dot(perpVec,poly1[0])
         minPoly1=maxPoly1
-        for p in poly1[1:]:
+        for p in poly1:
             p_onLine = np.dot(perpVec,p)
             maxPoly1 = max(maxPoly1,p_onLine)
             minPoly1 = min(minPoly1,p_onLine)
-        maxPoly2=np.dot(perpVec,poly1[0])
+        maxPoly2=np.dot(perpVec,poly2[0])
         minPoly2=maxPoly2
-        for p in poly1[1:]:
+        for p in poly2:
             p_onLine = np.dot(perpVec,p)
             maxPoly2 = max(maxPoly2,p_onLine)
             minPoly2 = min(minPoly2,p_onLine)
@@ -46,11 +46,11 @@ def perp( a ) :
     b[1] = a[0]
     return b
 
-def lineIntersection(line1, line2, thresh=10, both=False):
-    a1=line1[0]
-    a2=line1[1]
-    b1=line2[0]
-    b2=line2[1]
+def lineIntersection(lineA, lineB, threshA_low=10, threshA_high=10, threshB_low=10, threshB_high=10, both=False):
+    a1=lineA[0]
+    a2=lineA[1]
+    b1=lineB[0]
+    b2=lineB[1]
     da = a2-a1
     db = b2-b1
     dp = a1-b1
@@ -68,15 +68,16 @@ def lineIntersection(line1, line2, thresh=10, both=False):
     p_B = np.dot(point,vecB)
     b1_B = np.dot(b1,vecB)
     b2_B = np.dot(b2,vecB)
-
     
+    ###rint('A:{},  B:{}, int p:{}'.format(lineA,lineB,point))
+    ###rint('{:.0f}>{:.0f} and {:.0f}<{:.0f}  and/or  {:.0f}>{:.0f} and {:.0f}<{:.0f} = {} {} {}'.format((p_A+threshA_low),(min(a1_A,a2_A)),(p_A-threshA_high),(max(a1_A,a2_A)),(p_B+threshB_low),(min(b1_B,b2_B)),(p_B-threshB_high),(max(b1_B,b2_B)),(p_A+threshA_low>min(a1_A,a2_A) and p_A-threshA_high<max(a1_A,a2_A)),'and' if both else 'or',(p_B+threshB_low>min(b1_B,b2_B) and p_B-threshB_high<max(b1_B,b2_B))))
     if both:
-        if ( (p_A+thresh>min(a1_A,a2_A) and p_A-thresh<max(a1_A,a2_A)) and
-             (p_B+thresh>min(b1_B,b2_B) and p_B-thresh<max(b1_B,b2_B)) ):
+        if ( (p_A+threshA_low>min(a1_A,a2_A) and p_A-threshA_high<max(a1_A,a2_A)) and
+             (p_B+threshB_low>min(b1_B,b2_B) and p_B-threshB_high<max(b1_B,b2_B)) ):
             return point
     else:
-        if ( (p_A+thresh>min(a1_A,a2_A) and p_A-thresh<max(a1_A,a2_A)) or
-             (p_B+thresh>min(b1_B,b2_B) and p_B-thresh<max(b1_B,b2_B)) ):
+        if ( (p_A+threshA_low>min(a1_A,a2_A) and p_A-threshA_high<max(a1_A,a2_A)) or
+             (p_B+threshB_low>min(b1_B,b2_B) and p_B-threshB_high<max(b1_B,b2_B)) ):
             return point
     return None
 
@@ -311,8 +312,8 @@ class FormsDetect(torch.utils.data.Dataset):
     def __getitem__(self,index):
         ##ticFull=timeit.default_timer()
         imagePath = self.images[index]['imagePath']
-        #print(imagePath)
         annotationPath = self.images[index]['annotationPath']
+        #print(annotationPath)
         rescaled = self.images[index]['rescaled']
         with open(annotationPath) as annFile:
             annotations = json.loads(annFile.read())
@@ -322,6 +323,7 @@ class FormsDetect(torch.utils.data.Dataset):
             for i in range(len(annotations['fieldBBs'])):
                 if annotations['fieldBBs'][i]['type']=='fieldCircle':
                     indexToSwap.append(i)
+            indexToSwap.sort(reverse=True)
             for i in indexToSwap:
                 annotations['textBBs'].append(annotations['fieldBBs'][i])
                 del annotations['fieldBBs'][i]
@@ -541,7 +543,10 @@ class FormsDetect(torch.utils.data.Dataset):
                 for bb2 in bbs:
                     if bb2['type'] == 'fieldRow':
                         if polyIntersect(bb['poly_points'], bb2['poly_points']):
+                            
                             otherGroup = lookup[bb2['id']]
+                            #if otherGroup is None:
+                            #    print('intersection! {}:{},  {}:{}'.format(bb['id'],bb['poly_points'],bb2['id'],bb2['poly_points']))
                             if otherGroup is not None:
                                 if myGroup is None:
                                     groups[otherGroup].append(bb)
@@ -596,11 +601,13 @@ class FormsDetect(torch.utils.data.Dataset):
                         pair0Comb=idToComb[pair[0]]
                         if pair[1] in idToComb:
                             pair1Comb=idToComb[pair[1]]
-                            #merge
-                            combIds[pair0Comb] += combIds[pair1Comb]
-                            for id in combIds[pair1Comb]:
-                                idToComb[id]=pair0Comb
-                            del combIds[pair1Comb]
+                            if pair0Comb!=pair1Comb:
+                                #merge
+                                #print('merge {}:{} and {}:{}'.format(pair0Comb,combIds[pair0Comb],pair1Comb,combIds[pair0Comb]))
+                                combIds[pair0Comb] += combIds[pair1Comb]
+                                for id in combIds[pair1Comb]:
+                                    idToComb[id]=pair0Comb
+                                del combIds[pair1Comb]
                         else:
                             combIds[pair0Comb].append(pair[1])
                             idToComb[pair[1]]=pair0Comb
@@ -613,6 +620,8 @@ class FormsDetect(torch.utils.data.Dataset):
                         idToComb[pair[0]]=curComb
                         idToComb[pair[1]]=curComb
                         curComb+=1
+                    #print(combIds)
+                    #print(idToComb)
             #sort them in order (left->right or top->botton) and add them to our lists
             for _,ids in combIds.items():
                     typ = table[ids[0]]['type']
@@ -647,25 +656,105 @@ class FormsDetect(torch.utils.data.Dataset):
             #we must iterate over all the components of each row
             #the very top boundary (and bottom) must be handeled specially since they don't have two lines
             nextInd=0
+            j=0
             for lineComponent in rows[0]:
-                somePoints,nextInd = getIntersectsCols(lineComponent[0:2],cols,nextInd)
-                for p in somePoints:
-                    intersectionPoints.append(s*p)
+                ###rint('row start, comp:{}'.format(j))
+                height = getHeightFromBB(lineComponent)
+                if j==0:
+                    distFromPrev=getWidthFromBB(lineComponent)/2#float('inf')
+                else:
+                    distFromPrev=np.linalg.norm(lineComponent[0]-rows[0][j-1][1])
+                if j==len(rows[0])-1:
+                    distToNext=getWidthFromBB(lineComponent)/2#float('inf')
+                else:
+                    distToNext=np.linalg.norm(lineComponent[1]-rows[0][j+1][0])
+                somePoints,nextInd,before = getIntersectsCols(lineComponent[0:2],
+                        cols,
+                        nextInd,
+                        threshLine_low=height/2,#float('inf'),
+                        threshLine_high=height/2,
+                        threshLeft=distFromPrev,
+                        threshRight=distToNext)
+                if before:
+                    intersectionPoints[-1] = (intersectionPoints[-1]+somePoints[0]*s)/2
+                    for p in somePoints[1:]:
+                        intersectionPoints.append(s*p)
+                else:
+                    for p in somePoints:
+                        intersectionPoints.append(s*p)
+                j+=1
             for i in range(len(rows)-1):
+                avgHHeight_ip1=0
+                for lineComponent in rows[i+1]:
+                    height = getHeightFromBB(lineComponent)
+                    avgHHeight_ip1+=height/2
+                avgHHeight_ip1/=len(rows[i+1])
                 nextInd=0
                 pointsU=[] #points from the bottom line of the BB above the seperator
+                avgHHeight_i=0
+                j=0
                 for lineComponent in rows[i]:
-                    somePoints,nextInd = getIntersectsCols(lineComponent[2:4],cols,nextInd)
-                    pointsU+=somePoints
+                    ###rint('row U {}, comp:{}'.format(i,j))
+                    height = getHeightFromBB(lineComponent)
+                    avgHHeight_i+=height/2
+                    if j==0:
+                        distFromPrev=getWidthFromBB(lineComponent)/2#float('inf')
+                    else:
+                        distFromPrev=np.linalg.norm(lineComponent[3]-rows[i][j-1][2])
+                    if j==len(rows[i])-1:
+                        distToNext=getWidthFromBB(lineComponent)/2#float('inf')
+                    else:
+                        distToNext=np.linalg.norm(lineComponent[2]-rows[i][j+1][3])
+                    somePoints,nextInd,before = getIntersectsCols(lineComponent[2:4],
+                            cols,
+                            nextInd,
+                            threshLine_low=height/2,
+                            threshLine_high=avgHHeight_ip1,
+                            threshLeft=distFromPrev,
+                            threshRight=distToNext)
+                    if before:
+                        if len(pointsU)>0:
+                            pointsU = pointsU[:-1] + [(pointsU[-1]+somePoints[0])/2] + somePoints[1:]
+                        else:
+                            pointsU = somePoints[1:]
+                    else:
+                        pointsU+=somePoints
+                    j+=1
+                avgHHeight_i/=len(rows[i])
                 pointsL=[] #points from the top line of the BB below the seperator
                 nextInd=0
+                j=0
                 for lineComponent in rows[i+1]:
-                    somePoints,nextInd = getIntersectsCols(lineComponent[0:2],cols,nextInd)
-                    pointsL+=somePoints
+                    ###rint('row L {}, comp:{}'.format(i,j))
+                    height = getHeightFromBB(lineComponent)
+                    if j==0:
+                        distFromPrev=getWidthFromBB(lineComponent)/2#float('inf')
+                    else:
+                        distFromPrev=np.linalg.norm(lineComponent[0]-rows[i+1][j-1][1])
+                    if j==len(rows[i+1])-1:
+                        distToNext=getWidthFromBB(lineComponent)/2#float('inf')
+                    else:
+                        distToNext=np.linalg.norm(lineComponent[1]-rows[i+1][j+1][0])
+                    somePoints,nextInd,before = getIntersectsCols(lineComponent[0:2],
+                            cols,
+                            nextInd,
+                            threshLine_low=avgHHeight_i,
+                            threshLine_high=height/2,
+                            threshLeft=distFromPrev,
+                            threshRight=distToNext)
+                    if before:
+                        if len(pointsL)>0:
+                            pointsL = pointsL[:-1] + [(pointsL[-1]+somePoints[0])/2] + somePoints[1:]
+                        else:
+                            pointsL = somePoints[1:]
+                    else:
+                        pointsL+=somePoints
+                    j+=1
                 #print(i)
                 #print(pointsU)
                 #print(pointsL)
-                
+                if len(pointsU) != len(pointsL):
+                    import pdb; pdb.set_trace()
                 assert(len(pointsU)==len(pointsL))
                 #average the upper and lower points (and scale them)
                 for pi in range(len(pointsU)):
@@ -673,10 +762,32 @@ class FormsDetect(torch.utils.data.Dataset):
                     
             #special handeling of bottom boundary
             nextInd=0
+            j=0
             for lineComponent in rows[-1]:
-                somePoints,nextInd = getIntersectsCols(lineComponent[2:4],cols,nextInd)
-                for p in somePoints:
-                    intersectionPoints.append(s*p)
+                ###rint('row end, comp:{}'.format(j))
+                if j==0:
+                    distFromPrev=getWidthFromBB(lineComponent)/2#float('inf')
+                else:
+                    distFromPrev=np.linalg.norm(lineComponent[3]-rows[-1][j-1][2])
+                if j==len(rows[-1])-1:
+                    distToNext=getWidthFromBB(lineComponent)/2#float('inf')
+                else:
+                    distToNext=np.linalg.norm(lineComponent[2]-rows[-1][j+1][3])
+                somePoints,nextInd,before = getIntersectsCols(lineComponent[2:4],
+                        cols,
+                        nextInd,
+                        threshLine_low=height/2,
+                        threshLine_high=height/2,#float('inf'),
+                        threshLeft=distFromPrev,
+                        threshRight=distToNext)
+                j+=1
+                if before:
+                    intersectionPoints[-1] = (intersectionPoints[-1]+somePoints[0]*s)/2
+                    for p in somePoints[1:]:
+                        intersectionPoints.append(s*p)
+                else:
+                    for p in somePoints:
+                        intersectionPoints.append(s*p)
 
                     #rowLines=[ [rows[0][0], rows[0][1]] ]
                     #for i in range(len(rows)-1):
@@ -701,46 +812,102 @@ class FormsDetect(torch.utils.data.Dataset):
             intersectionPointsM[0,j,0]=x
             intersectionPointsM[0,j,1]=y
             j+=1
-
+            
         return intersectionPointsM, pixelMap
+
+def getWidthFromBB(bb):
+    return (np.linalg.norm(bb[0]-bb[1]) + np.linalg.norm(bb[3]-bb[2]))/2
+def getHeightFromBB(bb):
+    return (np.linalg.norm(bb[0]-bb[3]) + np.linalg.norm(bb[1]-bb[2]))/2
 
 #This iterates over each part of the columns, seeing if their seperator lines intersect the argument line
 ##We assume that an intersection must occur (we don't have row components that don't intersect any columns)
-def getIntersectsCols(line,cols,startInd,failed=0):
+def getIntersectsCols(line,cols,startInd,threshLine_low=10,threshLine_high=10,threshLeft=float('inf'),threshRight=float('inf'),failed=0):
+    if startInd>0:
+        startInd-=1
+        tryBefore=True
+    else:
+        tryBefore=False
     intersectionThresh=20
     intersectionBoth=True
     if failed==1:
         intersectionThresh=40
     elif failed==2:
         intersectionBoth=False
+    elif failed>2:
+        return [], 0
 
     #left-most boundary
     p=None
     if startInd==0:
+        j=0
         for lineComponent in cols[0]:
-            p = lineIntersection(line,[lineComponent[0],lineComponent[3]], thresh=intersectionThresh, both=intersectionBoth)
+            ###rint('first, j:{}, failed:{}'.format(j,failed))
+            width = getWidthFromBB(lineComponent)
+            p = lineIntersection(line,[lineComponent[0],lineComponent[3]], 
+                    threshA_low=threshLeft, #float("inf"), 
+                    threshA_high=width/2, 
+                    threshB_low=threshLine_low if j==len(cols[0])-1 or threshLine_low!=float('inf') else 10,
+                    threshB_high=threshLine_high if j==len(cols[0])-1 or threshLine_high!=float('inf') else 10,
+                    both=intersectionBoth)
+            j+=1
             if p is not None:
                 break
         if p is None:
-            if failed==2:
+            if tryBefore:
+                tryBefore=False
+                startInd=1
+                iPoints=[]
+            elif failed==2:
                 return [], 0
             else:
-                return getIntersectsCols(line,cols,startInd,failed+1)
-        iPoints=[p]
-        startInd=1
+                return getIntersectsCols(line,cols,startInd,threshLine_low,threshLine_high,threshLeft,threshRight,failed+1)
+        else:
+            iPoints=[p]
+            startInd=1
+            #tryBefore=False
     else:
         iPoints=[]
 
     done=False
     i = startInd-1 #in case the for-loop doesn't run at all
     for i in range(startInd-1,len(cols)-1):
+        #if i==(startInd):
+            #tryBefore=False
+        avgWidth_ip1=0
+        for lineComponent in cols[i+1]:
+            width = getWidthFromBB(lineComponent)
+            avgWidth_ip1+=width
+        avgWidth_ip1/=len(cols[i+1])
+        avgHWidth_ip1=avgWidth_ip1/2
         pL=pR=None
+        avgWidth_i=0
+        j=0
         for lineComponent in cols[i]:
-            pL = lineIntersection(line,lineComponent[1:3], thresh=intersectionThresh, both=intersectionBoth)
+            ###rint('L i:{}, j:{}, failed:{}'.format(i,j,failed))
+            width = getWidthFromBB(lineComponent)
+            avgWidth_i+=width
+            pL = lineIntersection(line,lineComponent[1:3], 
+                    threshA_low=width/2, 
+                    threshA_high=avgHWidth_ip1, 
+                    threshB_low=threshLine_low if j==len(cols[0])-1 or threshLine_low!=float('inf') else 10,
+                    threshB_high=threshLine_high if j==len(cols[0])-1 or threshLine_high!=float('inf') else 10,
+                    both=intersectionBoth)
+            j+=1
             if pL is not None:
                 break
+        avgWidth_i/=len(cols[i])
+        avgHWidth_i=avgWidth_i/2
+        j=0
         for lineComponent in cols[i+1]:
-            pR = lineIntersection(line,[lineComponent[0],lineComponent[3]], thresh=intersectionThresh, both=intersectionBoth)
+            ###rint('R i:{}, j:{}, failed:{}'.format(i,j,failed))
+            pR = lineIntersection(line,[lineComponent[0],lineComponent[3]], 
+                    threshA_low=avgHWidth_i, 
+                    threshA_high=width/2, 
+                    threshB_low=threshLine_low if j==len(cols[0])-1 or threshLine_low!=float('inf') else 10,
+                    threshB_high=threshLine_high if j==len(cols[0])-1 or threshLine_high!=float('inf') else 10,
+                    both=intersectionBoth)
+            j+=1
             if pR is not None:
                 break
         #print('pL {}'.format(pL))
@@ -748,8 +915,12 @@ def getIntersectsCols(line,cols,startInd,failed=0):
         #print('failed {}, i={}, line={}'.format(failed,i,line))
         #assert((pL is None) == (pR is None))
         if (pL is None) and (pR is None):
-            done=True
-            break
+            if tryBefore and i==startInd-1:
+                tryBefore=False
+                continue
+            else:
+                done=True
+                break
         elif pL is None:
             iPoints.append(pR)
         elif pR is None:
@@ -758,8 +929,17 @@ def getIntersectsCols(line,cols,startInd,failed=0):
             iPoints.append((pL+pR)/2.0)
     if not done:
         #right-most boundary
+        j=0
         for lineComponent in cols[-1]:
-            p = lineIntersection(line,lineComponent[1:3], thresh=intersectionThresh, both=intersectionBoth)
+            ###rint('last, j:{}, failed:{}'.format(j,failed))
+            width = getWidthFromBB(lineComponent)
+            p = lineIntersection(line,lineComponent[1:3], 
+                    threshA_low=width/2, 
+                    threshA_high=threshRight, #float('inf'), 
+                    threshB_low=threshLine_low if j==len(cols[0])-1 or threshLine_low!=float('inf') else 10,
+                    threshB_high=threshLine_high if j==len(cols[0])-1 or threshLine_high!=float('inf') else 10,
+                    both=intersectionBoth)
+            j+=1
             if p is not None:
                 iPoints.append(p)
                 i = len(cols)+1
@@ -769,6 +949,6 @@ def getIntersectsCols(line,cols,startInd,failed=0):
     else:
         i+=1
     if len(iPoints)>0 or failed==2:
-        return iPoints,i
+        return iPoints,i,tryBefore
     else:
-        return getIntersectsCols(line,cols,startInd,failed+1)
+        return getIntersectsCols(line,cols,startInd,threshLine_low,threshLine_high,threshLeft,threshRight,failed+1)

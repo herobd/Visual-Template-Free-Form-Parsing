@@ -12,6 +12,7 @@ from model.metric import *
 from data_loader import getDataLoader
 from utils.printers import *
 import math
+from collections import defaultdict
 
 from datasets.forms_detect import FormsDetect
 from datasets import forms_detect
@@ -70,6 +71,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
             os.mkdir(validDir)
 
         val_metrics_sum = np.zeros(len(metrics))
+        val_metrics_list = defaultdict(lambda: defaultdict(list))
+        val_comb_metrics = defaultdict(list)
 
         curVI=0
 
@@ -96,20 +99,31 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics_ind(metrics,output, target)
                     metricsO = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
-
-                    #val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
+                    if type(metricsO) == dict:
+                        for typ,typeLists in metricsO.items():
+                            for name,lst in typeLists.items():
+                                val_metrics_list[typ][name]+=lst
+                                val_comb_metrics[typ]+=lst
+                    else:
+                        val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
         if gpu is not None:
             try:
                 for vi in range(curVI,len(valid_data_loader)):
-                    data, target = valid_iter.next() #valid_data_loader[validIndex]
+                    #data, target = valid_iter.next() #valid_data_loader[validIndex]
                     #data  = _to_tensor(gpu,data)
                     #output = model(data)
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics(metrics,output, target)
                     metricsO = saveFunc(config,train_iter.next(),model,gpu,metrics)
-                    val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
+                    if type(metricsO) == dict:
+                        for typ,typeLists in metricsO.items():
+                            for name,lst in typeLists.items():
+                                val_metrics_list[typ][name]+=lst
+                                val_comb_metrics[typ]+=lst
+                    else:
+                        val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
             except StopIteration:
                 print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))
             
@@ -117,6 +131,10 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
             print('Validation metrics')
             for i in range(len(metrics)):
                 print(metrics[i].__name__ + ': '+str(val_metrics_sum[i]))
+            for typ in val_comb_metrics:
+                print('{} overall mean: {}, std {}'.format(typ,np.mean(val_comb_metrics[typ]), np.std(val_comb_metrics[typ])))
+                for name, typeLists in val_metrics_list[typ].items():
+                    print('{} {} mean: {}, std {}'.format(typ,name,np.mean(typeLists),np.std(typeLists)))
 
     else:
         batchIndex = index//batchSize

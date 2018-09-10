@@ -30,7 +30,12 @@ def main(config, resume):
             loss[name]=eval(l)
     else:
         loss = eval(config['loss'])
-    metrics = [eval(metric) for metric in config['metrics']]
+    if type(config['metrics'])==dict:
+        metrics={}
+        for name,m in config['metrics'].items():
+            metrics[name]=[eval(metric) for metric in m]
+    else:
+        metrics = [eval(metric) for metric in config['metrics']]
 
     if 'class' in config['trainer']:
         trainerClass = eval(config['trainer']['class'])

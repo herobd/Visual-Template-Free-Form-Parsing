@@ -259,7 +259,15 @@ class FormsLF(torch.utils.data.Dataset):
 
         #now everything not in a horz link
         for bbId in ann['byId'].keys()-idsInHorz:
-            bbSlanty=ann['byId'][bbId]['poly_points']
+            bb=ann['byId'][bbId]
+            if ( bbId[0]=='f' and (
+                    (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
+                    (self.no_print_fields and (bb['isBlank']=='print' or bb['isBlank']==2)) or
+                    bb['type'] == 'fieldRow' or
+                    bb['type'] == 'fieldCol' or
+                    bb['type'] == 'fieldRegion' )):
+                continue
+            bbSlanty=bb['poly_points']
             tX,tY,bX,bY,etX,etY,ebX,ebY = getRectPoints(bbSlanty)
             points.append([ torch.Tensor([[tX*s,bX*s],[tY*s,bY*s]]),
                             torch.Tensor([[etX*s,ebX*s],[etY*s,ebY*s]]) ])

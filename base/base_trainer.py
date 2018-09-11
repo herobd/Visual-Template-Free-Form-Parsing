@@ -65,7 +65,7 @@ class BaseTrainer:
         #    sumLog['avg_'+metric.__name__]=0
 
         for self.iteration in range(self.start_iteration, self.iterations + 1):
-            print('iteration: '+str(self.iteration), end='\r')
+            print('iteration: {}'.format(self.iteration), end='\r')
 
             t = timeit.default_timer()
             result = self._train_iteration(self.iteration)

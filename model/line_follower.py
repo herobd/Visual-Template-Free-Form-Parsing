@@ -87,6 +87,17 @@ class LineFollower(BaseModel):
             self.noise_scale = config['noise_scale']
         else:
             self.noise_scale = 1
+        
+        if 'randomize_start' in config:
+            self.randomizeStart = True
+            self.mean_dist_x = config['randomize_start']['mean_dist_x']
+            self.std_dist_x = config['randomize_start']['std_dist_x']
+            self.mean_dist_y = config['randomize_start']['mean_dist_y']
+            self.std_dist_y = config['randomize_start']['std_dist_y']
+            self.mean_rot = config['randomize_start']['mean_rot']
+            self.std_rot = config['randomize_start']['std_rot']
+            self.mean_scale = config['randomize_start']['mean_rot']
+            self.std_scale = config['randomize_start']['std_rot']
 
         
         if 'output_grid_size' in config:
@@ -198,7 +209,7 @@ class LineFollower(BaseModel):
                 else:
                     p_0 = all_positions[i].type(self.dtype) #this only occus an index 0 (?)
                 reset_windows = True
-                if randomize:
+                if randomize and (i!=0 or not self.randomizeStart):
                     add_noise = p_0.clone()
                     add_noise.data.zero_()
                     mul_moise = p_0.clone()
@@ -221,6 +232,20 @@ class LineFollower(BaseModel):
                     next_windows.append(current_window)
             else:
                 current_window = next_windows[-1].detach()
+
+            if i==0 and self.randomizeStart:
+                add_noise = p_0.clone()
+                add_noise.data.zero_()
+                #mul_moise = p_0.clone()
+                #mul_moise.data.fill_(1.0)
+
+                add_noise[:,0].data.normal_(self.mean_dist_x, self.std_dist_x)
+                add_noise[:,1].data.normal_(self.mean_dist_y, self.std_dist_y)
+                add_noise[:,2].data.normal_(self.mean_rot, self.std_rot)
+                #if self.pred_scale:
+                add_noise[:,3].data.normal_(self.mean_scale, self.std_scale)
+
+                p_0 = p_0 - add_noise #I calculated differences using targ-pred=dif, so we need to subtract (pred=targ-dif)
 
             crop_window = current_window.bmm(view_window)
             #I need the x,y cords from here

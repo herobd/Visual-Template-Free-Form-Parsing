@@ -1,5 +1,5 @@
 {
-    "name": "Forms7_lf",
+    "name": "Forms8_lf_rStart",
     "cuda": true,
     "gpu": 0,
     "override": true,
@@ -45,6 +45,16 @@
     },
     "arch": "LineFollower", 
     "model": {
-        "angle_only": true
+        "angle_only": true,
+        "randomize_start": {
+            "mean_dist_x": -0.02584811660697138,
+            "std_dist_x": 2.5572498653785605,
+            "mean_dist_y": 0.1385272591175548,
+            "std_dist_y": 2.527279348700079,
+            "mean_rot": -0.022515571702303897,
+            "std_rot": 0.15544707891815263,
+            "mean_scale": 0.16643097931226533,
+            "std_scale": 2.659666428328995
+        }
     }
 }

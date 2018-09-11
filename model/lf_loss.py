@@ -107,9 +107,9 @@ def special_loss(xy_output, xy_positions):
         p1 = xy_output[i][0,:2,1]
 
         min_d0,min_d1 = getMinimumDists(p0,p1,xy_positions)
-        if (min_d0>14 or min_d1>14) and i!=len(xy_output)-1:
-            print('min_d0:{}, min_d1:{}'.format(min_d0,min_d1))
-            import pdb; pdb.set_trace()
+        #if (min_d0>14 or min_d1>14) and i!=len(xy_output)-1:
+        #    print('min_d0:{}, min_d1:{}'.format(min_d0,min_d1))
+        #    import pdb; pdb.set_trace()
 
         loss += min_d0
         loss += min_d1

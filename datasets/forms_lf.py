@@ -57,6 +57,11 @@ class FormsLF(torch.utils.data.Dataset):
         else:
             self.augment = False
 
+        if 'detection_dir' in config:
+            self.detection_dir = config['detection_dir']
+        else:
+            self.detection_dir = None
+
         if lines is not None:
             self.lines=lines
         else:
@@ -110,8 +115,17 @@ class FormsLF(torch.utils.data.Dataset):
 
                         if 'text' in self.only_types:
                             textLines = self.getLines(annotations['textBBs'],rescale)
+                            forwards=None
+                            #for l,forwards in textLines:
                             for l in textLines:
-                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l)})
+                                if self.detection_dir is not None:
+                                    if forwards:
+                                        det_dir = os.path.join(self.detection_dir,'eol',imageName)
+                                    else:
+                                        det_dir = os.path.join(self.detection_dir,'sol',imageName)
+                                else:
+                                    det_dir = None
+                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detection_dir':det_dir})
                         if 'field' in self.only_types:
                             fieldLines = self.getLines(annotations['fieldBBs'],rescale,True)
                             for l in fieldLines:

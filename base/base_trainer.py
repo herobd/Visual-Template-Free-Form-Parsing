@@ -42,7 +42,7 @@ class BaseTrainer:
             config['lr_scheduler_type'], None)
         if self.lr_scheduler:
             self.lr_scheduler = self.lr_scheduler(self.optimizer, **config['lr_scheduler'])
-            self.lr_scheduler_step = config['lr_scheduler_step']
+            self.epoch_size = config['epoch_size']
         self.monitor = config['trainer']['monitor']
         self.monitor_mode = config['trainer']['monitor_mode']
         #assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
@@ -134,8 +134,8 @@ class BaseTrainer:
                     print('                   ', end='\r')
                 #    print()#clear inplace text
                 self.logger.info('Checkpoint saved for iteration '+str(self.iteration))
-            if self.lr_scheduler and self.iteration % self.lr_scheduler_step == 0:
-                self.lr_scheduler.step(self.iteration)
+            if self.lr_scheduler and self.iteration % self.epoch_size == 0:
+                self.lr_scheduler.step(self.iteration/self.epoch_size)
                 lr = self.lr_scheduler.get_lr()[0]
                 if self.iteration%self.log_step!=0:
                     print('                   ', end='\r')

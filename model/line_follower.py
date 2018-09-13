@@ -17,8 +17,8 @@ def get_xyrs(mats):
     #return torch.cat([x[:,None,...],y[:,None,...],rot[:,None,...],s[:,None,...]],dim=1)
     return torch.tensor([x,y,rot,s], requires_grad=True).cuda()
 
-def convRelu(i, batchNormalization=False, leakyRelu=False):
-    nc = 3
+def convRelu(i, batchNormalization=False, leakyRelu=False, numChanIn=3):
+    nc = numChanIn
     ks = [3, 3, 3, 3, 3, 3, 2]
     ps = [1, 1, 1, 1, 1, 1, 1]
     ss = [1, 1, 1, 1, 1, 1, 1]
@@ -35,25 +35,25 @@ def convRelu(i, batchNormalization=False, leakyRelu=False):
         # cnn.add_module('batchnorm{0}'.format(i), nn.BatchNorm2d(nOut))
     if leakyRelu:
         cnn.add_module('relu{0}'.format(i),
-                       nn.LeakyReLU(0.2, inplace=True))
+                       nn.LeakyReLU(0.1, inplace=True))
     else:
         cnn.add_module('relu{0}'.format(i), nn.ReLU(True))
     return cnn
 
-def makeCnn():
+def makeCnn(batchNorm,leakyReLU,numChanIn):
 
     cnn = nn.Sequential()
-    cnn.add_module('convRelu{0}'.format(0), convRelu(0))
+    cnn.add_module('convRelu{0}'.format(0), convRelu(0, leakyRelu=leakyReLU, numChanIn=numChanIn))
     cnn.add_module('pooling{0}'.format(0), nn.MaxPool2d(2, 2))
     cnn.add_module('convRelu{0}'.format(1), convRelu(1))
     cnn.add_module('pooling{0}'.format(1), nn.MaxPool2d(2, 2))
-    cnn.add_module('convRelu{0}'.format(2), convRelu(2, True))
+    cnn.add_module('convRelu{0}'.format(2), convRelu(2, batchNorm, leakyReLU))
     cnn.add_module('convRelu{0}'.format(3), convRelu(3))
     cnn.add_module('pooling{0}'.format(2), nn.MaxPool2d(2, 2))
-    cnn.add_module('convRelu{0}'.format(4), convRelu(4, True))
+    cnn.add_module('convRelu{0}'.format(4), convRelu(4, batchNorm, leakyReLU))
     cnn.add_module('convRelu{0}'.format(5), convRelu(5))
     cnn.add_module('pooling{0}'.format(3), nn.MaxPool2d(2, 2))
-    cnn.add_module('convRelu{0}'.format(6), convRelu(6, True))
+    cnn.add_module('convRelu{0}'.format(6), convRelu(6, batchNorm, leakyReLU))
     cnn.add_module('pooling{0}'.format(4), nn.MaxPool2d(2, 2))
 
     return cnn
@@ -61,8 +61,8 @@ def makeCnn():
 class LineFollower(BaseModel):
     def __init__(self, config, dtype=torch.cuda.FloatTensor):
         super(LineFollower, self).__init__(config)
-
-        cnn = makeCnn()
+        batchNorm = "batch_norm" in config and config['batch_norm']
+        leakyReLU = "leaky_relu" in config and config['leaky_relu']
         if "angle_only" in config and config["angle_only"]:
             self.no_xy=True
             num_pos=1
@@ -73,15 +73,24 @@ class LineFollower(BaseModel):
         self.pred_end = "pred_end" in config and config['pred_end']
 
         self.pred_scale = 'pred_scale' in config and config['pred_scale']
-        
-        position_linear = nn.Linear(512,num_pos + int(self.pred_end))
+        if self.pred_scale:
+            self.scale_index=num_pos
+            num_pos+=1
+        else:
+            self.scale_index=None
+        inputChannels = (3+5) if self.pred_end else 3
+        cnn = makeCnn(batchNorm,leakyReLU, inputChannels)
+      
+        position_linear = nn.Linear(512,num_pos)
         position_linear.weight.data.zero_()
         position_linear.bias.data[0:num_pos] = 0 #dont shift or rotate, no scale is zero as well
         if self.pred_scale:
-            self.scale_linear = nn.Linear(512,1)
-            self.scale_linear.weight.data.zero_()
-            self.scale_linear.bias.data[0] = 0 #scale is zero as well
-            self.scale_root = nn.Parameter(torch.tensor(2,dtype=torch.float), requires_grad=True)
+            #self.scale_linear = nn.Linear(512,1)
+            #self.scale_linear.weight.data.zero_()
+            #self.scale_linear.bias.data[0] = 0 #scale is zero as well
+            self.scale_root = 2 #nn.Parameter(torch.tensor(2,dtype=torch.float), requires_grad=True)
+        if self.pred_end:
+            self.end_linear = nn.Linear(512,1)
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
@@ -179,6 +188,7 @@ class LineFollower(BaseModel):
         view_window_imgs = []
         next_windows = []
         reset_windows = True
+        end_preds = []
         for i in range(steps):
 
             if i%reset_interval != 0 or reset_interval==-1:
@@ -223,16 +233,6 @@ class LineFollower(BaseModel):
 
                     p_0 = p_0 * mul_moise + add_noise
 
-            if reset_windows:
-                reset_windows = False
-
-                current_window = transformation_utils.get_init_matrix(p_0)
-
-                if len(next_windows) == 0:
-                    next_windows.append(current_window)
-            else:
-                current_window = next_windows[-1].detach()
-
             if i==0 and self.randomizeStart:
                 add_noise = p_0.clone()
                 add_noise.data.zero_()
@@ -246,6 +246,17 @@ class LineFollower(BaseModel):
                 add_noise[:,3].data.normal_(self.mean_scale, self.std_scale)
 
                 p_0 = p_0 - add_noise #I calculated differences using targ-pred=dif, so we need to subtract (pred=targ-dif)
+
+            if reset_windows:
+                reset_windows = False
+
+                current_window = transformation_utils.get_init_matrix(p_0)
+
+                if len(next_windows) == 0:
+                    next_windows.append(current_window)
+            else:
+                current_window = next_windows[-1].detach()
+
 
             crop_window = current_window.bmm(view_window)
             #I need the x,y cords from here
@@ -269,26 +280,23 @@ class LineFollower(BaseModel):
             cnn_out = torch.squeeze(cnn_out, dim=2)
             delta = self.position_linear(cnn_out)
             if self.pred_scale:
-                scale_out = self.scale_linear(cnn_out)
-                #twos = 2*torch.ones_like(scale_out)
+                #scale_out = self.scale_linear(cnn_out)
+                twos = 2*torch.ones_like(scale_out)
                 #delta_scale = torch.pow(twos, scale_out)
-                delta_scale = torch.pow(self.scale_root, scale_out)
-            else:
-                delta_scale = None
+                delta[:,self.scale_index] = 2*torch.ones_like(delta[:,self.scale_index])
+                #delta_scale = torch.pow(self.scale_root, scale_out)
+            #else:
+            #    delta_scale = None
 
-            #if self.pred_scale:
-            #    if self.no_xy:
-            #        index=1
-            #    else:
-            #        index=3
-            #    twos = 2*torch.ones_like(delta[:,index])
-            #    #delta[:,index]=torch.pow(twos,torch.clamp(delta[:,index],-2,2)) #we clamp to prevent really weird things, having 2^x makes the scaling linear with respect the the nets linear output
-            #    delta[:,index]=torch.pow(twos,delta[:,index]).clone() #having 2^x makes the scaling linear with respect the the nets linear output
+            if self.pred_end:
+                end_out = self.end_linear(cnn_out)
+                end_preds.append(end_out)
+
 
 
             ##rint(delta)
             ##rint(delta_scale)
-            next_window = transformation_utils.get_step_matrix(delta,self.no_xy,delta_scale)
+            next_window = transformation_utils.get_step_matrix(delta,self.no_xy,self.scale_index)
             ##rint('{} delta'.format(i))
             ##rint(next_window)
             next_window = next_window.bmm(step_bias)
@@ -355,11 +363,11 @@ class LineFollower(BaseModel):
 
         if skip_grid:
             #grid_line = None
-            return xy_positions, xyrs_pos
+            return xy_positions, xyrs_pos, end_preds
         else:
             grid_line = torch.cat(grid_line, dim=1)
 
-        return grid_line, view_window_imgs, next_windows, xy_positions, xyrs_pos
+        return grid_line, view_window_imgs, next_windows, xy_positions, xyrs_pos, end_preds
 
 
 

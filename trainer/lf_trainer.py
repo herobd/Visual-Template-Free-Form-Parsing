@@ -34,12 +34,19 @@ class LFTrainer(Trainer):
         #tic=timeit.default_timer()
 
         self.optimizer.zero_grad()
+
+        #if self.
+        #if self.detectorModel is not None:
+        #    linePreds, pointPreds, pixelPreds = self.detectorModel(data
         #step_count=len(positions_xyrs)
         #print(step_count)
         rand=True
-        output,outputrs = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
-        loss = self.loss(output, positions_xyxy)
+        output,outputrs,output_end = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
+        pos_loss = self.loss(output, positions_xyxy)
+        if len(output_end)>0:
+            end_loss = self.end_loss(output_end,
         #loss = self.loss(outputrs, positions_xyrs)
+        loss = pos_loss + self.end_loss_weigth*end_loss
         loss.backward()
         self.optimizer.step()
 

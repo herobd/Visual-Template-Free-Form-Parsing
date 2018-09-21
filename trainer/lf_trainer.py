@@ -24,10 +24,10 @@ class LFTrainer(Trainer):
         #tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
-            data, positions_xyxy, positions_xyrs, step_count = self._to_tensor(*self.data_loader_iter.next())
+            data, positions_xyxy, positions_xyrs, step_count, forwards = self._to_tensor(*self.data_loader_iter.next())
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
-            data, positions_xyxy, positions_xyrs, step_count = self._to_tensor(*self.data_loader_iter.next())
+            data, positions_xyxy, positions_xyrs, step_count, forwards = self._to_tensor(*self.data_loader_iter.next())
         #toc=timeit.default_timer()
         #print('data: '+str(toc-tic))
 
@@ -41,10 +41,10 @@ class LFTrainer(Trainer):
         #step_count=len(positions_xyrs)
         #print(step_count)
         rand=True
-        output,outputrs,output_end = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
+        output,outputrs,output_end = self.model(data,positions_xyrs[0], forwards, steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
         pos_loss = self.loss(output, positions_xyxy)
         if len(output_end)>0:
-            end_loss = self.end_loss(output_end,
+            end_loss = self.end_loss(output_end,output,positions_xyrs[-1])
         #loss = self.loss(outputrs, positions_xyrs)
         loss = pos_loss + self.end_loss_weigth*end_loss
         loss.backward()

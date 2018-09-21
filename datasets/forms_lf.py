@@ -115,21 +115,26 @@ class FormsLF(torch.utils.data.Dataset):
 
                         if 'text' in self.only_types:
                             textLines = self.getLines(annotations['textBBs'],rescale)
-                            forwards=None
-                            #for l,forwards in textLines:
-                            for l in textLines:
+                            for l,forwards in textLines:
                                 if self.detection_dir is not None:
                                     if forwards:
-                                        det_dir = os.path.join(self.detection_dir,'eol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'eol',imageName)
                                     else:
-                                        det_dir = os.path.join(self.detection_dir,'sol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'sol',imageName)
                                 else:
-                                    det_dir = None
-                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detection_dir':det_dir})
+                                    detPath = None
+                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detectionPath':detPath})
                         if 'field' in self.only_types:
                             fieldLines = self.getLines(annotations['fieldBBs'],rescale,True)
-                            for l in fieldLines:
-                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l)})
+                            for l,forwards in fieldLines:
+                                if self.detection_dir is not None:
+                                    if forwards:
+                                        detPath = os.path.join(self.detection_dir,'eol',imageName)
+                                    else:
+                                        detPath = os.path.join(self.detection_dir,'sol',imageName)
+                                else:
+                                    detPath = None
+                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detectionPath':detPath})
                         if 'horz' in self.only_types or 'horzLinks' in self.only_types:
                             annotations['byId']={}
                             for bb in annotations['fieldBBs']:
@@ -137,8 +142,15 @@ class FormsLF(torch.utils.data.Dataset):
                             for bb in annotations['textBBs']:
                                 annotations['byId'][bb['id']]=bb
                             horzLines = self.getHorzLines(annotations,rescale)
-                            for l in horzLines:
-                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l)})
+                            for l,forwards in horzLines:
+                                if self.detection_dir is not None:
+                                    if forwards:
+                                        detPath = os.path.join(self.detection_dir,'eol',imageName)
+                                    else:
+                                        detPath = os.path.join(self.detection_dir,'sol',imageName)
+                                else:
+                                    detPath = None
+                                self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detectionDir':det_dir})
 
 
         
@@ -152,6 +164,7 @@ class FormsLF(torch.utils.data.Dataset):
     def __getitem__(self,index):
         ##ticFull=timeit.default_timer()
         imagePath = self.lines[index]['imagePath']
+        detectionPath = self.lines[index]['detectionPath']
         #print(imagePath)
         points = self.lines[index]['points']
         steps = self.lines[index]['steps']
@@ -191,19 +204,22 @@ class FormsLF(torch.utils.data.Dataset):
             #Not sure if this is right...
             theta = -math.atan2(dx, -dy)
             pointsAngle.append(torch.Tensor([mx, my, theta, d/2, 1.0]))
+        
+        
 
-
+        img = 1.0 - img / 128.0 #ideally the median value would be 0
+        if detectionDir is not None:
+            detection_res = np.load(detectionPath)#replace with retrieving list of points
         img = org_img.transpose([2,0,1]) #from [row,col,color] to [color,row,col]
         img = img.astype(np.float32)
         img = torch.from_numpy(img)
-        img = 1.0 - img / 128.0 #ideally the median value would be 0
         
         #return {
         #        'img':img,
         #        'lf_xyrs':pointsAngle,
         #        'lf_xyxy':points
         #       }
-        return img, points, pointsAngle, steps
+        return img, points, pointsAngle, steps, forwards, eol
 
 
 

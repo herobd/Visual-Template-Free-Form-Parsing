@@ -41,10 +41,20 @@ class LFTrainer(Trainer):
         #step_count=len(positions_xyrs)
         #print(step_count)
         rand=True
-        output,outputrs,output_end = self.model(data,positions_xyrs[0], forwards, steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
+        output,outputrs,output_end = self.model(
+                data,
+                positions_xyrs[0], 
+                forwards, 
+                steps=step_count, 
+                all_positions=positions_xyrs, 
+                all_xy_positions=positions_xyxy, 
+                reset_interval=4, 
+                randomize=rand, 
+                skip_grid=True, 
+                detected_end_points=detected_end_points)
         pos_loss = self.loss(output, positions_xyxy)
         if len(output_end)>0:
-            end_loss = self.end_loss(output_end,output,positions_xyrs[-1])
+            end_loss = self.end_loss(output_end,output,positions_xyrs[:,-1,0:2])
         #loss = self.loss(outputrs, positions_xyrs)
         loss = pos_loss + self.end_loss_weigth*end_loss
         loss.backward()

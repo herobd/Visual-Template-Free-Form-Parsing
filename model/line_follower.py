@@ -140,7 +140,7 @@ class LineFollower(BaseModel):
 
         self.grid_gen = GridGen(self.view_window_size,self.view_window_size)
 
-    def forward(self, image, start_position, forward, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False):
+    def forward(self, image, start_position, forward, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False, detected_end_points=None):
 
         #if reset_interval>0:
         #    reset_interval = random.randint(reset_interval-2,reset_interval+2)
@@ -312,6 +312,15 @@ class LineFollower(BaseModel):
                 #TODO change rotation and scale according to the transformation and include them
 
                 resampled = torch.cat(resampled,confs,dim=1)
+
+                #meh, handle this in loss function
+                ##is the correct end point in the window?
+                #trans_end = torch.inverse(crop_window.data).bmm(end_point)
+                #if trans_end[0]>=-1 and trans_end[0]<=1 and
+                #    trans_end[1]>=-1 and trans_end[1]<=1:
+                #    end_present.append(1)
+                #else:
+                #end_present.
 
 
             # Process Window CNN

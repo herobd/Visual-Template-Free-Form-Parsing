@@ -139,3 +139,7 @@ def point_loss(xy_output, xy_positions):
     for i, l in enumerate(xy_positions):
         loss += loss_fn(xy_output[i][:,:2,:2], l)
     return loss
+
+def end_pred_loss(end_pred,path_xyxy,end_point):
+    assert(len(end_pred)==len(path_xyxy)-1)
+    for i in range

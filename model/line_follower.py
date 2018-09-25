@@ -17,17 +17,20 @@ def get_xyrs(mats):
     #return torch.cat([x[:,None,...],y[:,None,...],rot[:,None,...],s[:,None,...]],dim=1)
     return torch.tensor([x,y,rot,s], requires_grad=True).cuda()
 
-def convRelu(i, batchNormalization=False, leakyRelu=False):
-    nc = 3
+def convRelu(i, batchNormalization=False, leakyRelu=False, numChanIn=3, split=False):
+    nc = numChanIn
     ks = [3, 3, 3, 3, 3, 3, 2]
     ps = [1, 1, 1, 1, 1, 1, 1]
     ss = [1, 1, 1, 1, 1, 1, 1]
+    #nm = [64, 128, 256, 256, 512, 512, 512]
     nm = [64, 128, 256, 256, 512, 512, 512]
 
     cnn = nn.Sequential()
 
     nIn = nc if i == 0 else nm[i - 1]
     nOut = nm[i]
+    if split:
+        nOut/=2
     cnn.add_module('conv{0}'.format(i),
                    nn.Conv2d(nIn, nOut, ks[i], ss[i], ps[i]))
     if batchNormalization:
@@ -35,34 +38,44 @@ def convRelu(i, batchNormalization=False, leakyRelu=False):
         # cnn.add_module('batchnorm{0}'.format(i), nn.BatchNorm2d(nOut))
     if leakyRelu:
         cnn.add_module('relu{0}'.format(i),
-                       nn.LeakyReLU(0.2, inplace=True))
+                       nn.LeakyReLU(0.1, inplace=True))
     else:
         cnn.add_module('relu{0}'.format(i), nn.ReLU(True))
     return cnn
 
-def makeCnn():
+def makeCnn(batchNorm,leakyReLU,numChanIn,split):
 
-    cnn = nn.Sequential()
-    cnn.add_module('convRelu{0}'.format(0), convRelu(0))
-    cnn.add_module('pooling{0}'.format(0), nn.MaxPool2d(2, 2))
-    cnn.add_module('convRelu{0}'.format(1), convRelu(1))
-    cnn.add_module('pooling{0}'.format(1), nn.MaxPool2d(2, 2))
-    cnn.add_module('convRelu{0}'.format(2), convRelu(2, True))
-    cnn.add_module('convRelu{0}'.format(3), convRelu(3))
-    cnn.add_module('pooling{0}'.format(2), nn.MaxPool2d(2, 2))
-    cnn.add_module('convRelu{0}'.format(4), convRelu(4, True))
-    cnn.add_module('convRelu{0}'.format(5), convRelu(5))
-    cnn.add_module('pooling{0}'.format(3), nn.MaxPool2d(2, 2))
-    cnn.add_module('convRelu{0}'.format(6), convRelu(6, True))
-    cnn.add_module('pooling{0}'.format(4), nn.MaxPool2d(2, 2))
+    cnn1 = nn.Sequential()
+    cnn1.add_module('convRelu{0}'.format(0), convRelu(0, leakyRelu=leakyReLU, numChanIn=numChanIn))
+    cnn1.add_module('pooling{0}'.format(0), nn.MaxPool2d(2, 2))
+    cnn1.add_module('convRelu{0}'.format(1), convRelu(1))
+    cnn1.add_module('pooling{0}'.format(1), nn.MaxPool2d(2, 2))
+    cnn1.add_module('convRelu{0}'.format(2), convRelu(2, batchNorm, leakyReLU))
+    cnn1.add_module('convRelu{0}'.format(3), convRelu(3))
+    cnn1.add_module('pooling{0}'.format(2), nn.MaxPool2d(2, 2))
+    if split:
+        convReLU_shared = convRelu(4, batchNorm, leakyReLU, split=True)
+        convReLU_forward = convRelu(4, batchNorm, leakyReLU, split=True)
+        convReLU_back = convRelu(4, batchNorm, leakyReLU, split=True)
+    else:
+        convReLU_shared=None
+        convReLU_forward=None
+        convReLU_back=None
+        cnn1.add_module('convRelu{0}'.format(4), convRelu(4, batchNorm, leakyReLU))
+    cnn2 = nn.Sequential()
+    cnn2.add_module('convRelu{0}'.format(5), convRelu(5))
+    cnn2.add_module('pooling{0}'.format(3), nn.MaxPool2d(2, 2))
+    cnn2.add_module('convRelu{0}'.format(6), convRelu(6, batchNorm, leakyReLU))
+    cnn2.add_module('pooling{0}'.format(4), nn.MaxPool2d(2, 2))
 
-    return cnn
+    return cnn1, convReLU_shared, convReLU_forward, convReLU_back, cnn2
 
 class LineFollower(BaseModel):
     def __init__(self, config, dtype=torch.cuda.FloatTensor):
         super(LineFollower, self).__init__(config)
-
-        cnn = makeCnn()
+        self.view_window_size = 32
+        batchNorm = "batch_norm" in config and config['batch_norm']
+        leakyReLU = "leaky_relu" in config and config['leaky_relu']
         if "angle_only" in config and config["angle_only"]:
             self.no_xy=True
             num_pos=1
@@ -70,18 +83,34 @@ class LineFollower(BaseModel):
             self.no_xy=False
             num_pos=3
 
+        self.split_cnn_forback = "split_cnn_forback" in config and config['split_cnn_forback']
         self.pred_end = "pred_end" in config and config['pred_end']
 
         self.pred_scale = 'pred_scale' in config and config['pred_scale']
+        if self.pred_scale:
+            self.scale_index=num_pos
+            num_pos+=1
+        else:
+            self.scale_index=None
+
+        if "gray_scale" in config and config["gray_scale"]:
+            colorCh=1
+        else:
+            colorCh=3
+        pointCh=3 #confidence, rot, scale; we assume the point has been aligned according to its offset
+        inputChannels = (colorCh+pointCh) if self.pred_end else colorCh
         
-        position_linear = nn.Linear(512,num_pos + int(self.pred_end))
+      
+        position_linear = nn.Linear(512,num_pos)
         position_linear.weight.data.zero_()
         position_linear.bias.data[0:num_pos] = 0 #dont shift or rotate, no scale is zero as well
         if self.pred_scale:
-            self.scale_linear = nn.Linear(512,1)
-            self.scale_linear.weight.data.zero_()
-            self.scale_linear.bias.data[0] = 0 #scale is zero as well
-            self.scale_root = nn.Parameter(torch.tensor(2,dtype=torch.float), requires_grad=True)
+            #self.scale_linear = nn.Linear(512,1)
+            #self.scale_linear.weight.data.zero_()
+            #self.scale_linear.bias.data[0] = 0 #scale is zero as well
+            self.scale_root = 2 #nn.Parameter(torch.tensor(2,dtype=torch.float), requires_grad=True)
+        if self.pred_end:
+            self.end_linear = nn.Linear(512,1)
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
@@ -103,13 +132,15 @@ class LineFollower(BaseModel):
         if 'output_grid_size' in config:
             self.output_grid_size = output_grid_size['output_grid_size']
         else:
-            self.output_grid_size=32
+            self.output_grid_size=self.view_window_size
 
         self.dtype = dtype
-        self.cnn = cnn
+        self.cnn1, self.shared_conv, self.forward_conv, self.backward_conv, self.cnn1 = makeCnn(batchNorm,leakyReLU, inputChannels, self.split_cnn_forback)
         self.position_linear = position_linear
 
-    def forward(self, image, positions, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False):
+        self.grid_gen = GridGen(self.view_window_size,self.view_window_size)
+
+    def forward(self, image, start_position, forward, steps=None, all_positions=[], all_xy_positions=[], reset_interval=-1, randomize=False, negate_lw=False, skip_grid=False, allow_end_early=False, detected_end_points=None):
 
         #if reset_interval>0:
         #    reset_interval = random.randint(reset_interval-2,reset_interval+2)
@@ -174,15 +205,15 @@ class LineFollower(BaseModel):
         if negate_lw:
             view_window = invert.bmm(view_window)
 
-        grid_gen = GridGen(32,32)
 
         view_window_imgs = []
         next_windows = []
         reset_windows = True
+        end_preds = []
         for i in range(steps):
 
             if i%reset_interval != 0 or reset_interval==-1:
-                p_0 = positions[-1]
+                p_0 = start_position#s[-1]
 
                 if i == 0 and len(p_0.size()) == 3 and p_0.size()[1] == 3 and p_0.size()[2] == 3:
                     print('when does this hit?')
@@ -249,10 +280,11 @@ class LineFollower(BaseModel):
             else:
                 current_window = next_windows[-1].detach()
 
+
             crop_window = current_window.bmm(view_window)
             #I need the x,y cords from here
 
-            resampled = get_patches(image, crop_window, grid_gen, allow_end_early)
+            resampled = get_patches(image, crop_window, self.grid_gen, allow_end_early)
 
             if resampled is None and i > 0:
                 #get patches checks to see if stopping early is allowed
@@ -264,33 +296,67 @@ class LineFollower(BaseModel):
                 #in the future
                 resampled = torch.zeros(crop_window.size(0), 3, 32, 32).type_as(image.data)
 
+            if self.pred_end:
+                #transform all detected end points to the resampled coordinates ([-1,1])
+                #add any in the resampled image
+                # shape of detected_end_points [instances, features] feautres:conf,x,y,rot,scale
+                detected_end_points_xy = torch.zeros(detected_end_points.size(0), 3)
+                detected_end_points_xy[:,0:2] = detected_end_points[:,1:3]
+                detected_end_points_xy = detected_end_points_xy.t() #so matrics mult is correct
+                trans_detected_points = torch.inverse(crop_window.data).bmm(detected_end_points_xy)
+                valid_points = (trans_detected_points[0,:]>=-1 and trans_detected_points[0,:]<=1 and
+                        trans_detected_points[1,:]>=-1 and trans_detected_points[1,:]<=1)
+                xys = self.view_window_size*(trans_detected_points[:,valid_points].floor()+1)/2
+                confs = detected_end_points[valid_points,0]
+
+                detected_img = torch.zeros(crop_window.size(0), 1, 32, 32).type_as(image.data) #1 channel for conf
+                detected_img[:,0,xys[1,:],xyx[0,:]]=confs
+                #TODO change rotation and scale according to the transformation and include them
+
+                resampled = torch.cat(resampled,confs,dim=1)
+
+                #meh, handle this in loss function
+                ##is the correct end point in the window?
+                #trans_end = torch.inverse(crop_window.data).bmm(end_point)
+                #if trans_end[0]>=-1 and trans_end[0]<=1 and
+                #    trans_end[1]>=-1 and trans_end[1]<=1:
+                #    end_present.append(1)
+                #else:
+                #end_present.
+
 
             # Process Window CNN
-            cnn_out = self.cnn(resampled)
+            cnn_out = self.cnn1(resampled)
+            if self.shared_conv is not None:
+                shared_out = self.shared_conv(cnn_out)
+                if forwards:
+                    part_out = self.forward_conv(cnn_out)
+                else:
+                    part_out = self.backward_conv(cnn_out)
+                cnn_out = torch.cat(shared_out,part_out,dim=1)
+            cnn_out = self.cnn2(cnn_out)
+            #cnn_out = self.cnn(resampled)
             cnn_out = torch.squeeze(cnn_out, dim=2)
             cnn_out = torch.squeeze(cnn_out, dim=2)
             delta = self.position_linear(cnn_out)
             if self.pred_scale:
-                scale_out = self.scale_linear(cnn_out)
-                #twos = 2*torch.ones_like(scale_out)
+                #scale_out = self.scale_linear(cnn_out)
+                twos = 2*torch.ones_like(scale_out)
                 #delta_scale = torch.pow(twos, scale_out)
-                delta_scale = torch.pow(self.scale_root, scale_out)
-            else:
-                delta_scale = None
+                delta[:,self.scale_index] = 2*torch.ones_like(delta[:,self.scale_index])
+                #delta_scale = torch.pow(self.scale_root, scale_out)
+            #else:
+            #    delta_scale = None
 
-            #if self.pred_scale:
-            #    if self.no_xy:
-            #        index=1
-            #    else:
-            #        index=3
-            #    twos = 2*torch.ones_like(delta[:,index])
-            #    #delta[:,index]=torch.pow(twos,torch.clamp(delta[:,index],-2,2)) #we clamp to prevent really weird things, having 2^x makes the scaling linear with respect the the nets linear output
-            #    delta[:,index]=torch.pow(twos,delta[:,index]).clone() #having 2^x makes the scaling linear with respect the the nets linear output
+            if self.pred_end:
+                end_out = self.end_linear(cnn_out)
+                end_preds.append(end_out)
+
 
 
             ##rint(delta)
             ##rint(delta_scale)
-            next_window = transformation_utils.get_step_matrix(delta,self.no_xy,delta_scale)
+            next_window = transformation_utils.get_step_matrix(delta,self.no_xy,self.scale_index)
             ##rint('{} delta'.format(i))
             ##rint(next_window)
             next_window = next_window.bmm(step_bias)
@@ -357,11 +423,11 @@ class LineFollower(BaseModel):
 
         if skip_grid:
             #grid_line = None
-            return xy_positions, xyrs_pos
+            return xy_positions, xyrs_pos, end_preds
         else:
             grid_line = torch.cat(grid_line, dim=1)
 
-        return grid_line, view_window_imgs, next_windows, xy_positions, xyrs_pos
+        return grid_line, view_window_imgs, next_windows, xy_positions, xyrs_pos, end_preds
 
 
 
@@ -440,7 +506,7 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False, end_points=
 
             if not skip_slice:
                 all_skipped = False
-                i_s  = image[b_i:b_i+1, :, s_x[0]:s_x[1], s_y[0]:s_y[1]]
+                i_s  = image[b_i:b_i+1, :, s_x[0]:s_x[1], s_y[0]:s_y[1]]  # I think this an optimization
                 #print(i_s.size())
                 #print(memory_space.size())
                 memory_space[b_i:b_i+1, :, t_x[0]:t_x[1], t_y[0]:t_y[1]] = i_s

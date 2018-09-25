@@ -3,6 +3,11 @@ import torch
 import numpy as np
 
 class LFTrainer(Trainer):
+    def __init__(self, model, loss, metrics, resume, config,
+                 data_loader, valid_data_loader=None, train_logger=None):
+        super(LFTrainer, self).__init__(model, loss, metrics, resume, config, data_loader, valid_data_loader, train_logger)
+        self.end_loss_weight = config['end_loss_weight'] if 'end_loss_weight' in config else 1.0
+
     def _train_iteration(self, iteration):
         """
         Training logic for an iteration
@@ -24,22 +29,39 @@ class LFTrainer(Trainer):
         #tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
-            data, positions_xyxy, positions_xyrs, step_count = self._to_tensor(*self.data_loader_iter.next())
+            data, positions_xyxy, positions_xyrs, step_count, forwards = self._to_tensor(*self.data_loader_iter.next())
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
-            data, positions_xyxy, positions_xyrs, step_count = self._to_tensor(*self.data_loader_iter.next())
+            data, positions_xyxy, positions_xyrs, step_count, forwards = self._to_tensor(*self.data_loader_iter.next())
         #toc=timeit.default_timer()
         #print('data: '+str(toc-tic))
 
         #tic=timeit.default_timer()
 
         self.optimizer.zero_grad()
+
+        #if self.
+        #if self.detectorModel is not None:
+        #    linePreds, pointPreds, pixelPreds = self.detectorModel(data
         #step_count=len(positions_xyrs)
         #print(step_count)
         rand=True
-        output,outputrs = self.model(data,positions_xyrs[:1], steps=step_count, all_positions=positions_xyrs, all_xy_positions=positions_xyxy, reset_interval=4, randomize=rand, skip_grid=True)
-        loss = self.loss(output, positions_xyxy)
+        output,outputrs,output_end = self.model(
+                data,
+                positions_xyrs[0], 
+                forwards, 
+                steps=step_count, 
+                all_positions=positions_xyrs, 
+                all_xy_positions=positions_xyxy, 
+                reset_interval=4, 
+                randomize=rand, 
+                skip_grid=True, 
+                detected_end_points=detected_end_points)
+        pos_loss = self.loss['pos'](output, positions_xyxy)
+        if len(output_end)>0:
+            end_loss = self.loss['end'](output_end,output,positions_xyrs[:,-1,0:2])
         #loss = self.loss(outputrs, positions_xyrs)
+        loss = pos_loss + self.end_loss_weight*end_loss
         loss.backward()
         self.optimizer.step()
 
@@ -59,6 +81,8 @@ class LFTrainer(Trainer):
 
         log = {
             'loss': loss,
+            'pos_loss': pos_loss,
+            'end_loss': end_loss,
             'metrics': metrics
         }
 

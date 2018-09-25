@@ -203,6 +203,8 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
     #    return metricsOut
     
     dists=defaultdict(list)
+    dists_x=defaultdict(list)
+    dists_y=defaultdict(list)
     scaleDiffs=defaultdict(list)
     rotDiffs=defaultdict(list)
     for b in range(batchSize):
@@ -251,6 +253,8 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                     my_pred = (p1[1]+p2[1])/2.0
                     theta_pred = -math.atan2(dx, -dy)
                     dists[name].append( math.sqrt((mx_targ-mx_pred)**2 + (my_targ-my_pred)**2) )
+                    dists_x[name].append(mx_targ-mx_pred)
+                    dists_y[name].append(my_targ-my_pred)
                     scaleDiffs[name].append( scale_targ-scale_pred )
                     rotDiffs[name].append( theta_targ-theta_pred )
                     #mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
@@ -323,7 +327,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                         rad = 4 #round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
                         #print(mid)
                         #print(rad)
-                        cv2.circle(image,mid,rad,(0,1,1),1)
+                        #cv2.circle(image,mid,rad,(0,1,1),1)
                 #for j in alignmentLinesTarg[name][b]:
                 #    p1 = (targetLines[name][b,j,0], targetLines[name][b,j,1])
                 #    p2 = (targetLines[name][b,j,0], targetLines[name][b,j,1])
@@ -348,6 +352,8 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
         
     #return metricsOut
     return { 'dists':dists,
+             'dists_x':dists_x,
+             'dists_y':dists_y,
              'scaleDiffs':scaleDiffs,
              'rotDiffs':rotDiffs
              }
@@ -386,7 +392,6 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
     maxX=maxY=-1
 
     if outDir is not None:
-
         for pointPair in  instance[1]:
             pointPair=pointPair[0].numpy()
             #print (pointPair)

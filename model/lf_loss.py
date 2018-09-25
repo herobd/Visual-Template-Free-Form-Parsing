@@ -65,10 +65,11 @@ def getMinimumDists(p0,p1,xy_positions, return_points=False):
 
 def getMinimumDists_rs(p,xyrs_positions, return_points=False):
     min_d = None
+    b=0
     for j in range(len(xyrs_positions)-1):
         #print(xy_positions[j].size())
-        s = xyrs_positions[j][0,:2]
-        e = xyrs_positions[j+1][0,:2]
+        s = xyrs_positions[j][b,:2]
+        e = xyrs_positions[j+1][b,:2]
         if return_points:
             d,point = compute_distance(s,e,p,True)
             if min_d is None:
@@ -91,20 +92,22 @@ def getMinimumDists_rs(p,xyrs_positions, return_points=False):
                 if (d<min_d):
                     min_j=j
 
-    rot = xyrs_positions[min_j][0,2]
-    scale = xyrs_positions[min_j][0,3]
+    rot = xyrs_positions[min_j][b,2]
+    scale = xyrs_positions[min_j][b,3]
     if return_points:
         return min_d, rot,scale, min_p
     else:
         return min_d, rot,scale
 
 #special loss only works with batch size 1
+#this computes the loss from the predicted point to the neartest point-on-a-line defined by the GT points
 def special_loss(xy_output, xy_positions):
     assert(xy_output[0].size(0)==1)
+    b=0
     loss = 0
     for i in range(len(xy_output)):
-        p0 = xy_output[i][0,:2,0]
-        p1 = xy_output[i][0,:2,1]
+        p0 = xy_output[i][b,:2,0]
+        p1 = xy_output[i][b,:2,1]
 
         min_d0,min_d1 = getMinimumDists(p0,p1,xy_positions)
         #if (min_d0>14 or min_d1>14) and i!=len(xy_output)-1:
@@ -139,3 +142,54 @@ def point_loss(xy_output, xy_positions):
     for i, l in enumerate(xy_positions):
         loss += loss_fn(xy_output[i][:,:2,:2], l)
     return loss
+
+def get_side(a, b):
+    x = x_product(a, b)
+    if x < 0:
+        return 'left'
+    elif x > 0:
+        return 'right'
+    else:
+        return None
+
+def v_sub(a, b):
+    return (a[0]-b[0], a[1]-b[1])
+
+def x_product(a, b):
+    return a[0]*b[1]-a[1]*b[0]
+
+
+def checkInsidePoly(point,vertices):
+    #point=(x,y)
+    previous_side = None
+    n_vertices = len(vertices)
+    for n in xrange(n_vertices):
+        a, b = vertices[n], vertices[(n+1)%n_vertices]
+        affine_segment = a-b #v_sub(b, a)
+        affine_point = point-a #v_sub(point, a)
+        current_side = get_side(affine_segment, affine_point)
+        if current_side is None:
+            return False #outside or over an edge
+        elif previous_side is None: #first segment
+            previous_side = current_side
+        elif previous_side != current_side:
+            return False
+    return True
+
+#This assumes batch size of 1
+def end_pred_loss(end_pred,path_xyxy,end_point):
+    assert(end_point.size(0)==1)
+    assert(len(end_pred)==len(path_xyxy)-1)
+    b=0
+    passed_end=False
+    for i in range(len(end_pred)):
+        pred = torch.nn.functional.sigmoid(end_pred[i][b])
+        tl = path_xyxy[i][b,0:2]
+        br = path_xyxy[i+1][b,2:4]
+        tr = path_xyxy[i+1][b,0:2]
+        bl = path_xyxy[i][b,2:4]
+        if passed_end or checkInsidePoly(end_point[b],[tl,tr,br,bl]):
+            passed_end=True
+            return 1-pred
+        else:
+            return pred

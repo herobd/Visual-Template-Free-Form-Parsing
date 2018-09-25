@@ -16,7 +16,11 @@ import cv2
 IAIN_CATCH=['193','194','197','200']
 ONE_DONE=[]
 
-
+def flipPoints(points):
+    newPoints = list(reversed(points))
+    for i in range(len(newPoints)):
+        newPoints[i] = torch.Tensor([[newPoints[i][0,1],newPoints[i][0,0]],[newPoints[i][1,1],newPoints[i][1,0]]])
+    return newPoint
 
 class FormsLF(torch.utils.data.Dataset):
     """
@@ -171,7 +175,7 @@ class FormsLF(torch.utils.data.Dataset):
         rescaled = self.lines[index]['rescaled']
 
         ##tic=timeit.default_timer()
-        org_img = cv2.imread(imagePath)#/255.0
+        img = cv2.imread(imagePath)#/255.0
         ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,org_img.shape[0],org_img.shape[1]))
 
         #target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
@@ -187,8 +191,8 @@ class FormsLF(torch.utils.data.Dataset):
         if self.augment:
 
             ##tic=timeit.default_timer()
-            org_img = augmentation.apply_random_color_rotation(org_img)
-            org_img = augmentation.apply_tensmeyer_brightness(org_img)
+            img = augmentation.apply_random_color_rotation(img)
+            img = augmentation.apply_tensmeyer_brightness(img)
             ##print('augmentation: {}'.format(timeit.default_timer()-tic))
         pointsAngle=[]
         for p in points:
@@ -210,7 +214,7 @@ class FormsLF(torch.utils.data.Dataset):
         img = 1.0 - img / 128.0 #ideally the median value would be 0
         if detectionDir is not None:
             detection_res = np.load(detectionPath)#replace with retrieving list of points
-        img = org_img.transpose([2,0,1]) #from [row,col,color] to [color,row,col]
+        img = img.transpose([2,0,1]) #from [row,col,color] to [color,row,col]
         img = img.astype(np.float32)
         img = torch.from_numpy(img)
         
@@ -238,8 +242,10 @@ class FormsLF(torch.utils.data.Dataset):
             tX,tY,bX,bY,etX,etY,ebX,ebY = getRectPoints(bb['poly_points'])
 
 
-            points.append([ torch.Tensor([[tX*s,bX*s],[tY*s,bY*s]]),
-                            torch.Tensor([[etX*s,ebX*s],[etY*s,ebY*s]]) ])
+            points.append( ([ torch.Tensor([[tX*s,bX*s],[tY*s,bY*s]]),
+                              torch.Tensor([[etX*s,ebX*s],[etY*s,ebY*s]]) ], True) )
+            points.append( ([ torch.Tensor([[ebX*s,etX*s],[ebY*s,etY*s]]),
+                              torch.Tensor([[bX*s,tX*s],[bY*s,tY*s]]) ], False) )
 
         return points
 
@@ -285,7 +291,8 @@ class FormsLF(torch.utils.data.Dataset):
                 pointsBot.append(bb[2])
             for i in range(len(pointsTop)):
                 linePoints.append( torch.Tensor([[pointsTop[i][0]*s,pointsBot[i][0]*s],[pointsTop[i][1]*s,pointsBot[i][1]*s]]) )
-            points.append(linePoints)
+            points.append( (linePoints,True) )
+            points.append( (flipPoints(linePoints),False) )
 
         #now everything not in a horz link
         for bbId in ann['byId'].keys()-idsInHorz:
@@ -299,8 +306,10 @@ class FormsLF(torch.utils.data.Dataset):
                 continue
             bbSlanty=bb['poly_points']
             tX,tY,bX,bY,etX,etY,ebX,ebY = getRectPoints(bbSlanty)
-            points.append([ torch.Tensor([[tX*s,bX*s],[tY*s,bY*s]]),
-                            torch.Tensor([[etX*s,ebX*s],[etY*s,ebY*s]]) ])
+            points.append( ([ torch.Tensor([[tX*s,bX*s],[tY*s,bY*s]]),
+                              torch.Tensor([[etX*s,ebX*s],[etY*s,ebY*s]]) ],True) )
+            points.append( ([ torch.Tensor([[ebX*s,etX*s],[ebY*s,etY*s]]),
+                              torch.Tensor([[bX*s,tX*s],[bY*s,tY*s]]) ], False) )
         return points
 
 def getRectPoints(poly_points):               

@@ -68,7 +68,7 @@ def makeCnn(batchNorm,leakyReLU,numChanIn,split):
     cnn2.add_module('convRelu{0}'.format(6), convRelu(6, batchNorm, leakyReLU))
     cnn2.add_module('pooling{0}'.format(4), nn.MaxPool2d(2, 2))
 
-    return cnn1, convReLU_shared, convReLU_forward, convReLU_backward, cnn2
+    return cnn1, convReLU_shared, convReLU_forward, convReLU_back, cnn2
 
 class LineFollower(BaseModel):
     def __init__(self, config, dtype=torch.cuda.FloatTensor):
@@ -302,13 +302,13 @@ class LineFollower(BaseModel):
                 detected_end_points_xy[:,0:2] = detected_end_points[:,1:3]
                 detected_end_points_xy = detected_end_points_xy.t() #so matrics mult is correct
                 trans_detected_points = torch.inverse(crop_window.data).bmm(detected_end_points_xy)
-                valid_points = trans_detected_points[0,:]>=-1 and trans_detected_points[0,:]<=1 and
-                        trans_detected_points[1,:]>=-1 and trans_detected_points[1,:]<=1
+                valid_points = (trans_detected_points[0,:]>=-1 and trans_detected_points[0,:]<=1 and
+                        trans_detected_points[1,:]>=-1 and trans_detected_points[1,:]<=1)
                 xys = self.view_window_size*(trans_detected_points[:,valid_points].floor()+1)/2
                 confs = detected_end_points[valid_points,0]
 
                 detected_img = torch.zeros(crop_window.size(0), 1, 32, 32).type_as(image.data) #1 channel for conf
-                detected_img[:,0,xys[1,:],xyx[0,:]=confs
+                detected_img[:,0,xys[1,:],xyx[0,:]]=confs
                 #TODO change rotation and scale according to the transformation and include them
 
                 resampled = torch.cat(resampled,confs,dim=1)
@@ -502,7 +502,6 @@ def get_patches(image, crop_window, grid_gen, allow_end_early=False, end_points=
             if t_y[0] >= t_y[1]:
                 skip_slice = True
 
-p_window
             if not skip_slice:
                 all_skipped = False
                 i_s  = image[b_i:b_i+1, :, s_x[0]:s_x[1], s_y[0]:s_y[1]]  # I think this an optimization

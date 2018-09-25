@@ -327,7 +327,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                         rad = 4 #round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
                         #print(mid)
                         #print(rad)
-                        cv2.circle(image,mid,rad,(0,1,1),1)
+                        #cv2.circle(image,mid,rad,(0,1,1),1)
                 #for j in alignmentLinesTarg[name][b]:
                 #    p1 = (targetLines[name][b,j,0], targetLines[name][b,j,1])
                 #    p2 = (targetLines[name][b,j,0], targetLines[name][b,j,1])

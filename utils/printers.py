@@ -377,45 +377,50 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
 
     data, positions_xyxy, positions_xyrs, steps = _to_tensor(*instance)
     #print(steps)
-    output = model(data,positions_xyrs[:1],steps=steps, skip_grid=True)
-    loss = lf_line_loss(output, positions_xyxy)
+    output_xyxy, output_xyrs = model(data,positions_xyrs[:1],steps=steps, skip_grid=True)
+    loss = lf_line_loss(output_xyxy, positions_xyxy)
     image = (1-((1+np.transpose(instance[0][b][:,:,:].numpy(),(1,2,0)))/2.0)).copy()
     #print(image.shape)
     #print(type(image))
     minX=minY=9999999
     maxX=maxY=-1
 
+    if outDir is not None:
 
-    for pointPair in  instance[1]:
-        pointPair=pointPair[0].numpy()
-        #print (pointPair)
-        xU=int(pointPair[0,0])
-        yU=int(pointPair[1,0])
-        xL=int(pointPair[0,1])
-        yL=int(pointPair[1,1])
-        cv2.circle(image,(xU,yU),2,(0.25,1,0),-1)
-        cv2.circle(image,(xL,yL),2,(0,1,0.25),-1)
-        minX=min(minX,xU,xL)
-        maxX=max(maxX,xU,xL)
-        minY=min(minY,yU,yL)
-        maxY=max(maxY,yU,yL)
+        for pointPair in  instance[1]:
+            pointPair=pointPair[0].numpy()
+            #print (pointPair)
+            xU=int(pointPair[0,0])
+            yU=int(pointPair[1,0])
+            xL=int(pointPair[0,1])
+            yL=int(pointPair[1,1])
+            cv2.circle(image,(xU,yU),2,(0.25,1,0),-1)
+            cv2.circle(image,(xL,yL),2,(0,1,0.25),-1)
+            minX=min(minX,xU,xL)
+            maxX=max(maxX,xU,xL)
+            minY=min(minY,yU,yL)
+            maxY=max(maxY,yU,yL)
 
-    for pointPair in output:
-        pointPair = pointPair[0].data.cpu().numpy()
-        xU=int(pointPair[0,0])
-        yU=int(pointPair[1,0])
-        xL=int(pointPair[0,1])
-        yL=int(pointPair[1,1])
-        cv2.circle(image,(xU,yU),2,(1,0,0),-1)
-        cv2.circle(image,(xL,yL),2,(0,0,1),-1)
-        minX=min(minX,xU,xL)
-        maxX=max(maxX,xU,xL)
-        minY=min(minY,yU,yL)
-        maxY=max(maxY,yU,yL)
+        for pointPair in output_xyxy:
+            pointPair = pointPair[0].data.cpu().numpy()
+            xU=int(pointPair[0,0])
+            yU=int(pointPair[1,0])
+            xL=int(pointPair[0,1])
+            yL=int(pointPair[1,1])
+            cv2.circle(image,(xU,yU),2,(1,0,0),-1)
+            cv2.circle(image,(xL,yL),2,(0,0,1),-1)
+            minX=min(minX,xU,xL)
+            maxX=max(maxX,xU,xL)
+            minY=min(minY,yU,yL)
+            maxY=max(maxY,yU,yL)
 
-    horzPad = int((maxX-minX)/2)
-    vertPad = int((maxY-minY)/2)
-    image=image[max(0,minY-vertPad):min(image.shape[0],maxY+vertPad) , max(0,minX-horzPad):min(image.shape[1],maxX+horzPad)]
+        horzPad = int((maxX-minX)/2)
+        vertPad = int((maxY-minY)/2)
+        image=image[max(0,minY-vertPad):min(image.shape[0],maxY+vertPad) , max(0,minX-horzPad):min(image.shape[1],maxX+horzPad)]
 
-    saveName = '{:06}_lf_l:{:.3f}.png'.format(startIndex+b,loss.item())
-    io.imsave(os.path.join(outDir,saveName),image)
+        saveName = '{:06}_lf_l:{:.3f}.png'.format(startIndex+b,loss.item())
+        io.imsave(os.path.join(outDir,saveName),image)
+
+    return {
+            "loss":{'xy':[loss.item()]}
+            }

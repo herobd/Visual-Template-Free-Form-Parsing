@@ -185,6 +185,8 @@ class LineFollower(BaseModel):
                 p_0 = positions[-1]
 
                 if i == 0 and len(p_0.size()) == 3 and p_0.size()[1] == 3 and p_0.size()[2] == 3:
+                    print('when does this hit?')
+                    print(p_0)
                     current_window = p_0
                     reset_windows = False
                     next_windows.append(p_0)
@@ -223,16 +225,6 @@ class LineFollower(BaseModel):
 
                     p_0 = p_0 * mul_moise + add_noise
 
-            if reset_windows:
-                reset_windows = False
-
-                current_window = transformation_utils.get_init_matrix(p_0)
-
-                if len(next_windows) == 0:
-                    next_windows.append(current_window)
-            else:
-                current_window = next_windows[-1].detach()
-
             if i==0 and self.randomizeStart:
                 add_noise = p_0.clone()
                 add_noise.data.zero_()
@@ -246,6 +238,16 @@ class LineFollower(BaseModel):
                 add_noise[:,3].data.normal_(self.mean_scale, self.std_scale)
 
                 p_0 = p_0 - add_noise #I calculated differences using targ-pred=dif, so we need to subtract (pred=targ-dif)
+
+            if reset_windows:
+                reset_windows = False
+
+                current_window = transformation_utils.get_init_matrix(p_0)
+
+                if len(next_windows) == 0:
+                    next_windows.append(current_window)
+            else:
+                current_window = next_windows[-1].detach()
 
             crop_window = current_window.bmm(view_window)
             #I need the x,y cords from here

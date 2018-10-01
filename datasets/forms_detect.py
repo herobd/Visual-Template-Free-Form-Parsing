@@ -880,7 +880,7 @@ def getIntersectsCols(line,cols,startInd,threshLine_low=10,threshLine_high=10,th
     elif failed==2:
         intersectionBoth=False
     elif failed>2:
-        return [], 0,tryBefore
+        return [], 0, tryBefore
 
     #left-most boundary
     p=None
@@ -904,7 +904,7 @@ def getIntersectsCols(line,cols,startInd,threshLine_low=10,threshLine_high=10,th
                 startInd=1
                 iPoints=[]
             elif failed==2:
-                return [], 0,tryBefore
+                return [], 0, tryBefore
             else:
                 return getIntersectsCols(line,cols,startInd,threshLine_low,threshLine_high,threshLeft,threshRight,failed+1)
         else:

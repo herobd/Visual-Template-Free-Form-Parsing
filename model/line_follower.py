@@ -221,6 +221,8 @@ class LineFollower(BaseModel):
                 p_0 = start_position#s[-1]
 
                 if i == 0 and len(p_0.size()) == 3 and p_0.size()[1] == 3 and p_0.size()[2] == 3:
+                    print('when does this hit?')
+                    print(p_0)
                     current_window = p_0
                     reset_windows = False
                     next_windows.append(p_0)

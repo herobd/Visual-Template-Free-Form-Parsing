@@ -85,6 +85,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
         for index in range(0,numberOfImages,step*batchSize):
             for trainIndex in range(index,index+step*batchSize, batchSize):
                 if trainIndex/batchSize < len(data_loader):
+                    print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
                     #data, target = train_iter.next() #data_loader[trainIndex]
                     #dataT = _to_tensor(gpu,data)
                     #output = model(dataT)
@@ -96,6 +97,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
             
             for validIndex in range(index,index+step*batchSize, batchSize):
                 if validIndex/batchSize < len(valid_data_loader):
+                    print('valid batch index: {}/{}'.format(validIndex/batchSize,len(valid_data_loader)),end='\r')
                     #data, target = valid_iter.next() #valid_data_loader[validIndex]
                     curVI+=0
                     #dataT  = _to_tensor(gpu,data)
@@ -116,6 +118,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
         if gpu is not None:
             try:
                 for vi in range(curVI,len(valid_data_loader)):
+                    print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
                     #data, target = valid_iter.next() #valid_data_loader[validIndex]
                     #data  = _to_tensor(gpu,data)
                     #output = model(data)

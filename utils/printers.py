@@ -119,6 +119,8 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
             if targetPixels is not None:
                 targetPixels=targetPixels.to(gpu)
         return data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels
+
+
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -129,15 +131,28 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
     targetLines = instance['line_gt']
     targetPoints = instance['point_gt']
     targetPixels = instance['pixel_gt']
+    imageName = instance['imgName']
+    scale = instance['scale']
     dataT, targetLinesT, targetLinesSizes, targetPointsT, targetPointsSizes, targetPixelsT = __to_tensor(instance,gpu)
 
+    resultsDirName='results'
+    if outDir is not None and resultsDirName is not None:
+        rPath = os.path.join(outDir,resultsDirName)
+        if not os.path.exists(rPath):
+            os.mkdir(rPath)
+        for name in targetLines:
+            nPath = os.path.join(rPath,name)
+            if not os.path.exists(nPath):
+                os.mkdir(nPath)
 
     #dataT = __to_tensor(data,gpu)
-    outputLines, outputPoints, outputPixels = model(dataT)
+    print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
+    outputLines_xyrs, outputPoints, outputPixels = model(dataT)
     outputPixels = torch.sigmoid(outputPixels)
     index=0
+    outputLines = []
     for name, targ in targetLines.items():
-        outputLines[index] = util.pt_xyrs_2_xyxy(outputLines[index])
+        outputLines.append(util.pt_xyrs_2_xyxy(outputLines_xyrs[index]))
         index+=1
 
     alignmentLinesPred={}
@@ -173,8 +188,10 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
     data = data.cpu().data.numpy()
     #outputLine = outputLine.cpu().data.numpy()
     outputLinesOld = outputLines
+    outputLinesOld_xyrs = outputLines_xyrs
     targetLinesOld = targetLines
     outputLines={}
+    outputLines_xyrs={}
     targetLines={}
     i=0
     for name,targ in targetLinesOld.items():
@@ -183,6 +200,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
         else:
              targetLines[name]=None
         outputLines[name] = outputLinesOld[i].cpu().data.numpy()
+        outputLines_xyrs[name] = outputLinesOld_xyrs[i].cpu().data.numpy()
         i+=1
     outputPointsOld = outputPoints
     targetPointsOld = targetPoints
@@ -212,6 +230,16 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
         #lineImage = np.ones_like(image)
         for name, out in outputLines.items():
             if outDir is not None:
+                #Write the results so we can train LF with them
+                saveFile = os.path.join(outDir,resultsDirName,name,'{}'.format(imageName[b]))
+                #we must rescale the output to be according to the original image
+                rescaled_outputLines_xyrs = outputLines_xyrs[name][b]
+                rescaled_outputLines_xyrs[:,1] /= scale[b]
+                rescaled_outputLines_xyrs[:,2] /= scale[b]
+                rescaled_outputLines_xyrs[:,4] /= scale[b]
+
+                np.save(saveFile,rescaled_outputLines_xyrs)
+
                 image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()
                 #if name=='text_start_gt':
                 for j in range(targetLinesSizes[name][b]):
@@ -226,6 +254,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                     #print(p2)
                     cv2.line(image,p1,p2,(1,0.5,0),1)
             lines=[]
+            #pred_points=[]
             maxConf = out[b,:,0].max()
             threshConf = maxConf*0.1
             for j in range(out.shape[1]):
@@ -234,6 +263,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                     p1 = (out[b,j,1],out[b,j,2])
                     p2 = (out[b,j,3],out[b,j,4])
                     lines.append((conf,p1,p2,j))
+                #pred_points.append(
             lines.sort(key=lambda a: a[0]) #so most confident lines are draw last (on top)
             for conf, p1, p2, j in lines:
                 #circle aligned predictions
@@ -381,9 +411,15 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
 
     b=0 #assume batchsize of 1
 
-    data, positions_xyxy, positions_xyrs, steps = _to_tensor(*instance)
+    data, positions_xyxy, positions_xyrs, steps, forwards, detected_end_points = _to_tensor(*instance)
     #print(steps)
-    output_xyxy, outpu_xyrs = model(data,positions_xyrs[:1],steps=steps, skip_grid=True)
+    output_xyxy, output_xyrs, output_end = model(
+            data,
+            positions_xyrs[0],
+            forwards,
+            steps=steps,
+            skip_grid=True,
+            detected_end_points=detected_end_points)
     loss = lf_line_loss(output_xyxy, positions_xyxy)
     image = (1-((1+np.transpose(instance[0][b][:,:,:].numpy(),(1,2,0)))/2.0)).copy()
     #print(image.shape)
@@ -392,8 +428,15 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
     maxX=maxY=-1
 
     if outDir is not None:
+        for j in range(len(instance[5]).shape[0]):
+            conf = instance[5][b,j,0]
+            x = int(instance[5][b,j,1])
+            y = int(instance[5][b,j,2])
+
+            cv2.circle(image,(x,y),2,(conf,conf,0),-1)
+
         for pointPair in  instance[1]:
-            pointPair=pointPair[0].numpy()
+            pointPair=pointPair[b].numpy()
             #print (pointPair)
             xU=int(pointPair[0,0])
             yU=int(pointPair[1,0])
@@ -406,8 +449,10 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
             minY=min(minY,yU,yL)
             maxY=max(maxY,yU,yL)
 
+
+        j=0
         for pointPair in output_xyxy:
-            pointPair = pointPair[0].data.cpu().numpy()
+            pointPair = pointPair[b].data.cpu().numpy()
             xU=int(pointPair[0,0])
             yU=int(pointPair[1,0])
             xL=int(pointPair[0,1])
@@ -418,6 +463,14 @@ def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startInde
             maxX=max(maxX,xU,xL)
             minY=min(minY,yU,yL)
             maxY=max(maxY,yU,yL)
+            
+            if j>0:
+                endScore = output_end[j-1][b]
+                x=(xU+xL)//2
+                y=(yU+yL)//2
+                cv2.circle(image,(x,y),4,(endScore,0,endScore),-1)
+
+            j+=1
 
         horzPad = int((maxX-minX)/2)
         vertPad = int((maxY-minY)/2)

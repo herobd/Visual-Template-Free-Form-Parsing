@@ -85,6 +85,8 @@ def collate(batch):
 
     ##tic=timeit.default_timer()
     batch_size = len(batch)
+    imageNames=[]
+    scales=[]
     imgs = []
     pixel_gt=[]
     max_h=0
@@ -96,6 +98,8 @@ def collate(batch):
     for b in batch:
         if b is None:
             continue
+        imageNames.append(b['imgName'])
+        scales.append(b['scale'])
         imgs.append(b["img"])
         pixel_gt.append(b['pixel_gt'])
         max_h = max(max_h,b["img"].size(2))
@@ -195,7 +199,9 @@ def collate(batch):
         "line_label_sizes": line_label_sizes,
         'point_gt': point_labels,
         "point_label_sizes": point_label_sizes,
-        'pixel_gt': pixel_gt
+        'pixel_gt': pixel_gt,
+        "imgName": imageNames,
+        "scale": scales
     }
 
 
@@ -217,13 +223,23 @@ class FormsDetect(torch.utils.data.Dataset):
         else:
             self.transform = None
         self.rescale_range = config['rescale_range']
+        if self.rescale_range[0]==450:
+            self.rescale_range[0]=0.2
+        elif self.rescale_range[0]>1.0:
+            self.rescale_range[0]=0.27
+        if self.rescale_range[1]==800:
+            self.rescale_range[1]=0.33
+        elif self.rescale_range[1]>1.0:
+            self.rescale_range[1]=0.27
         if 'cache_resized_images' in config:
             self.cache_resized = config['cache_resized_images']
-            self.cache_path = os.path.join(dirPath,'cache_'+str(self.rescale_range[1]))
-            if self.cache_resized and not os.path.exists(self.cache_path):
-                os.mkdir(self.cache_path)
+            if self.cache_resized:
+                self.cache_path = os.path.join(dirPath,'cache_'+str(self.rescale_range[1]))
+                if not os.path.exists(self.cache_path):
+                    os.mkdir(self.cache_path)
         else:
             self.cache_resized = False
+        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 2200000
         if 'only_types' in config:
             self.only_types = config['only_types']
         else:
@@ -269,23 +285,29 @@ class FormsDetect(torch.utils.data.Dataset):
                     #print(jsonPath)
                     if os.path.exists(jsonPath):
                         rescale=1.0
-                        if self.cache_resized and not os.path.exists(path):
-                            org_img = cv2.imread(org_path)
-                            target_dim1 = self.rescale_range[1]
-                            target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
-                            resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
-                            cv2.imwrite(path,resized)
-                            rescale = target_dim1/float(org_img.shape[1])
-                        elif self.cache_resized:
+                        if self.cache_resized:
+                            rescale = self.rescale_range[1]
+                            if not os.path.exists(path):
+                                org_img = cv2.imread(org_path)
+                                #target_dim1 = self.rescale_range[1]
+                                #target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
+                                #resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
+                                resized = cv2.resize(org_img,(0,0),
+                                        fx=self.rescale_range[1], 
+                                        fy=self.rescale_range[1], 
+                                        interpolation = cv2.INTER_CUBIC)
+                                cv2.imwrite(path,resized)
+                                #rescale = target_dim1/float(org_img.shape[1])
+                        #elif self.cache_resized:
                             #print(jsonPath)
-                            with open(jsonPath) as f:
-                                annotations = json.loads(f.read())
-                            imW = annotations['width']
+                            #with open(jsonPath) as f:
+                            #    annotations = json.loads(f.read())
+                            #imW = annotations['width']
 
-                            target_dim1 = self.rescale_range[1]
-                            rescale = target_dim1/float(imW)
+                            #target_dim1 = self.rescale_range[1]
+                            #rescale = target_dim1/float(imW)
 
-                        self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath, 'rescaled':rescale})
+                        self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath, 'rescaled':rescale, 'imageName':imageName[:imageName.rfind('.')]})
                             
                         # with open(path+'.json') as f:
                         #    annotations = json.loads(f.read())
@@ -312,6 +334,7 @@ class FormsDetect(torch.utils.data.Dataset):
     def __getitem__(self,index):
         ##ticFull=timeit.default_timer()
         imagePath = self.images[index]['imagePath']
+        imageName = self.images[index]['imageName']
         annotationPath = self.images[index]['annotationPath']
         #print(annotationPath)
         rescaled = self.images[index]['rescaled']
@@ -329,29 +352,47 @@ class FormsDetect(torch.utils.data.Dataset):
                 del annotations['fieldBBs'][i]
 
         ##tic=timeit.default_timer()
-        org_img = cv2.imread(imagePath)#/255.0
-        ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,org_img.shape[0],org_img.shape[1]))
-        ##print('       channels : {}'.format(len(org_img.shape)))
+        np_img = cv2.imread(imagePath)#/255.0
+        ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
+        ##print('       channels : {}'.format(len(np_img.shape)))
         if self.cropToPage:
             pageCorners = annotations['page_corners']
-            xl = max(0,int(min(pageCorners['tl'],pageCorners['bl'])))
-            xr = min(org_img.shape[1]-1,int(max(pageCorners['tr'],pageCorners['br'])))
-            yt = max(0,int(min(pageCorners['tl'],pageCorners['tr'])))
-            yb = min(org_img.shape[0]-1,int(max(pageCorners['bl'],pageCorners['br'])))
-            org_img = org_img[yt:yb+1,xl:xr+1,:]
-        target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
-        s = target_dim1 / float(org_img.shape[1])
-        s *= rescaled
+            xl = max(0,int(rescaled*min(pageCorners['tl'],pageCorners['bl'])))
+            xr = min(np_img.shape[1]-1,int(rescaled*max(pageCorners['tr'],pageCorners['br'])))
+            yt = max(0,int(rescaled*min(pageCorners['tl'],pageCorners['tr'])))
+            yb = min(np_img.shape[0]-1,int(rescaled*max(pageCorners['bl'],pageCorners['br'])))
+            np_img = np_img[yt:yb+1,xl:xr+1,:]
+        #target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
+        s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
+        partial_rescale = s/rescaled
+        if self.transform is None: #we're doing the whole image
+            #this is a check to be sure we don't send too big images through
+            pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
+            if pixel_count > self.pixel_count_thresh:
+                partial_rescale = self.pixel_count_thresh/pixel_count
+                s = rescaled*partial_rescale
+                print('exceed thresh: {}, new scale {}'.format(pixel_count,s))
+        #s = target_dim1 / float(np_img.shape[1])
+        #s *= rescaled
         #print(s)
-        target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
+        #target_dim0 = int(np_img.shape[0]/float(np_img.shape[1]) * target_dim1)
         ##tic=timeit.default_timer()
-        org_img = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
-        ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,org_img.shape[0],org_img.shape[1]))
+        #np_img = cv2.resize(np_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
+        np_img = cv2.resize(np_img,(0,0),
+                fx=partial_rescale,
+                fy=partial_rescale,
+                interpolation = cv2.INTER_CUBIC)
+        ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
         ##tic=timeit.default_timer()
         text_start_gt, text_end_gt = self.getStartEndGT(annotations['textBBs'],s)
         field_start_gt, field_end_gt = self.getStartEndGT(annotations['fieldBBs'],s,fields=True)
-        table_points, table_pixels = self.getTables(annotations['fieldBBs'],s, target_dim0,target_dim1,annotations['samePairs'])
+        table_points, table_pixels = self.getTables(
+                annotations['fieldBBs'],
+                s, 
+                np_img.shape[0], 
+                np_img.shape[1],
+                annotations['samePairs'])
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
         pixel_gt = table_pixels
@@ -359,7 +400,7 @@ class FormsDetect(torch.utils.data.Dataset):
         ##ticTr=timeit.default_timer()
         if self.transform is not None:
             out = self.transform({
-                "img": org_img,
+                "img": np_img,
                 "line_gt": {
                         "text_start_gt": text_start_gt,
                         "text_end_gt": text_end_gt,
@@ -371,7 +412,7 @@ class FormsDetect(torch.utils.data.Dataset):
                         },
                 "pixel_gt": pixel_gt
             })
-            org_img = out['img']
+            np_img = out['img']
             text_start_gt = out['line_gt']['text_start_gt']
             text_end_gt = out['line_gt']['text_end_gt']
             field_start_gt = out['line_gt']['field_start_gt']
@@ -380,13 +421,13 @@ class FormsDetect(torch.utils.data.Dataset):
             pixel_gt = out['pixel_gt']
 
             ##tic=timeit.default_timer()
-            org_img = augmentation.apply_random_color_rotation(org_img)
-            org_img = augmentation.apply_tensmeyer_brightness(org_img)
+            np_img = augmentation.apply_random_color_rotation(np_img)
+            np_img = augmentation.apply_tensmeyer_brightness(np_img)
             ##print('augmentation: {}'.format(timeit.default_timer()-tic))
         ##print('transfrm: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
 
 
-        img = org_img.transpose([2,0,1])[None,...] #from [row,col,color] to [batch,color,row,col]
+        img = np_img.transpose([2,0,1])[None,...] #from [row,col,color] to [batch,color,row,col]
         img = img.astype(np.float32)
         img = torch.from_numpy(img)
         img = 1.0 - img / 128.0 #ideally the median value would be 0
@@ -414,7 +455,9 @@ class FormsDetect(torch.utils.data.Dataset):
                 "point_gt": {
                         "table_points":table_points
                         },
-                "pixel_gt": pixel_gt
+                "pixel_gt": pixel_gt,
+                "imgName": imageName,
+                "scale": s
                 }
         else:
             line_gt={}
@@ -465,7 +508,9 @@ class FormsDetect(torch.utils.data.Dataset):
                 "img": img,
                 "line_gt": line_gt,
                 "point_gt": point_gt,
-                "pixel_gt": pixel_gtR
+                "pixel_gt": pixel_gtR,
+                "imgName": imageName,
+                "scale": s
                 }
 
 
@@ -835,7 +880,7 @@ def getIntersectsCols(line,cols,startInd,threshLine_low=10,threshLine_high=10,th
     elif failed==2:
         intersectionBoth=False
     elif failed>2:
-        return [], 0
+        return [], 0,tryBefore
 
     #left-most boundary
     p=None
@@ -859,7 +904,7 @@ def getIntersectsCols(line,cols,startInd,threshLine_low=10,threshLine_high=10,th
                 startInd=1
                 iPoints=[]
             elif failed==2:
-                return [], 0
+                return [], 0,tryBefore
             else:
                 return getIntersectsCols(line,cols,startInd,threshLine_low,threshLine_high,threshLeft,threshRight,failed+1)
         else:

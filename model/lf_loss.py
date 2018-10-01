@@ -163,7 +163,7 @@ def checkInsidePoly(point,vertices):
     #point=(x,y)
     previous_side = None
     n_vertices = len(vertices)
-    for n in xrange(n_vertices):
+    for n in range(n_vertices):
         a, b = vertices[n], vertices[(n+1)%n_vertices]
         affine_segment = a-b #v_sub(b, a)
         affine_point = point-a #v_sub(point, a)
@@ -183,13 +183,13 @@ def end_pred_loss(end_pred,path_xyxy,end_point):
     b=0
     passed_end=False
     for i in range(len(end_pred)):
-        pred = torch.nn.functional.sigmoid(end_pred[i][b])
-        tl = path_xyxy[i][b,0:2]
-        br = path_xyxy[i+1][b,2:4]
-        tr = path_xyxy[i+1][b,0:2]
-        bl = path_xyxy[i][b,2:4]
+        pred = end_pred[i][b]
+        tl = path_xyxy[i][b,0:2,0]
+        bl = path_xyxy[i][b,0:2,1]
+        tr = path_xyxy[i+1][b,0:2,0]
+        br = path_xyxy[i+1][b,0:2,1]
         if passed_end or checkInsidePoly(end_point[b],[tl,tr,br,bl]):
             passed_end=True
-            return 1-pred
+            return (1-pred)*(1-pred)
         else:
-            return pred
+            return pred*pred

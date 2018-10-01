@@ -88,6 +88,8 @@ class FormsLF(torch.utils.data.Dataset):
                         print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
                         continue
                 for imageName in imageNames:
+                    imageName_npy = imageName[0:imageName.rfind('.')]+'.npy'
+                    
                     if oneonly and T_annotations['imageFilename']!=imageName:
                         #print('skipped {} {}'.format(imageName,groupName))
                         continue
@@ -122,9 +124,9 @@ class FormsLF(torch.utils.data.Dataset):
                             for l,forwards in textLines:
                                 if self.detection_dir is not None:
                                     if forwards:
-                                        detPath = os.path.join(self.detection_dir,'eol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'text_end_gt',imageName_npy) #not ground truth, just folder name
                                     else:
-                                        detPath = os.path.join(self.detection_dir,'sol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'text_start_gt',imageName_npy)
                                 else:
                                     detPath = None
                                 self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detectionPath':detPath})
@@ -133,9 +135,9 @@ class FormsLF(torch.utils.data.Dataset):
                             for l,forwards in fieldLines:
                                 if self.detection_dir is not None:
                                     if forwards:
-                                        detPath = os.path.join(self.detection_dir,'eol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'field_end_gt',imageName_npy)
                                     else:
-                                        detPath = os.path.join(self.detection_dir,'sol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'field_start_gt',imageName_npy)
                                 else:
                                     detPath = None
                                 self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detectionPath':detPath})
@@ -149,9 +151,9 @@ class FormsLF(torch.utils.data.Dataset):
                             for l,forwards in horzLines:
                                 if self.detection_dir is not None:
                                     if forwards:
-                                        detPath = os.path.join(self.detection_dir,'eol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'end?',imageName)
                                     else:
-                                        detPath = os.path.join(self.detection_dir,'sol',imageName)
+                                        detPath = os.path.join(self.detection_dir,'start?',imageName)
                                 else:
                                     detPath = None
                                 self.lines.append({'imagePath':path, 'rescaled':rescale, 'points':l, 'steps':getNumSteps(l), 'forwards':forwards, 'detectionDir':det_dir})
@@ -173,6 +175,7 @@ class FormsLF(torch.utils.data.Dataset):
         points = self.lines[index]['points']
         steps = self.lines[index]['steps']
         rescaled = self.lines[index]['rescaled']
+        forwards = self.lines[index]['forwards']
 
         ##tic=timeit.default_timer()
         img = cv2.imread(imagePath)#/255.0
@@ -212,8 +215,8 @@ class FormsLF(torch.utils.data.Dataset):
         
 
         img = 1.0 - img / 128.0 #ideally the median value would be 0
-        if detectionDir is not None:
-            detection_res = np.load(detectionPath)#replace with retrieving list of points
+        if detectionPath is not None:
+            detection_res = np.load(detectionPath) #matrix of [instances, features] feautres:conf,x,y,rot,scale
         img = img.transpose([2,0,1]) #from [row,col,color] to [color,row,col]
         img = img.astype(np.float32)
         img = torch.from_numpy(img)
@@ -223,7 +226,7 @@ class FormsLF(torch.utils.data.Dataset):
         #        'lf_xyrs':pointsAngle,
         #        'lf_xyxy':points
         #       }
-        return img, points, pointsAngle, steps, forwards, eol
+        return img, points, pointsAngle, steps, forwards, detection_res
 
 
 

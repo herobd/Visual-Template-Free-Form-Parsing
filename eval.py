@@ -25,9 +25,15 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
     checkpoint = torch.load(resume)
     config = checkpoint['config']
     config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
+    
     config['data_loader']['shuffle']=shuffle
     config['validation']['shuffle']=shuffle
     #config['validation']
+
+    if config['data_loader']['data_set_name']=='FormsDetect':
+        config['data_loader']['batch_size']=1
+        del config['data_loader']["crop_params"]
+        config['data_loader']["rescale_range"]= config['validation']["rescale_range"]
 
     #print(config['data_loader'])
     data_loader, valid_data_loader = getDataLoader(config,'train')

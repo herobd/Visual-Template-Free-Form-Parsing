@@ -1,0 +1,77 @@
+{
+    "name": "Forms9_lf_end",
+    "cuda": true,
+    "gpu": 0,
+    "override": true,
+    "data_loader": {
+        "data_set_name": "FormsLF",
+        "data_dir": "/home/ubuntu/brian/data/forms",
+        "batch_size": 1,
+        "shuffle": true,
+        "num_workers": 5,
+        "crop_to_page":false,
+        "no_blanks": true,
+        "swap_circle":true,
+        "cache_resized_images": true,
+        "augment":true,
+        "only_types": ["text","field"],
+        "detection_dir": "out/train_Forms8_detectMore/results/"
+
+    },
+    "validation": {
+        "shuffle": false,
+        "only_types": ["text","field"],
+        "no_blanks": true,
+        "swap_circle":true,
+        "cache_resized_images": true,
+        "detection_dir": "out/valid_Forms8_detectMore/results/"
+    },
+
+    
+    "lr_scheduler_type": "StepLR",
+    "lr_scheduler": {
+        "step_size": 1,
+        "gamma": 0.1
+    },
+    "epoch_size": 150000,
+
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.00001,
+        "weight_decay": 0
+    },
+    "loss": {
+        "pos":"lf_line_loss",
+        "end":"lf_end_loss"
+    },
+    "end_loss_weight": 2.0,
+    "metrics": [],
+    "trainer": {
+        "class": "LFTrainer",
+        "iterations": 1000000,
+        "save_dir": "saved/",
+        "val_step": 2500,
+        "save_step": 5000,
+        "log_step": 250,
+        "verbosity": 2,
+        "monitor": "loss",
+        "monitor_mode": "none"
+    },
+    "arch": "LineFollower", 
+    "model": {
+        "angle_only": true,
+        "pred_scale": true,
+        "pred_end": true,
+        "split_cnn_forback": false,
+        "randomize_start": {
+            "mean_dist_x": -0.02584811660697138,
+            "std_dist_x": 2.5572498653785605,
+            "mean_dist_y": 0.1385272591175548,
+            "std_dist_y": 2.527279348700079,
+            "mean_rot": -0.022515571702303897,
+            "std_rot": 0.15544707891815263,
+            "mean_scale": 0.16643097931226533,
+            "std_scale": 2.659666428328995
+        }
+    }
+}

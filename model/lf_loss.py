@@ -190,6 +190,7 @@ def end_pred_loss(end_pred,path_xyxy,end_point):
         br = path_xyxy[i+1][b,0:2,1]
         if passed_end or checkInsidePoly(end_point[b],[tl,tr,br,bl]):
             passed_end=True
-            return (1-pred)*(1-pred)
+            truth=1
         else:
-            return pred*pred
+            truth=0
+        return F.binary_cross_entropy(pred,truth)

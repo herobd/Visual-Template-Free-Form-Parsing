@@ -10,7 +10,7 @@ from model.detector import Detector
 from model.line_follower import LineFollower
 from model.metric import *
 from data_loader import getDataLoader
-from utils.printers import *
+from evaluators import *
 import math
 from collections import defaultdict
 

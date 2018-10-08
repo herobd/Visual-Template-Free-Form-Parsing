@@ -119,10 +119,10 @@ class LFTrainer(Trainer):
                         detected_end_points=detected_end_points)
                 pos_loss = self.loss['pos'](output, positions_xyxy)
                 if len(output_end)>0:
-                    end_loss = self.loss['end'](output_end,output,positions_xyrs[-1][:,0:2])
+                    end_loss = self.end_loss_weight * self.loss['end'](output_end,output,positions_xyrs[-1][:,0:2])
                 else:
                     end_loss=0
-                loss = pos_loss + self.end_loss_weight*end_loss
+                loss = pos_loss + end_loss
                 #loss = self.loss(outputrs, positions_xyrs)
 
                 total_val_loss += loss.item()

@@ -131,3 +131,126 @@ def alignment_loss(predictions, target, label_sizes, alpha_alignment=1000.0, alp
 
 def alignment_loss_points(predictions, target, label_sizes, alpha_alignment=1000.0, alpha_backprop=100.0, return_alignment=False, debug=None):
     return alignment_loss(predictions, target, label_sizes, alpha_alignment,alpha_backprop,return_alignment,debug,points=True)
+
+
+
+
+def alignment_loss_boxes(predictions, target, target_sizes, ignore_thresh=9.0, return_alignment=False, debug=None, use_point_loss=False, bias_long_side=False):
+    batch_size = predictions.size(0)
+    # This should probably be computed using the log_softmax
+    confidences = predictions[:,:,0]
+    log_one_minus_confidences = torch.log(1.0 - confidences + 1e-10) #but shouldn't the condifences be 0?
+
+    if target is None:
+        if return_alignment:
+            return -log_one_minus_confidences.sum(), None, None
+        return -log_one_minus_confidences.sum()
+    #0:conf, 1:xc, 2:yx, 3:rot, 4:h, 5:w
+    cos_rot = torch.cos(predictions[:,:,3])
+    sin_rot = torch.sin(predictions[:,:,3])
+    p_left_x = predictions[:,:,1]-cos_rot/predictions[:,:,5]
+    p_left_y = predictions[:,:,2]-sin_rot/predictions[:,:,5]
+    p_right_x = predictions[:,:,1]+cos_rot/predictions[:,:,5]
+    p_right_y = predictions[:,:,2]+sin_rot/predictions[:,:,5]
+    p_top_x = predictions[:,:,1]+sin_rot/predictions[:,:,4]
+    p_top_y = predictions[:,:,2]-cos_rot/predictions[:,:,4]
+    p_bot_x = predictions[:,:,1]-sin_rot/predictions[:,:,4]
+    p_bot_y = predictions[:,:,2]+cos_rot/predictions[:,:,4]
+
+    #pred_left = torch.stack([p_left_x,p_left_y],dim=2)
+    pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=2)
+    pred_heights = predictions[:,:,4]
+    pred_widths = predictions[:,:,5]
+    pred_classes = predictions[:,:,6:]
+
+    #target_points_left = target[:,:,5:7] #pre-computed points
+    #target_points_right = target[:,:,7:9] #pre-computed points
+    target_points = target[:,:,?5:13] #pre-computed points
+    target_box = target[:,:,0:5]
+    target_classes = target[5:?]
+    target_heights = targets[:,:,3]
+    target_widths = targets[:,:,4]
+    #print('loc {},   tar {}'.format(locations.shape,target.shape))
+    #tic=timeit.default_timer()
+
+    log_confidences = torch.log(confidences + 1e-10)
+
+    expanded_pred_points = pred_points[:,:,None]
+    expanded_pred_heights = pred_heights[:,:,None]
+    expanded_pred_widths = pred_widths[:,:,None]
+
+    expanded_target_points = target_points[:,None,:]
+    expanded_target_heights = target_heights[:,None,:]
+    expanded_target_widths = target_widths[:,None,:]   
+
+    expanded_pred_points = expanded_pred_points.expand(pred_points.size(0), pred_points.size(1), target_points.size(1), pred_points.size(2))
+    expanded_pred_heights = expanded_pred_heights.expand(pred_heights.size(0), pred_heights.size(1), target_heights.size(1))
+    expanded_pred_widths = expanded_pred_widths.expand(pred_widths.size(0), pred_widths.size(1), target_widths.size(1))
+    expanded_target_points = expanded_target_points.expand(target_points.size(0), pred_points.size(1), target_points.size(1), target_points.size(2))
+    expanded_target_heights = expanded_target_heights.expand(target_heights.size(0), pred_heights.size(1), target_heights.size(1))
+    expanded_target_widths = expanded_target_widths.expand(target_widths.size(0), pred_widths.size(1), target_widths.size(1))
+
+    #Compute All Deltas
+    point_deltas = (expanded_pred_points - expanded_target_points)
+    if bias_long_side:
+        norm_heights = ((expanded_target_heights+expanded_pred_heights)/2)
+        norm_widths = ((expanded_target_widths+expanded_pred_widths)/2)
+    else:
+        norm_heights=norm_widths = (expanded_target_heights+expanded_pred_heights+expanded_target_widths+expanded_pred_widths)/4
+
+    normed_difference = (
+            torch.norm(point_deltas[:,:,:,0:2],2,3)/norm_widths +
+            torch.norm(point_deltas[:,:,:,2:4],2,3)/norm_widths +
+            torch.norm(point_deltas[:,:,:,4:6],2,3)/norm_heights +
+            torch.norm(point_deltas[:,:,:,6:8],2,3)/norm_heights 
+            )**2
+
+    #we need to produce an error on conf of all pred that don't intersect targets significantly
+    above_thresh = (normed_difference>ignore_thresh) #candidates
+
+    if return_alignment:
+        bests=[]
+
+    #for b in range(batch_size):
+    #    normed_difference[b,target_sizes
+    for b in range(batch_size): #by batch, has they have different numbers of targets
+        minVs,best = normed_difference[b,:,:taget_sizes[b]].min(0) #this leaves index of pred for each target
+        if return_alignment:
+            bests.append(best)
+        #box_loss = normed_difference[:,best,range].sum()
+        #batchInd = torch.arange(batch_size)[:,None].expand(batch_size,best.size(1)) #so we can use best to index in
+        if use_point_loss:
+            box_loss = minVs.sum()
+        #TODO loss using deactivated values
+        else:
+            box_loss = F.mse_loss(predictions[b,best,1:6],target_box[b],size_average=False,reduce=True) #skip conf and classes. this does error between activated  offsets/scaled of achors, not actual
+        box_loss += F.binary_cross_entropy(confidences[b,best],1,size_average=False,reduce=True) #here's conf
+        box_loss += F.binary_cross_entropy(pred_classes[b,best],target_classes,size_average=False,reduce=True) #yolov3 doesnt use softmax
+
+        above_thresh[b,best]=0  #0 out the whole vector for preds we selected earlier
+        above_thresh[b,:,taget_sizes[b]:]=0 #0 out padding
+    #minVs,best = normed_difference.min(1) #this leaves index of pred for each target
+    ##box_loss = normed_difference[:,best,range].sum()
+    #batchInd = torch.arange(batch_size)[:,None].expand(batch_size,best.size(1)) #so we can use best to index in
+    #if use_point_loss:
+    #    box_loss = minVs.sum()
+    ##TODO loss using deactivated values
+    #else:
+    #    box_loss = F.mse_loss(predictions[batchInd,best,1:6],target_box,size_average=False,reduce=True) #skip conf and classes. this does error between activated  offsets/scaled of achors, not actual
+    #box_loss += F.binary_cross_entropy(confidences[batchInd,best],1,size_average=False,reduce=True) #here's conf
+    #box_loss += F.binary_cross_entropy(pred_classes[batchInd,best],target_classes,size_average=False,reduce=True) #yolov3 doesnt use softmax
+
+    #zero best
+    #above_thresh[batchInd,best]=0 #0 out the whole vector for preds we selected earlier
+    above_thresh,_ = above_thresh.min(dim=2) #if a pred is over threshold for all targets
+    
+    #tell these they should have 0 conf. Everything is zero-ed, so it will produce no error.
+    conf_loss = F.binary_cross_entropy(confidences*above_thresh,0,size_average=False,reduce=True)
+    
+
+
+    loss = (conf_loss+box_loss)/batch_size
+
+    if return_alignment:
+        return loss, bests
+    return loss

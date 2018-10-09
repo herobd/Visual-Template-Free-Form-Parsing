@@ -6,7 +6,7 @@ import json
 #import skimage.transform as sktransform
 import os
 import math
-from utils.crop_transform import CropTransform
+from utils.crop_transform import CropBoxTransform
 from utils import augmentation
 from collections import defaultdict
 import timeit
@@ -95,6 +95,7 @@ def collate(batch):
     point_label_sizes = defaultdict(list)
     largest_line_label = {}
     largest_point_label = {}
+    bb_sizes=[]
     for b in batch:
         if b is None:
             continue
@@ -154,11 +155,11 @@ def collate(batch):
             
 
     if largest_bb_count != 0:
-        bbs = torch.zeros(batch_size, largest_bb_count, 4)
+        bbs = torch.zeros(batch_size, largest_bb_count, batch[0]['bb_gt'].size(2))
     else:
         bbs=None
     for i, b in enumerate(batch):
-        gt = b['line_gt']
+        gt = b['bb_gt']
         if bb_sizes[i] == 0:
             continue
         bbs[i, :bb_sizes[i]] = gt
@@ -198,7 +199,7 @@ def collate(batch):
     }
 
 
-class FormsDetect(torch.utils.data.Dataset):
+class FormsBoxDetect(torch.utils.data.Dataset):
     """
     Class for reading forms dataset and creating starting and ending gt
     """
@@ -212,7 +213,7 @@ class FormsDetect(torch.utils.data.Dataset):
         self.cropToPage=config['crop_to_page']
         #patchSize=config['patch_size']
         if 'crop_params' in config:
-            self.transform = CropTransform(config['crop_params'])
+            self.transform = CropBoxTransform(config['crop_params'])
         else:
             self.transform = None
         self.rescale_range = config['rescale_range']
@@ -381,7 +382,7 @@ class FormsDetect(torch.utils.data.Dataset):
         ##tic=timeit.default_timer()
         text_bbs = self.getBBGT(annotations['textBBs'],s)
         field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
-        bbs = torch.cat([text_bbs,field_bbs],dim=1) #has batch dim
+        bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
         table_points, table_pixels = self.getTables(
                 annotations['fieldBBs'],
                 s, 
@@ -423,7 +424,9 @@ class FormsDetect(torch.utils.data.Dataset):
         pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
         pixel_gt = torch.from_numpy(pixel_gt)
         
-        bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
+        #import pdb; pdb.set_trace()
+        #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
+        bbs = self.convert(bbs)
 
         table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
 
@@ -495,7 +498,7 @@ class FormsDetect(torch.utils.data.Dataset):
             #TODO connect things that blanks bridged
             else:
                 useBBs.append(bb)
-        bbs = np.empty((1,len(useBBs), 5+2), dtype=np.float32) #5 params, 2 classes
+        bbs = np.empty((1,len(useBBs), 8+8+2), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
         j=0
         for bb in useBBs:
             tlX = bb['poly_points'][0][0]
@@ -507,45 +510,94 @@ class FormsDetect(torch.utils.data.Dataset):
             blX = bb['poly_points'][3][0]
             blY = bb['poly_points'][3][1]
 
-            lX = (tlX+blX)/2.0
-            lY = (tlY+blY)/2.0
-            rX = (trX+brX)/2.0
-            rY = (trY+brY)/2.0
-            d=math.sqrt((lX-rX)**2 + (lY-rY)**2)
-
-            hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
-            hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
-            h = (hl+hr)/2.0
-
-            #tX = lX + h*-(rY-lY)/d
-            #tY = lY + h*(rX-lX)/d
-            #bX = lX - h*-(rY-lY)/d
-            #bY = lY - h*(rX-lX)/d
-
-            #etX =tX + rX-lX
-            #etY =tY + rY-lY
-            #ebX =bX + rX-lX
-            #ebY =bY + rY-lY
-
-            cX = s*(lX+rX)/2.0
-            cY = s*(lY+rY)/2.0
-            rot = math.atan2((rY-lY),rX-lX)
-            height = abs(s*h)    #this is half height
-            width = s*d/2.0 #and half width
-
-            bbs[:,j,0]=cX
-            bbs[:,j,1]=cY
-            bbs[:,j,2]=rot
-            bbs[:,j,3]=height
-            bbs[:,j,4]=width
-            bbs[:,j,5]=1 if not fields else 0
-            bbs[:,j,6]=1 if fields else 0
-
-            #if j<10:
-            #    ##print('f {},{}   {},{}'.format(tX,tY,bX,bY))
-            #    ##print('s {},{}   {},{}'.format(start_gt[:,j,0],start_gt[:,j,1],start_gt[:,j,2],start_gt[:,j,3]))
-            j+=1
+            bbs[:,j,0]=tlX*s
+            bbs[:,j,1]=tlY*s
+            bbs[:,j,2]=trX*s
+            bbs[:,j,3]=trY*s
+            bbs[:,j,4]=brX*s
+            bbs[:,j,5]=brY*s
+            bbs[:,j,6]=blX*s
+            bbs[:,j,7]=blY*s
+            #we add these for conveince to crop BBs within window
+            bbs[:,j,8]=s*(tlX+blX)/2
+            bbs[:,j,9]=s*(tlY+blY)/2
+            bbs[:,j,10]=s*(tlX+blX)/2
+            bbs[:,j,11]=s*(tlY+blY)/2
+            bbs[:,j,12]=s*(tlX+blX)/2
+            bbs[:,j,13]=s*(tlY+blY)/2
+            bbs[:,j,14]=s*(tlX+blX)/2
+            bbs[:,j,15]=s*(tlY+blY)/2
+            bbs[:,j,16]=1 if not fields else 0
+            bbs[:,j,17]=1 if fields else 0
         return bbs
+
+    def convertBBs(self,bbs):
+        if bbs.shape[1]==0:
+            return None
+        new_bbs = np.empty((1,bbs.shape[1], 5+8+2), dtype=np.float32) #5 params, 8 points (used in loss), 2 classes
+        
+        trX = bbs[:,:,0]
+        tlY = bbs[:,:,1]
+        trX = bbs[:,:,2]
+        trY = bbs[:,:,3]
+        brX = bbs[:,:,4]
+        brY = bbs[:,:,5]
+        blX = bbs[:,:,6]
+        blY = bbs[:,:,7]
+
+        lX = (tlX+blX)/2.0
+        lY = (tlY+blY)/2.0
+        rX = (trX+brX)/2.0
+        rY = (trY+brY)/2.0
+        d=np.sqrt((lX-rX)**2 + (lY-rY)**2)
+
+        hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
+        hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
+        h = (hl+hr)/2.0
+
+        #tX = lX + h*-(rY-lY)/d
+        #tY = lY + h*(rX-lX)/d
+        #bX = lX - h*-(rY-lY)/d
+        #bY = lY - h*(rX-lX)/d
+
+        #etX =tX + rX-lX
+        #etY =tY + rY-lY
+        #ebX =bX + rX-lX
+        #ebY =bY + rY-lY
+
+        cX = (lX+rX)/2.0
+        cY = (lY+rY)/2.0
+        rot = np.atan2((rY-lY),rX-lX)
+        height = np.abs(h)    #this is half height
+        width = d/2.0 #and half width
+
+        topX = (tlX+trX)/2.0
+        topY = (tlY+trY)/2.0
+        botX = (blX+brX)/2.0
+        botY = (blY+brY)/2.0
+        leftX = lX
+        leftY = lY
+        rightX = rX
+        rightY = rY
+
+        new_bbs[:,:,0]=cX
+        new_bbs[:,:,1]=cY
+        new_bbs[:,:,2]=rot
+        new_bbs[:,:,3]=height
+        new_bbs[:,:,4]=width
+        new_bbs[:,:,5]=leftX
+        new_bbs[:,:,6]=leftY
+        new_bbs[:,:,7]=rightX
+        new_bbs[:,:,8]=rightY
+        new_bbs[:,:,9]=topX
+        new_bbs[:,:,10]=topY
+        new_bbs[:,:,11]=botX
+        new_bbs[:,:,12]=botY
+        new_bbs[:,:,13]=bbs[:,:,16]
+        new_bbs[:,:,14]=bbs[:,:,17]
+
+
+        return torch.from_numpy(new_bbs)
 
     def getTables(self,bbs,s, sH, sW,selfPairs):
         #find which rows and cols are part of the same tables
@@ -833,6 +885,121 @@ class FormsDetect(torch.utils.data.Dataset):
             
         return intersectionPointsM, pixelMap
 
+    def cluster(self,k,sample_count):
+        pointsAndRects=[]
+        for inst in self.images:
+            annotationPath = inst['annotationPath']
+            #rescaled = inst['rescaled']
+            with open(annotationPath) as annFile:
+                annotations = json.loads(annFile.read())
+            for i in range(sample_count):
+                if i==0:
+                    s = (self.rescale_range[0]+self.rescale_range[1])/2
+                else:
+                    s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
+                #partial_rescale = s/rescaled
+                text_bbs = self.getBBGT(annotations['textBBs'],s)
+                field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
+                bbs = np.concatenate([text_bbs[0],field_bbs[0]],axis=0)
+                cos_rot = np.cos(bbs[:,2])
+                sin_rot = np.sin(bbs[:,2])
+                p_left_x = -cos_rot*bbs[:,4]
+                p_left_y = -sin_rot*bbs[:,4]
+                p_right_x = cos_rot*bbs[:,4]
+                p_right_y = sin_rot*bbs[:,4]
+                p_top_x = sin_rot*bbs[:,3]
+                p_top_y = -cos_rot*bbs[:,3]
+                p_bot_x = -sin_rot*bbs[:,3]
+                p_bot_y = cos_rot*bbs[:,3]
+                points = np.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],axis=1)
+                pointsAndRects.append(np.concatenate([points,bbs[:,:5]],axis=1))
+        pointsAndRects = np.concatenate(pointsAndRects,axis=0)
+        #all_points = pointsAndRects[:,0:8]
+        #all_heights = pointsAndRects[:,11]
+        #all_widths = pointsAndRects[:,12]
+        
+        bestDistsFromMean=None
+        for attempt in range(15):
+            randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
+            means=pointsAndRects[randomIndexes]
+            #pointsAndRects [0:p_left_x, 1:p_left_y,2:p_right_x,3:p_right_y,4:p_top_x,5:p_top_y,6:p_bot_x,7:p_bot_y, 8:xc, 9:yc, 10:rot, 11:h, 12:w
+            prevDistsFromMean=None
+            for iteration in range(1000000): #intended to break out
+                print('attempt:{}, bestDistsFromMean:{}, iteration:{}, bestDistsFromMean:{}'.format(attempt,bestDistsFromMean,iteration,prevDistsFromMean), end='\r')
+                #means_points = means[:,0:8]
+                #means_heights = means[:,11]
+                #means_widths = means[:,12]
+                # = groups = assignGroups(means,pointsAndRects)
+                expanded_all_points = pointsAndRects[:,None,0:8]
+                expanded_all_heights = pointsAndRects[:,None,11]
+                expanded_all_widths = pointsAndRects[:,None,12]
+
+                expanded_means_points = means[None,:,0:8]
+                expanded_means_heights = means[None,:,11]
+                expanded_means_widths = means[None,:,12]
+
+                #expanded_all_points = expanded_all_points.expand(all_points.shape[0], all_points.shape[1], means_points.shape[1], all_points.shape[2])
+                expanded_all_points = np.tile(expanded_all_points,(1,means.shape[0],1))
+                expanded_all_heights = np.tile(expanded_all_heights,(1,means.shape[0]))
+                expanded_all_widths = np.tile(expanded_all_widths,(1,means.shape[0]))
+                #expanded_means_points = expanded_means_points.expand(means_points.shape[0], all_points.shape[0], means_points.shape[0], means_points.shape[2])
+                expanded_means_points = np.tile(expanded_means_points,(pointsAndRects.shape[0],1,1))
+                expanded_means_heights = np.tile(expanded_means_heights,(pointsAndRects.shape[0],1))
+                expanded_means_widths = np.tile(expanded_means_widths,(pointsAndRects.shape[0],1))
+
+                point_deltas = (expanded_all_points - expanded_means_points)
+                #avg_heights = ((expanded_means_heights+expanded_all_heights)/2)
+                #avg_widths = ((expanded_means_widths+expanded_all_widths)/2)
+                avg_heights=avg_widths = (expanded_means_heights+expanded_all_heights+expanded_means_widths+expanded_all_widths)/4
+                #print point_deltas
+
+                normed_difference = (
+                    np.linalg.norm(point_deltas[:,:,0:2],2,2)/avg_widths +
+                    np.linalg.norm(point_deltas[:,:,2:4],2,2)/avg_widths +
+                    np.linalg.norm(point_deltas[:,:,4:6],2,2)/avg_heights +
+                    np.linalg.norm(point_deltas[:,:,6:8],2,2)/avg_heights
+                    )**2
+                #print normed_difference
+                #import pdb; pdb.set_trace()
+
+                groups = normed_difference.argmin(1) #this should list the mean (index) for each element of all
+                distsFromMean = normed_difference.min(1).mean()
+                if prevDistsFromMean is not None and distsFromMean >= prevDistsFromMean:
+                    break
+                prevDistsFromMean = distsFromMean
+
+                #means = computeMeans(groups,pointsAndRects)
+                #means = np.zeros(k,13)
+                for ki in range(k):
+                    selected = (groups==ki)[:,None]
+                    numSel = float(selected.sum())
+                    if (numSel==0):
+                        break
+                    means[ki,:] = (pointsAndRects*np.tile(selected,(1,13))).sum(0)/numSel
+            if bestDistsFromMean is None or distsFromMean<bestDistsFromMean:
+                bestDistsFromMean = distsFromMean
+                cluster_centers=means
+
+        draw = np.zeros([600,600,3],dtype=np.float)
+        for ki in range(k):
+            color = np.random.uniform(0.2,1,3).tolist()
+            #d=math.sqrt(mean[ki,11]**2 + mean[ki,12]**2)
+            #theta = math.atan2(mean[ki,11],mean[ki,12]) + mean[ki,10]
+            h=means[ki,11]
+            w=means[ki,12]
+            rot=means[ki,10]
+            tr = ( int(math.cos(rot)*w-math.sin(rot)*h)+300,   int(math.sin(rot)*w+math.cos(rot)*h)+300 )
+            tl = ( int(math.cos(rot)*-w-math.sin(rot)*h)+300,  int(math.sin(rot)*-w+math.cos(rot)*h)+300 )
+            br = ( int(math.cos(rot)*w-math.sin(rot)*-h)+300,  int(math.sin(rot)*w+math.cos(rot)*-h)+300 )
+            bl = ( int(math.cos(rot)*-w-math.sin(rot)*-h)+300, int(math.sin(rot)*-w+math.cos(rot)*-h)+300 )
+            
+            cv2.line(draw,tl,tr,color)
+            cv2.line(draw,tr,br,color)
+            cv2.line(draw,br,bl,color)
+            cv2.line(draw,bl,tl,color,2)
+        cv2.imshow('clusters',draw)
+        cv2.waitKey()
+
 def getWidthFromBB(bb):
     return (np.linalg.norm(bb[0]-bb[1]) + np.linalg.norm(bb[3]-bb[2]))/2
 def getHeightFromBB(bb):
@@ -971,73 +1138,3 @@ def getIntersectsCols(line,cols,startInd,threshLine_low=10,threshLine_high=10,th
     else:
         return getIntersectsCols(line,cols,startInd,threshLine_low,threshLine_high,threshLeft,threshRight,failed+1)
 
-    def cluster(self,k,sample_count):
-        pointsAndRects=[]
-        for inst in self.images:
-            annotationPath = inst['annotationPath']
-            rescaled = self.images[index]['rescaled']
-            with open(annotationPath) as annFile:
-                annotations = json.loads(annFile.read())
-            for i in range(sample_count):
-                s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
-                #partial_rescale = s/rescaled
-                text_bbs = self.getBBGT(annotations['textBBs'],s)
-                field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
-                bbs = np.cat([text_bbs[0],field_bbs[0]],axis=0)
-                cos_rot = np.cos(bbs[:,2])
-                sin_rot = np.sin(bbs[:,2])
-                p_left_x = -cos_rot/bbs[:,4]
-                p_left_y = -sin_rot/bbs[:,4]
-                p_right_x = cos_rot/bbs[:,4]
-                p_right_y = sin_rot/bbs[:,4]
-                p_top_x = sin_rot/bbs[:,3]
-                p_top_y = -cos_rot/bbs[:,3]
-                p_bot_x = -sin_rot/bbs[:,3]
-                p_bot_y = cos_rot/bbs[:,3]
-                points = np.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],axis=1)
-                pointsAndRects.append([points,bbs],axis=1)
-
-        means=np.empty(k,13)
-        #pointsAndRects [0:p_left_x, 1:p_left_y,2:p_right_x,3:p_right_y,4:p_top_x,5:p_top_y,6:p_bot_x,7:p_bot_y, 8:xc, 9:yc, 10:rot, 11:h, 12:w
-
-        while True:
-            # = groups = assignGroups(means,pointsAndRects)
-            expanded_all_points = pointsAndRects[:,None,0:8]
-            expanded_all_heights = pointsAndRects[:,None,11]
-            expanded_all_widths = pointsAndRects[:,None,12]
-
-            expanded_means_points = means[:,None,0:8]
-            expanded_means_heights = means[:,None,11]
-            expanded_means_widths = means[:,None,12]
-
-            #expanded_all_points = expanded_all_points.expand(all_points.shape[0], all_points.shape[1], means_points.shape[1], all_points.shape[2])
-            expanded_all_points = np.tile(expanded_all_points,(1,means_points.shape[1],1))
-            expanded_all_heights = np.tile(expanded_all_heights,(1,means_heights.shape[1]))
-            expanded_all_widths = np.tile(expanded_all_widths,(1,means_widths.shape[1]))
-            #expanded_means_points = expanded_means_points.expand(means_points.shape[0], all_points.shape[1], means_points.shape[1], means_points.shape[2])
-            expanded_means_points = np.tile(expanded_means_points,(all_points.shape[1],1,1))
-            expanded_means_heights = np.tile(expanded_means_heights,(all_heights.shape[1],1))
-            expanded_means_widths = np.tile(expanded_means_widths,(all_widths.shape[1],1))
-
-            point_deltas = (expanded_all_points - expanded_means_points)
-            #avg_heights = ((expanded_means_heights+expanded_all_heights)/2)
-            #avg_widths = ((expanded_means_widths+expanded_all_widths)/2)
-            avg_heights=avg_widths = (expanded_means_heights+expanded_all_heights+expanded_means_widths+expanded_all_widths)/4
-            #print point_deltas
-
-            normed_difference = (
-                np.linalg.norm(point_deltas[:,:,0:2],2,3)/avg_widths +
-                np.linalg.norm(point_deltas[:,:,2:4],2,3)/avg_widths +
-                np.linalg.norm(point_deltas[:,:,4:6],2,3)/avg_heights +
-                np.linalg.norm(point_deltas[:,:,6:8],2,3)/avg_heights
-                )**2
-            #print normed_difference
-
-            groups = normed_difference.argmin(1) #this should list the mean (index) for each element of all
-            distFromMean = normed_difference.min(1).mean()
-            if distsFromMean >= prevDistsFromMean:
-                break
-            prevDistsFromMean = distsFromMean
-
-            #means = computeMeans(groups,pointsAndRects)
-            means = 

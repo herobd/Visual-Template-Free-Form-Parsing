@@ -148,14 +148,14 @@ def alignment_loss_boxes(predictions, target, target_sizes, ignore_thresh=9.0, r
     #0:conf, 1:xc, 2:yx, 3:rot, 4:h, 5:w
     cos_rot = torch.cos(predictions[:,:,3])
     sin_rot = torch.sin(predictions[:,:,3])
-    p_left_x = predictions[:,:,1]-cos_rot/predictions[:,:,5]
-    p_left_y = predictions[:,:,2]-sin_rot/predictions[:,:,5]
-    p_right_x = predictions[:,:,1]+cos_rot/predictions[:,:,5]
-    p_right_y = predictions[:,:,2]+sin_rot/predictions[:,:,5]
-    p_top_x = predictions[:,:,1]+sin_rot/predictions[:,:,4]
-    p_top_y = predictions[:,:,2]-cos_rot/predictions[:,:,4]
-    p_bot_x = predictions[:,:,1]-sin_rot/predictions[:,:,4]
-    p_bot_y = predictions[:,:,2]+cos_rot/predictions[:,:,4]
+    p_left_x = predictions[:,:,1]-cos_rot*predictions[:,:,5]
+    p_left_y = predictions[:,:,2]-sin_rot*predictions[:,:,5]
+    p_right_x = predictions[:,:,1]+cos_rot*predictions[:,:,5]
+    p_right_y = predictions[:,:,2]+sin_rot*predictions[:,:,5]
+    p_top_x = predictions[:,:,1]+sin_rot*predictions[:,:,4]
+    p_top_y = predictions[:,:,2]-cos_rot*predictions[:,:,4]
+    p_bot_x = predictions[:,:,1]-sin_rot*predictions[:,:,4]
+    p_bot_y = predictions[:,:,2]+cos_rot*predictions[:,:,4]
 
     #pred_left = torch.stack([p_left_x,p_left_y],dim=2)
     pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=2)
@@ -165,9 +165,9 @@ def alignment_loss_boxes(predictions, target, target_sizes, ignore_thresh=9.0, r
 
     #target_points_left = target[:,:,5:7] #pre-computed points
     #target_points_right = target[:,:,7:9] #pre-computed points
-    target_points = target[:,:,?5:13] #pre-computed points
+    target_points = target[:,:,5:13] #pre-computed points
     target_box = target[:,:,0:5]
-    target_classes = target[5:?]
+    target_classes = target[13:]
     target_heights = targets[:,:,3]
     target_widths = targets[:,:,4]
     #print('loc {},   tar {}'.format(locations.shape,target.shape))

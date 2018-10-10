@@ -58,67 +58,96 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
             line_gt_match=None
         if bb_gt is not None:
             bb_gt_match=np.zeros_like(bb_gt)
-            #TODO change to points instead of corners
+
             bb_gt_match[...,8][bb_gt[...,8] < dim1] = 1
-            bb_gt_match[...,8][bb_gt[...,8] > dim1+cs] = 1
+            bb_gt_match[...,0][bb_gt[...,8] >= dim1+cs] = 1
 
             bb_gt_match[...,9][bb_gt[...,9] < dim0] = 1
-            bb_gt_match[...,9][bb_gt[...,9] > dim0+cs] = 1
+            bb_gt_match[...,1][bb_gt[...,9] >= dim0+cs] = 1
 
             bb_gt_match[...,10][bb_gt[...,10] < dim1] = 1
-            bb_gt_match[...,10][bb_gt[...,10] > dim1+cs] = 1
+            bb_gt_match[...,2][bb_gt[...,10] >= dim1+cs] = 1
 
             bb_gt_match[...,11][bb_gt[...,11] < dim0] = 1
-            bb_gt_match[...,11][bb_gt[...,11] > dim0+cs] = 1
+            bb_gt_match[...,3][bb_gt[...,11] >= dim0+cs] = 1
 
             bb_gt_match[...,12][bb_gt[...,12] < dim1] = 1
-            bb_gt_match[...,12][bb_gt[...,12] > dim1+cs] = 1
+            bb_gt_match[...,12][bb_gt[...,12] >= dim1+cs] = 1
 
             bb_gt_match[...,13][bb_gt[...,13] < dim0] = 1
-            bb_gt_match[...,13][bb_gt[...,13] > dim0+cs] = 1
+            bb_gt_match[...,13][bb_gt[...,13] >= dim0+cs] = 1
 
             bb_gt_match[...,14][bb_gt[...,14] < dim1] = 1
-            bb_gt_match[...,14][bb_gt[...,14] > dim1+cs] = 1
+            bb_gt_match[...,14][bb_gt[...,14] >= dim1+cs] = 1
 
             bb_gt_match[...,15][bb_gt[...,15] < dim0] = 1
-            bb_gt_match[...,15][bb_gt[...,15] > dim0+cs] = 1
+            bb_gt_match[...,15][bb_gt[...,15] >= dim0+cs] = 1
 
 
             bb_gt_match = 1-bb_gt_match
-            has_left= np.logical_and(bb_gt_match[...,8], bb_gt_match[...,9])
-            has_right= np.logical_and(bb_gt_match[...,10], bb_gt_match[...,11]) 
+            left_inside_l = bb_gt_match[...,8]
+            left_inside_r = bb_gt_match[...,0]
+            left_inside_t = bb_gt_match[...,9]
+            left_inside_b = bb_gt_match[...,1]
+            has_left= np.logical_and.reduce([left_inside_l,left_inside_r,left_inside_t,left_inside_b])
+            right_inside_l = bb_gt_match[...,10]
+            right_inside_r = bb_gt_match[...,2]
+            right_inside_t = bb_gt_match[...,11]
+            right_inside_b = bb_gt_match[...,3]
+            has_right= np.logical_and.reduce([right_inside_l,right_inside_r,right_inside_t,right_inside_b]) 
             has_top= np.logical_and(bb_gt_match[...,12], bb_gt_match[...,13])  
             has_bot= np.logical_and(bb_gt_match[...,14], bb_gt_match[...,15])
 
-            bb_gt_cornerCount = has_left+has_right+has_top+has_bot
-            bb_gt_part = bb_gt_cornerCount==2 #if you have two corners in, your a partial
-            bb_gt_candidate = np.logical_or( np.logical_and(np.logical_or(has_top,has_bot),np.logical_or(has_left,has_right)),
+            #bb_gt_cornerCount = has_left+has_right+has_top+has_bot
+            #bb_gt_part = bb_gt_cornerCount==2 #if you have two corners in, your a partial
+            #bb_gt_candidate = np.logical_or( np.logical_and(np.logical_or(has_top,has_bot),np.logical_or(has_left,has_right)),
+            bb_gt_candidate = np.logical_or( np.logical_or(has_left,has_right),
                                              np.logical_and(has_top,has_bot))
+            
 
             #bb_gt_part -= bb_gt_fullin
+            #import pdb; pdb.set_trace()
             #we're going to edit bb_gt to make boxes partially in crop to be fully in crop 
             #bring in left side
-            needs_left = np.logical_and(bb_gt_candidate,1-has_left)
-            v_r = bb_gt[...,10:12]-bb_gt[...,8:10]
-            dist1_l = (dim1-bb_gt[...,8])/v_r[...,0]
-            dist1_r = (dim1+cs-bb_gt[...,8])/v_r[...,0]
-            dist0_t = (dim0-bb_gt[...,9])/v_r[...,1]
-            dist0_b = (dim0+cs-bb_gt[...,9])/v_r[..,1]
-            mv_left = v_r*np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)
-            bb_gt[...,0:2] = np.where( needs_left , bb_gt[...,0:2]+mv_left, bb_gt[...,0:2])
-            bb_gt[...,6:7] = np.where( needs_left , bb_gt[...,6:7]+mv_left, bb_gt[...,6:7])
+            #needs_left = np.logical_and(bb_gt_candidate,1-has_left)[:,:,None]#, [1,1,2]) # things that are candidates where the left point is out-of-bounds
+            v_r = bb_gt[...,10:12]-bb_gt[...,8:10] #vector to opposite point
+            #what do we need to bring in?
+            dist1_l = (1-left_inside_l)*(dim1-bb_gt[...,8])/v_r[...,0] #distance along vector till intersecting left boundary
+            dist1_r = (1-left_inside_r)*(dim1+cs-bb_gt[...,8])/v_r[...,0] # " right boundary
+            dist0_t = (1-left_inside_t)*(dim0-bb_gt[...,9])/v_r[...,1] # " top boudary
+            dist0_b = (1-left_inside_b)*(dim0+cs-bb_gt[...,9])/v_r[...,1] # " bottom boundarya
+            np.nan_to_num(dist1_l,False)
+            np.nan_to_num(dist1_r,False)
+            np.nan_to_num(dist0_t,False)
+            np.nan_to_num(dist0_b,False)
+            # #Take the closest boundary intersection and get the vector that corresponds
+            # #mv_left = v_r*(np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)[:,:,None])
+            #Take the largest of the boundaries we need (others are zeroed out)
+            mv_left = v_r*(np.maximum.reduce([dist1_l,dist1_r,dist0_t,dist0_b])[:,:,None])
+            #Now add that vector to the two corner points to bring them in
+            #bb_gt[...,0:2] = np.where( needs_left , bb_gt[...,0:2]+mv_left, bb_gt[...,0:2])
+            #bb_gt[...,6:8] = np.where( needs_left , bb_gt[...,6:8]+mv_left, bb_gt[...,6:8])
+            bb_gt[...,0:2] += mv_left
+            bb_gt[...,6:8] += mv_left
 
             #bring in right side
-            needs_right = np.logical_and(bb_gt_candidate,1-has_right)
-            v_l = -bb_gt[..,10:12]+bb_gt[..,8:10]
-            dist1_l = (dim1-bb_gt[..,10])/v_l[..,0]
-            dist1_r = (dim1+cs-bb_gt[..,10])/v_l[..,0]
-            dist0_t = (dim0-bb_gt[..,11])/v_l[..,1]
-            dist0_b = (dim0+cs-bb_gt[..,11])/v_l[..,1]
-            mv_right = v_l*np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)
-            bb_gt[...,2:4] = np.where( needs_right, bb_gt[...,2:4]+mv_right, bb_gt[...,2:4])
-            bb_gt[...,4:6] = np.where( needs_right, bb_gt[...,4:6]+mv_right, bb_gt[...,4:6])
-
+            #same process as left side
+            needs_right = np.logical_and(bb_gt_candidate,1-has_right)[:,:,None]#, [1,1,2])
+            v_l = -bb_gt[...,10:12]+bb_gt[...,8:10]
+            dist1_l = (1-right_inside_l)*(dim1-bb_gt[...,10])/v_l[...,0]
+            dist1_r = (1-right_inside_r)*(dim1+cs-bb_gt[...,10])/v_l[...,0]
+            dist0_t = (1-right_inside_t)*(dim0-bb_gt[...,11])/v_l[...,1]
+            dist0_b = (1-right_inside_b)*(dim0+cs-bb_gt[...,11])/v_l[...,1]
+            np.nan_to_num(dist1_l,False)
+            np.nan_to_num(dist1_r,False)
+            np.nan_to_num(dist0_t,False)
+            np.nan_to_num(dist0_b,False)
+            #mv_right = v_l*(np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)[:,:,None])
+            mv_right = v_l*(np.maximum.reduce([dist1_l,dist1_r,dist0_t,dist0_b])[:,:,None])
+            #bb_gt[...,2:4] = np.where( needs_right, bb_gt[...,2:4]+mv_right, bb_gt[...,2:4])
+            #bb_gt[...,4:6] = np.where( needs_right, bb_gt[...,4:6]+mv_right, bb_gt[...,4:6])
+            bb_gt[...,2:4] += mv_right
+            bb_gt[...,4:6] += mv_right
             if bb_gt_match.sum() > 0:
                 hit=True
         else:

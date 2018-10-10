@@ -426,7 +426,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
-        bbs = self.convert(bbs)
+        bbs = self.convertBBs(bbs)
 
         table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
 
@@ -521,14 +521,15 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             #we add these for conveince to crop BBs within window
             bbs[:,j,8]=s*(tlX+blX)/2
             bbs[:,j,9]=s*(tlY+blY)/2
-            bbs[:,j,10]=s*(tlX+blX)/2
-            bbs[:,j,11]=s*(tlY+blY)/2
-            bbs[:,j,12]=s*(tlX+blX)/2
-            bbs[:,j,13]=s*(tlY+blY)/2
-            bbs[:,j,14]=s*(tlX+blX)/2
-            bbs[:,j,15]=s*(tlY+blY)/2
+            bbs[:,j,10]=s*(trX+brX)/2
+            bbs[:,j,11]=s*(trY+brY)/2
+            bbs[:,j,12]=s*(tlX+trX)/2
+            bbs[:,j,13]=s*(tlY+trY)/2
+            bbs[:,j,14]=s*(brX+blX)/2
+            bbs[:,j,15]=s*(brY+blY)/2
             bbs[:,j,16]=1 if not fields else 0
             bbs[:,j,17]=1 if fields else 0
+            j+=1
         return bbs
 
     def convertBBs(self,bbs):
@@ -536,7 +537,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             return None
         new_bbs = np.empty((1,bbs.shape[1], 5+8+2), dtype=np.float32) #5 params, 8 points (used in loss), 2 classes
         
-        trX = bbs[:,:,0]
+        tlX = bbs[:,:,0]
         tlY = bbs[:,:,1]
         trX = bbs[:,:,2]
         trY = bbs[:,:,3]
@@ -567,7 +568,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
         cX = (lX+rX)/2.0
         cY = (lY+rY)/2.0
-        rot = np.atan2((rY-lY),rX-lX)
+        rot = np.arctan2((rY-lY),rX-lX)
         height = np.abs(h)    #this is half height
         width = d/2.0 #and half width
 

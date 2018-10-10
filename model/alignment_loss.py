@@ -135,7 +135,7 @@ def alignment_loss_points(predictions, target, label_sizes, alpha_alignment=1000
 
 
 
-def alignment_loss_boxes(predictions, target, target_sizes, ignore_thresh=9.0, return_alignment=False, debug=None, use_point_loss=False, bias_long_side=False):
+def box_alignment_loss(predictions, target, target_sizes, ignore_thresh=9.0, return_alignment=False, debug=None, use_point_loss=False, bias_long_side=False):
     batch_size = predictions.size(0)
     # This should probably be computed using the log_softmax
     confidences = predictions[:,:,0]
@@ -167,7 +167,7 @@ def alignment_loss_boxes(predictions, target, target_sizes, ignore_thresh=9.0, r
     #target_points_right = target[:,:,7:9] #pre-computed points
     target_points = target[:,:,5:13] #pre-computed points
     target_box = target[:,:,0:5]
-    target_classes = target[13:]
+    target_classes = target[:,:,13:]
     target_heights = targets[:,:,3]
     target_widths = targets[:,:,4]
     #print('loc {},   tar {}'.format(locations.shape,target.shape))

@@ -4,6 +4,7 @@ from base import BaseModel
 import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
 import math
+import json
 
 
 def offsetFunc(netPred): #this changes the offset prediction from the network
@@ -89,10 +90,10 @@ class up(nn.Module):
 class YoloBoxDetector(BaseModel):
     def __init__(self, config): # predCount, base_0, base_1):
         super(YoloBoxDetector, self).__init__(config)
-        self.numBBTypes = config['number_of_bb_types']
+        self.numBBTypes = config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
-        with open(config['anchors_file']) as anchors:
-            self.anchors = anchors #array of objects {rot,height,width}
+        with open(config['anchors_file']) as f:
+            self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
         #TODO Rescale anchors?
         self.numAnchors = len(self.anchors)
         self.predPointCount = config['number_of_point_types']
@@ -171,7 +172,7 @@ class YoloBoxDetector(BaseModel):
             ]
 
             for j in range(self.numBBTypes):
-                stackedPred.append(y[:,6+j+offset:7+j+offset,:,:]         #x. class prediction
+                stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
 
         bbPredictions = torch.cat(stackedPred, dim=1)
         

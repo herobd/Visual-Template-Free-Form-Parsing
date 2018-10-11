@@ -16,6 +16,7 @@
         "rescale_range": [0.2,0.33],
         "no_blanks": true,
         "swap_circle":true,
+        "no_graphics":true,
         "cache_resized_images": true,
         "only_types": {
             "boxes":true
@@ -68,7 +69,7 @@
         "number_of_box_types": 2,
         "number_of_point_types": 0,
         "number_of_pixel_types": 0,
-        "norm_type": "weightNorm",
+        "norm_type": "weight_norm",
         "down_layers_cfg": [3,64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 1024, 1024, 1024],
         "up_layers_cfg":[],
         "anchors_file": "test_anchors.json"

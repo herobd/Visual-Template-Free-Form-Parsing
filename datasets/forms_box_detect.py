@@ -13,7 +13,7 @@ import timeit
 
 import cv2
 
-IAIN_CATCH=['193','194','197','200']
+IAIN_CATCH=[]#['193','194','197','200']
 ONE_DONE=[]
 
 def polyIntersect(poly1, poly2):
@@ -96,6 +96,7 @@ def collate(batch):
     largest_line_label = {}
     largest_point_label = {}
     bb_sizes=[]
+    bb_dim=None
     for b in batch:
         if b is None:
             continue
@@ -110,6 +111,7 @@ def collate(batch):
             bb_sizes.append(0)
         else:
             bb_sizes.append(gt.size(1)) 
+            bb_dim=gt.size(2)
         for name,gt in b['point_gt'].items():
             if gt is None:
                 point_label_sizes[name].append(0)
@@ -155,7 +157,7 @@ def collate(batch):
             
 
     if largest_bb_count != 0:
-        bbs = torch.zeros(batch_size, largest_bb_count, batch[0]['bb_gt'].size(2))
+        bbs = torch.zeros(batch_size, largest_bb_count, bb_dim)
     else:
         bbs=None
     for i, b in enumerate(batch):
@@ -238,11 +240,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             self.only_types = config['only_types']
         else:
             self.only_types=None
+        #print( self.only_types)
         if 'swap_circle' in config:
             self.swapCircle = config['swap_circle']
         else:
             self.swapCircle = False
         self.color = config['color'] if 'color' in config else True
+        self.rotate = config['rotation'] if 'rotation' in config else True
 
         if images is not None:
             self.images=images
@@ -284,6 +288,9 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                             rescale = self.rescale_range[1]
                             if not os.path.exists(path):
                                 org_img = cv2.imread(org_path)
+                                if org_img is None:
+                                    print('WARNING, could not read {}'.format(org_img))
+                                    continue
                                 #target_dim1 = self.rescale_range[1]
                                 #target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
                                 #resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
@@ -319,6 +326,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             self.no_print_fields = config['no_print_fields']
         else:
             self.no_print_fields = False
+        self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
         
 
 
@@ -383,12 +391,18 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         text_bbs = self.getBBGT(annotations['textBBs'],s)
         field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
         bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
-        table_points, table_pixels = self.getTables(
-                annotations['fieldBBs'],
-                s, 
-                np_img.shape[0], 
-                np_img.shape[1],
-                annotations['samePairs'])
+        try:
+            table_points, table_pixels = self.getTables(
+                    annotations['fieldBBs'],
+                    s, 
+                    np_img.shape[0], 
+                    np_img.shape[1],
+                    annotations['samePairs'])
+        except Exception as inst:
+            table_points=None
+            table_pixels=None
+            print(inst)
+            print('Table error on: '+annotationPath)
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
         pixel_gt = table_pixels
@@ -421,8 +435,9 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         img = torch.from_numpy(img)
         img = 1.0 - img / 128.0 #ideally the median value would be 0
         #img = 1.0 - img / 255.0 #this way ink is on, page is off
-        pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
-        pixel_gt = torch.from_numpy(pixel_gt)
+        if pixel_gt is not None:
+            pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
+            pixel_gt = torch.from_numpy(pixel_gt)
         
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
@@ -443,7 +458,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 "scale": s
                 }
         else:
-            if 'boxes' not in self.only_type or not self.only_types['boxes']:
+            if 'boxes' not in self.only_types or not self.only_types['boxes']:
                 bbs=None
             point_gt={}
             if 'point' in self.only_types:
@@ -545,6 +560,16 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         brY = bbs[:,:,5]
         blX = bbs[:,:,6]
         blY = bbs[:,:,7]
+
+        if not self.rotate:
+            tlX = min(tlX,blX,trX,brX)
+            tlY = min(tlY,trY,blY,brY)
+            trX = max(tlX,blX,trX,brX)
+            trY = min(tlY,trY,blY,brY)
+            brX = max(tlX,blX,trX,brX)
+            brY = max(tlY,trY,blY,brY)
+            blX = min(tlX,blX,trX,brX)
+            blY = max(tlY,trY,blY,brY)
 
         lX = (tlX+blX)/2.0
         lY = (tlY+blY)/2.0
@@ -825,8 +850,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 #print(pointsU)
                 #print(pointsL)
                 if len(pointsU) != len(pointsL):
-                    import pdb; pdb.set_trace()
-                assert(len(pointsU)==len(pointsL))
+                    raise Exception(i,pointsU,pointsL)
                 #average the upper and lower points (and scale them)
                 for pi in range(len(pointsU)):
                     intersectionPoints.append(s*(pointsU[pi]+pointsL[pi])/2.0)
@@ -886,7 +910,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             
         return intersectionPointsM, pixelMap
 
-    def cluster(self,k,sample_count):
+    def cluster(self,k,sample_count,outPath):
         pointsAndRects=[]
         for inst in self.images:
             annotationPath = inst['annotationPath']
@@ -901,7 +925,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 #partial_rescale = s/rescaled
                 text_bbs = self.getBBGT(annotations['textBBs'],s)
                 field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
-                bbs = np.concatenate([text_bbs[0],field_bbs[0]],axis=0)
+                bbs = np.concatenate([text_bbs,field_bbs],axis=1)
+                bbs = self.convertBBs(bbs).numpy()[0]
                 cos_rot = np.cos(bbs[:,2])
                 sin_rot = np.sin(bbs[:,2])
                 p_left_x = -cos_rot*bbs[:,4]
@@ -920,7 +945,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #all_widths = pointsAndRects[:,12]
         
         bestDistsFromMean=None
-        for attempt in range(15):
+        for attempt in range(20):
             randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
             means=pointsAndRects[randomIndexes]
             #pointsAndRects [0:p_left_x, 1:p_left_y,2:p_right_x,3:p_right_y,4:p_top_x,5:p_top_y,6:p_bot_x,7:p_bot_y, 8:xc, 9:yc, 10:rot, 11:h, 12:w
@@ -980,15 +1005,17 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             if bestDistsFromMean is None or distsFromMean<bestDistsFromMean:
                 bestDistsFromMean = distsFromMean
                 cluster_centers=means
-
+        cluster_centers=means
         draw = np.zeros([600,600,3],dtype=np.float)
+        toWrite = []
         for ki in range(k):
             color = np.random.uniform(0.2,1,3).tolist()
             #d=math.sqrt(mean[ki,11]**2 + mean[ki,12]**2)
             #theta = math.atan2(mean[ki,11],mean[ki,12]) + mean[ki,10]
-            h=means[ki,11]
-            w=means[ki,12]
-            rot=means[ki,10]
+            h=cluster_centers[ki,11]
+            w=cluster_centers[ki,12]
+            rot=cluster_centers[ki,10]
+            toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item()})
             tr = ( int(math.cos(rot)*w-math.sin(rot)*h)+300,   int(math.sin(rot)*w+math.cos(rot)*h)+300 )
             tl = ( int(math.cos(rot)*-w-math.sin(rot)*h)+300,  int(math.sin(rot)*-w+math.cos(rot)*h)+300 )
             br = ( int(math.cos(rot)*w-math.sin(rot)*-h)+300,  int(math.sin(rot)*w+math.cos(rot)*-h)+300 )
@@ -998,6 +1025,9 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             cv2.line(draw,tr,br,color)
             cv2.line(draw,br,bl,color)
             cv2.line(draw,bl,tl,color,2)
+        print(toWrite)
+        with open(outPath,'w') as out:
+            out.write(json.dumps(toWrite))
         cv2.imshow('clusters',draw)
         cv2.waitKey()
 

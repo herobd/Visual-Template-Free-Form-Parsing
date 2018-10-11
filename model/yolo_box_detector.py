@@ -11,15 +11,15 @@ def offsetFunc(netPred): #this changes the offset prediction from the network
     #YOLOv2,3 use sigmoid on activation to prevent predicting outside of cell impossible
     #But this probably makes it hard to predict on the edges?
     #so just
-    return nn.TanH(netPred)
+    return nn.tanh(netPred)
     # we offset by 0.5, so the center of a cell is when netPred is 0
-    # TanH allows it to predict all the way to the center of its neighbor cell,
+    # tanh allows it to predict all the way to the center of its neighbor cell,
     # but this only occurs when netPred is +/- inf
 
 def rotFunc(netPred):
     return math.pi/2 * netPred
 
-def make_layers(cfg, batch_norm=False, instance_norm=False, weight_norm=False):
+def make_layers(cfg, batch_norm=False, instance_norm=False, use_weight_norm=False):
     modules = []
     in_channels = [cfg[0]]
     
@@ -50,7 +50,7 @@ def make_layers(cfg, batch_norm=False, instance_norm=False, weight_norm=False):
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
             elif instance_norm:
                 layers += [conv2d, nn.InstanceNorm2d(v), nn.ReLU(inplace=True)]
-            elif weight_norm:
+            elif use_weight_norm:
                 layers += [weight_norm(conv2d), nn.ReLU(inplace=True)]
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
@@ -112,6 +112,7 @@ class YoloBoxDetector(BaseModel):
         #self.cnn, self.scale = vgg.vgg11_custOut(self.predLineCount*5+self.predPointCount*3,batch_norm=batch_norm, weight_norm=weight_norm)
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
         self.numOutPoint = self.predPointCount*3
+
         if 'down_layers_cfg' in config:
             layers_cfg = config['down_layers_cfg']
         else:
@@ -164,11 +165,11 @@ class YoloBoxDetector(BaseModel):
 
             stackedPred += [
                 torch.sigmoid(y[:,0+offset:1+offset,:,:]),                #0. confidence
-                torch.TanH(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
-                torch.TanH(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
-                (math.pi/2)*torch.TanH(y[:,3+offset:4+offset,:,:]) + anchor[i].rot,      #3. rotation (radians)
-                torch.exp(y[:,4+offset:5+offset,:,:]) * anchor[i].height, #4. height (half), I don't think this needs scaled
-                torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i].width,  #5. width (half)  
+                torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
+                torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
+                (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:]) + anchor[i]['rot'],      #3. rotation (radians)
+                torch.exp(y[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
+                torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
             ]
 
             for j in range(self.numBBTypes):
@@ -177,7 +178,7 @@ class YoloBoxDetector(BaseModel):
         bbPredictions = torch.cat(stackedPred, dim=1)
         
         bbPredictions = bbPredictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
-        bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,5)#flatten to [batch, instances, channel]
+        bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3))#flatten to [batch, instances, channel]
 
         pointPreds=[]
         for i in range(self.predPointCount):

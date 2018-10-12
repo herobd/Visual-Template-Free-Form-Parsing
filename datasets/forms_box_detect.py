@@ -443,7 +443,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
         bbs = self.convertBBs(bbs)
 
-        table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
+        if table_points is not None:
+            table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
 
         ##print('__getitem__: '+str(timeit.default_timer()-ticFull))
         if self.only_types is None:

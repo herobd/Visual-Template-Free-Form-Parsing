@@ -5,6 +5,7 @@ from model.detector import Detector
 from model.line_follower import LineFollower
 
 from evaluators.formsdetect_printer import FormsDetect_printer
+from evaluators.formsboxdetect_printer import FormsBoxDetect_printer
 from evaluators.formslf_printer import FormsLF_printer
 from evaluators.ai2d_printer import AI2D_printer
 

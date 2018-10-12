@@ -38,7 +38,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.00001,
+        "lr": 0.0000001,
         "weight_decay": 0
     },
     "loss": {
@@ -58,7 +58,7 @@
         "save_dir": "saved/",
         "val_step": 2000,
         "save_step": 4000,
-        "log_step": 200,
+        "log_step": 100,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none"

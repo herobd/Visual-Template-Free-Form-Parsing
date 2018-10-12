@@ -158,12 +158,12 @@ class YoloBoxDetector(BaseModel):
         priors_1 = priors_1[:,None,:,:]
 
         anchor = self.anchors
-        stackedPred=[]
+        pred_anchors=[]
         for i in range(self.numAnchors):
 
             offset = i*(self.numBBParams+self.numBBTypes)
 
-            stackedPred += [
+            stackedPred = [
                 torch.sigmoid(y[:,0+offset:1+offset,:,:]),                #0. confidence
                 torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
@@ -174,11 +174,13 @@ class YoloBoxDetector(BaseModel):
 
             for j in range(self.numBBTypes):
                 stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
+            pred_anchors.append(torch.cat(stackedPred, dim=1))
 
-        bbPredictions = torch.cat(stackedPred, dim=1)
+        bbPredictions = torch.stack(pred_anchors, dim=1)
         
-        bbPredictions = bbPredictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
-        bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3))#flatten to [batch, instances, channel]
+        bbPredictions = bbPredictions.transpose(2,4).contiguous()#from [batch, anchors, channel, rows, cols] to [batch, anchros, cols, rows, channels]
+        bbPredictions = bbPredictions.view(bbPredictions.size(0),bbPredictions.size(1),-1,bbPredictions.size(4))#flatten to [batch, anchors, instances, channel]
+        bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3)) #[batch, instances+anchors, channel]
 
         pointPreds=[]
         for i in range(self.predPointCount):

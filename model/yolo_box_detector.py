@@ -164,7 +164,7 @@ class YoloBoxDetector(BaseModel):
             offset = i*(self.numBBParams+self.numBBTypes)
 
             stackedPred = [
-                torch.sigmoid(y[:,0+offset:1+offset,:,:]),                #0. confidence
+                y[:,0+offset:1+offset,:,:],                #0. confidence
                 torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
                 (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:]) + anchor[i]['rot'],      #3. rotation (radians)

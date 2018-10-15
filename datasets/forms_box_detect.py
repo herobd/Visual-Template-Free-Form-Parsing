@@ -260,21 +260,21 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             self.images=[]
             for groupName, imageNames in groupsToUse.items():
                 #print('{} {}'.format(groupName, imageNames))
-                oneonly=False
-                if groupName in IAIN_CATCH:
-                    if groupName in ONE_DONE:
-                        oneonly=True
-                        with open(os.path.join(dirPath,'groups',groupName,'template'+groupName+'.json')) as f:
-                            T_annotations = json.loads(f.read())
-                    else:
-                        print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
-                        continue
+                #oneonly=False
+                #if groupName in IAIN_CATCH:
+                #    if groupName in ONE_DONE:
+                #        oneonly=True
+                #        with open(os.path.join(dirPath,'groups',groupName,'template'+groupName+'.json')) as f:
+                #            T_annotations = json.loads(f.read())
+                #    else:
+                #        print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
+                #        continue
                 for imageName in imageNames:
-                    if oneonly and T_annotations['imageFilename']!=imageName:
-                        #print('skipped {} {}'.format(imageName,groupName))
-                        continue
-                    elif oneonly:
-                        print('only {} from {}'.format(imageName,groupName))
+                    #if oneonly and T_annotations['imageFilename']!=imageName:
+                    #    #print('skipped {} {}'.format(imageName,groupName))
+                    #    continue
+                    #elif oneonly:
+                    #    print('only {} from {}'.format(imageName,groupName))
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
                     if self.cache_resized:
                         path = os.path.join(self.cache_path,imageName)
@@ -308,8 +308,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
                             #target_dim1 = self.rescale_range[1]
                             #rescale = target_dim1/float(imW)
-
+                        #print('addint {}'.format(imageName))
                         self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath, 'rescaled':rescale, 'imageName':imageName[:imageName.rfind('.')]})
+                    #else:
+                    #    print('couldnt find {}'.format(jsonPath))
                             
                         # with open(path+'.json') as f:
                         #    annotations = json.loads(f.read())

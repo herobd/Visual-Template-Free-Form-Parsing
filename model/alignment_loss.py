@@ -136,18 +136,20 @@ def alignment_loss_points(predictions, target, label_sizes, alpha_alignment=1000
 
 
 
-def box_alignment_loss(predictions, target, target_sizes, ignore_thresh=9.0, return_alignment=False, debug=None, use_point_loss=False, bias_long_side=False):
+def box_alignment_loss(predictions, target, target_sizes, num_anchors, ignore_thresh=9.0, return_alignment=False, debug=None, use_point_loss=False, bias_long_side=False):
     batch_size = predictions.size(0)
     #collapse different anchors together
     
     # This should probably be computed using the log_softmax
     confidences = predictions[:,:,0]
-    log_one_minus_confidences = torch.log(1.0 - confidences + 1e-10) 
+    #log_one_minus_confidences = torch.log(1.0 - confidences + 1e-10) 
 
     if target is None:
+        loss = F.binary_cross_entropy_with_logits(confidences,torch.zeros_like(confidences),size_average=False,reduce=True)
+        loss /= confidences.size(0)*confidences.size(1)/num_anchors
         if return_alignment:
-            return -log_one_minus_confidences.sum(), None, None
-        return -log_one_minus_confidences.sum()
+            return loss, None, None
+        return loss
     #0:conf, 1:xc, 2:yx, 3:rot, 4:h, 5:w
     #pred_box = predictions[:,:,1:6].view(batch_size,-1,5)
     cos_rot = torch.cos(predictions[:,:,3])
@@ -217,8 +219,10 @@ def box_alignment_loss(predictions, target, target_sizes, ignore_thresh=9.0, ret
 
     #for b in range(batch_size):
     #    normed_difference[b,target_sizes
+    total_targets=0
     for b in range(batch_size): #by batch, has they have different numbers of targets
         if target_sizes[b]>0:
+            total_targets+=target_sizes[b]
             minVs,best = normed_difference[b,:,:target_sizes[b]].min(0) #this leaves index of pred for each target
             if return_alignment:
                 bests.append(best)
@@ -231,11 +235,14 @@ def box_alignment_loss(predictions, target, target_sizes, ignore_thresh=9.0, ret
                 #TODO loss using deactivated values
                 #This will require haveing the model keep the anchors channel
                 box_loss = F.mse_loss(predictions[b,best,1:6],target_box[b,:target_sizes[b],0:5],size_average=False,reduce=True) #skip conf and classes. this does error between activated  offsets/scaled of achors, not actual
+            #import pdb; pdb.set_trace()
             box_loss += F.binary_cross_entropy_with_logits(confidences[b,best],torch.ones_like(confidences[b,best]),size_average=False,reduce=True) #here's conf
             box_loss += F.binary_cross_entropy_with_logits(pred_classes[b,best],target_classes[b,:target_sizes[b]],size_average=False,reduce=True) #yolov3 doesnt use softmax
 
             above_thresh[b,best]=0  #0 out the whole vector for preds we selected earlier
             above_thresh[b,:,target_sizes[b]:]=0 #0 out padding
+        elif return_alignment:
+            bests.append(None)
     #minVs,best = normed_difference.min(1) #this leaves index of pred for each target
     ##box_loss = normed_difference[:,best,range].sum()
     #batchInd = torch.arange(batch_size)[:,None].expand(batch_size,best.size(1)) #so we can use best to index in
@@ -253,8 +260,9 @@ def box_alignment_loss(predictions, target, target_sizes, ignore_thresh=9.0, ret
     above_thresh=above_thresh.float()
     
     #tell these they should have 0 conf. Everything is zero-ed, so it will produce no error.
-    conf_loss = F.binary_cross_entropy(confidences*above_thresh,torch.zeros_like(above_thresh),size_average=False,reduce=True)
-    
+    conf_loss = F.binary_cross_entropy_with_logits(confidences*above_thresh,torch.zeros_like(above_thresh),size_average=False,reduce=True)
+    conf_loss /= (above_thresh.sum()/num_anchors) #normalize
+    box_loss /= total_targets
 
 
     loss = (conf_loss+box_loss)/batch_size

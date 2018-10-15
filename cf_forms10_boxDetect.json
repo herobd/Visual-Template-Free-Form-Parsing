@@ -6,7 +6,7 @@
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
         "data_dir": "/home/ubuntu/brian/data/forms",
-        "batch_size": 8,
+        "batch_size": 6,
         "shuffle": true,
         "num_workers": 5,
         "crop_to_page":false,
@@ -38,7 +38,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.0000001,
+        "lr": 0.000001,
         "weight_decay": 0
     },
     "loss": {

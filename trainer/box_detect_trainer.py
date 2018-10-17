@@ -240,12 +240,12 @@ class BoxDetectTrainer(BaseTrainer):
             for batch_idx, instance in enumerate(self.valid_data_loader):
                 data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
 
-                outputBoxes, outputPoints, outputPixels = self.model(data)
+                outputBoxes,outputOffsets, outputPoints, outputPixels = self.model(data)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
                 
-                this_loss = self.loss['box'](outputBoxes,targetBoxes,targetBoxes_sizes, self.model.numAnchors, **self.loss_params['box'])
+                this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
                 loss+=this_loss*self.loss_weight['box']
                 losses['val_box_loss']+=this_loss.item()
                 
@@ -268,5 +268,10 @@ class BoxDetectTrainer(BaseTrainer):
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
+            'val_recall':recall,
+            'val_precision':precision,
+            'val_position_loss':position_loss,
+            'val_conf_loss':conf_loss,
+            'val_class_loss':class_loss,
             **losses
         }

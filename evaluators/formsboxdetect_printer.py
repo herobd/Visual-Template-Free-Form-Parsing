@@ -90,6 +90,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    print(instance)
     #    print(startIndex)
     #data, targetBB, targetBBSizes = instance
+    yolo_loss = YoloLoss(model.numBBTypes,model.rotation,model.scale,model.anchors,**config['loss_params']['box'])
     data = instance['img']
     batchSize = data.shape[0]
     targetBBs = instance['bb_gt']
@@ -111,7 +112,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputPoints, outputPixels = model(dataT)
+    outputBBs, outputOffsets, outputPoints, outputPixels = model(dataT)
     if outputPixels is not None:
         outputPixels = torch.sigmoid(outputPixels)
     index=0
@@ -122,7 +123,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    ttt_hit=22-startIndex
     #else:
     #    return 0
-    lossThis, alignmentBBs = box_alignment_loss(outputBBs,targetBBsT,targetBBsSizes,model.numAnchors,**config['loss_params']['box'],return_alignment=True)
+    lossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
     alignmentPointsPred={}
     alignmentPointsTarg={}
     index=0
@@ -181,10 +182,28 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             if image.shape[2]==1:
                 image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
             #if name=='text_start_gt':
+
+        for j in range(targetBBsSizes[b]):
+            plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
+            #if alignmentBBs[b] is not None:
+            #    aj=alignmentBBs[b][j]
+            #    xc_gt = targetBBs[b,j,0]
+            #    yc_gt = targetBBs[b,j,1]
+            #    xc=outputBBs[b,aj,1]
+            #    yc=outputBBs[b,aj,2]
+            #    cv2.line(image,(xc,yc),(xc_gt,yc_gt),(0,1,0),1)
+            #    shade = 0.0+(outputBBs[b,aj,0]-threshConf)/(maxConf-threshConf)
+            #    shade = max(0,shade)
+            #    if outputBBs[b,aj,6] > outputBBs[b,aj,7]:
+            #        color=(0,shade,shade) #text
+            #    else:
+            #        color=(shade,shade,0) #field
+            #    plotRect(image,color,outputBBs[b,aj,1:6])
+
         bbs=[]
         #pred_points=[]
         maxConf = outputBBs[b,:,0].max()
-        threshConf = maxConf*0.9
+        threshConf = max(maxConf*0.5,0.5)
         for j in range(outputBBs.shape[1]):
             conf = outputBBs[b,j,0]
             if conf>threshConf:
@@ -208,22 +227,6 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 else:
                     color=(shade,0,0) #field
                 plotRect(image,color,outputBBs[b,j,1:6])
-        for j in range(targetBBsSizes[b]):
-            plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
-            if alignmentBBs[b] is not None:
-                aj=alignmentBBs[b][j]
-                xc_gt = targetBBs[b,j,0]
-                yc_gt = targetBBs[b,j,1]
-                xc=outputBBs[b,aj,1]
-                yc=outputBBs[b,aj,2]
-                cv2.line(image,(xc,yc),(xc_gt,yc_gt),(0,1,0),1)
-                shade = 0.0+(outputBBs[b,aj,0]-threshConf)/(maxConf-threshConf)
-                shade = max(0,shade)
-                if outputBBs[b,aj,6] > outputBBs[b,aj,7]:
-                    color=(0,shade,shade) #text
-                else:
-                    color=(shade,shade,0) #field
-                plotRect(image,color,outputBBs[b,aj,1:6])
 
         if outDir is not None:
             #for j in alignmentBBsTarg[name][b]:

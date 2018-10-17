@@ -44,7 +44,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.001,
+        "lr": 0.0001,
         "weight_decay": 0
     },
     "loss": {
@@ -75,9 +75,10 @@
         "number_of_point_types": 0,
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
-        "down_layers_cfg": [1,"C64", "M", "R64", "R64", "D128", "R128", "R128", "D256", "R256", "R256", "D512", "R512", "R512", "D1024", "R1024", "R1024", "U1024", "R1024", "ReLU"],
+        "Xdown_layers_cfg": [1,"C64", "M", "R64", "R64", "D128", "R128", "R128", "D256", "R256", "R256", "D512", "R512", "R512", "D1024", "R1024", "R1024", "U1024", "R1024", "ReLU"],
+        "down_layers_cfg": [1,64, "M", 128, 128, "M", 256, 256, "M", 512, 512, "M", 1024, 1024, 1024],
         "up_layers_cfg":[],
-        "anchors_file": "anchors_1.json",
+        "anchors_file": "anchors_noRot_12.json",
         "rotation":false
     }
 }

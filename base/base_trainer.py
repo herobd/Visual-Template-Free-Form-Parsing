@@ -80,7 +80,8 @@ class BaseTrainer:
                         sumLog['avg_'+metric.__name__] += result['metrics'][i]
                 else:
                     sumLog['avg_'+key] += value
-
+            
+            #log prep
             if self.iteration%self.log_step==0 or self.iteration%self.val_step==0 or self.iteration % self.save_step == 0:
                 log = {'iteration': self.iteration}
 
@@ -90,7 +91,7 @@ class BaseTrainer:
                             log[metric.__name__] = result['metrics'][i]
                     else:
                         log[key] = value
-
+            #VALIDATION
             if self.iteration%self.val_step==0:
                 val_result = self._valid_epoch()
                 for key, value in val_result.items():
@@ -115,6 +116,7 @@ class BaseTrainer:
                     self.monitor_best = log[self.monitor]
                     self._save_checkpoint(self.iteration, log, save_best=True)
 
+            #LOG
             if self.iteration%self.log_step==0:
                 #prinpt()#clear inplace text
                 print('                   ', end='\r')
@@ -129,12 +131,15 @@ class BaseTrainer:
                 if self.iteration%self.val_step!=0: #we'll do it later if we have a validation pass
                     self.train_logger.add_entry(log)
 
+            #SAVE
             if self.iteration % self.save_step == 0:
                 self._save_checkpoint(self.iteration, log)
                 if self.iteration%self.log_step!=0:
                     print('                   ', end='\r')
                 #    print()#clear inplace text
                 self.logger.info('Checkpoint saved for iteration '+str(self.iteration))
+
+            #LR ADJUST
             if self.lr_scheduler and self.iteration % self.epoch_size == 0:
                 self.lr_scheduler.step(self.iteration/self.epoch_size)
                 lr = self.lr_scheduler.get_lr()[0]

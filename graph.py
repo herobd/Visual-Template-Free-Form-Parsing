@@ -23,12 +23,13 @@ def graph(log):
     print('summed')
     i=1
     for metric, data in graphs.items():
-        plt.figure(i)
-        i+=1
-        plt.plot(data['iters'], data['values'], '.-')
-        plt.xlabel('iterations')
-        plt.ylabel(metric)
-        plt.title(metric)
+        if metric[:3]=='avg' or metric[:3]=='val':
+            plt.figure(i)
+            i+=1
+            plt.plot(data['iters'], data['values'], '.-')
+            plt.xlabel('iterations')
+            plt.ylabel(metric)
+            plt.title(metric)
     plt.show()
 
 

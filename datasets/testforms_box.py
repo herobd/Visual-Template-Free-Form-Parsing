@@ -85,7 +85,7 @@ if __name__ == "__main__":
         'rotation':False
         #"only_types": ["text_start_gt"]
 })
-    data.cluster(start,repeat,'anchors_{}.json'.format(start))
+    data.cluster(start,repeat,'anchors_noRot_{}.json'.format(start))
 
     dataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False, num_workers=0, collate_fn=forms_box_detect.collate)
     dataLoaderIter = iter(dataLoader)

@@ -370,17 +370,15 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
         s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
         partial_rescale = s/rescaled
-        if self.transform is None: #we're doing the whole image
-            #this is a check to be sure we don't send too big images through
-            pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
-            if pixel_count > self.pixel_count_thresh:
-                partial_rescale = self.pixel_count_thresh/pixel_count
-                s = rescaled*partial_rescale
-                print('{} exceed thresh: {}, new scale {}'.format(imageName,pixel_count,s))
-        #s = target_dim1 / float(np_img.shape[1])
-        #s *= rescaled
-        #print(s)
-        #target_dim0 = int(np_img.shape[0]/float(np_img.shape[1]) * target_dim1)
+        #if self.transform is None: #we're doing the whole image
+        #    #this is a check to be sure we don't send too big images through
+        #    pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
+        #    if pixel_count > self.pixel_count_thresh:
+        #        partial_rescale = self.pixel_count_thresh/pixel_count
+        #        s = rescaled*partial_rescale
+        #        print('{} exceed thresh: {}, new scale {}'.format(imageName,pixel_count,s))
+        
+        
         ##tic=timeit.default_timer()
         #np_img = cv2.resize(np_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
         np_img = cv2.resize(np_img,(0,0),

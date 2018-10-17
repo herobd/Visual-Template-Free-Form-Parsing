@@ -35,9 +35,9 @@ def convRelu(i, batchNormalization=False, leakyRelu=False, numChanIn=3, split=Fa
     nIn = nc if i == 0 else nm[i - 1]
     nOut = nm[i]
     if split:
-        nOut/=2
-    cnn.add_module('conv{0}'.format(i),
-                   nn.Conv2d(nIn, nOut, ks[i], ss[i], ps[i]))
+        nOut=nOut//2
+    conv = nn.Conv2d(nIn, nOut, ks[i], ss[i], ps[i])
+    cnn.add_module('conv{0}'.format(i),conv)
     if batchNormalization:
         cnn.add_module('batchnorm{0}'.format(i), nn.InstanceNorm2d(nOut))
         # cnn.add_module('batchnorm{0}'.format(i), nn.BatchNorm2d(nOut))
@@ -338,11 +338,11 @@ class LineFollower(BaseModel):
             cnn_out = self.cnn1(resampled)
             if self.shared_conv is not None:
                 shared_out = self.shared_conv(cnn_out)
-                if forwards:
+                if forward:
                     part_out = self.forward_conv(cnn_out)
                 else:
                     part_out = self.backward_conv(cnn_out)
-                cnn_out = torch.cat(shared_out,part_out,dim=1)
+                cnn_out = torch.cat([shared_out,part_out],dim=1)
             cnn_out = self.cnn2(cnn_out)
             #cnn_out = self.cnn(resampled)
             cnn_out = torch.squeeze(cnn_out, dim=2)

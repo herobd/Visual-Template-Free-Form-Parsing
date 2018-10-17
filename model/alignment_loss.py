@@ -306,64 +306,61 @@ def iou_alignment_loss(predictions, target, target_sizes, num_anchors, ignore_th
     p_bot_x = predictions[:,:,1]-sin_rot*predictions[:,:,4]
     p_bot_y = predictions[:,:,2]+cos_rot*predictions[:,:,4]
 
-    p_left = predictions[:,:,1]+predictions[:,:,4]
+    p_left = predictions[:,:,1]-predictions[:,:,5]
+    p_right = predictions[:,:,1]+predictions[:,:,5]
+    p_top = predictions[:,:,2]-predictions[:,:,4]
+    p_bot = predictions[:,:,2]+predictions[:,:,4]
 
-    #pred_left = torch.stack([p_left_x,p_left_y],dim=2)
-    pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=2)
-    pred_heights = predictions[:,:,4]
-    pred_widths = predictions[:,:,5]
     pred_classes = predictions[:,:,6:]
 
     #target_points_left = target[:,:,5:7] #pre-computed points
     #target_points_right = target[:,:,7:9] #pre-computed points
-    target_points = target[:,:,5:13] #pre-computed points
-    target_box = target[:,:,0:5]
+    t_left = target[:,:,0]-target[:,:,4]
+    t_right = target[:,:,0]+target[:,:,4]
+    t_top = target[:,:,1]-target[:,:,3]
+    t_bot = target[:,:,1]+target[:,:,3]
     target_classes = target[:,:,13:]
-    target_heights = target[:,:,3]
-    target_widths = target[:,:,4]
     #print('loc {},   tar {}'.format(locations.shape,target.shape))
     #tic=timeit.default_timer()
 
     log_confidences = torch.log(confidences + 1e-10)
 
     pred_x1 = p_left[:,:,None]
-    expanded_pred_heights = pred_heights[:,:,None]
-    expanded_pred_widths = pred_widths[:,:,None]
+    pred_x1 = pred_x1.expand(batch_size, predictions.size(1), target.size(1))
+    targ_x1 = t_left[:,None,:]
+    targ_x1 = targ_x1.expand(batch_size, predictions.size(1), target.size(1))
 
-    expanded_target_points = target_points[:,None,:]
-    expanded_target_heights = target_heights[:,None,:]
-    expanded_target_widths = target_widths[:,None,:]   
+    pred_x2 = p_right[:,:,None]
+    pred_x2 = pred_x2.expand(batch_size, predictions.size(1), target.size(1))
+    targ_x2 = t_right[:,None,:]
+    targ_x2 = targ_x2.expand(batch_size, predictions.size(1), target.size(1))
 
-    expanded_pred_points = expanded_pred_points.expand(pred_points.size(0), pred_points.size(1), target_points.size(1), pred_points.size(2))
-    expanded_pred_heights = expanded_pred_heights.expand(pred_heights.size(0), pred_heights.size(1), target_heights.size(1))
-    expanded_pred_widths = expanded_pred_widths.expand(pred_widths.size(0), pred_widths.size(1), target_widths.size(1))
-    expanded_target_points = expanded_target_points.expand(target_points.size(0), pred_points.size(1), target_points.size(1), target_points.size(2))
-    expanded_target_heights = expanded_target_heights.expand(target_heights.size(0), pred_heights.size(1), target_heights.size(1))
-    expanded_target_widths = expanded_target_widths.expand(target_widths.size(0), pred_widths.size(1), target_widths.size(1))
+    pred_y1 = p_top[:,:,None]
+    pred_y1 = pred_y1.expand(batch_size, predictions.size(1), target.size(1))
+    targ_y1 = t_top[:,None,:]
+    targ_y1 = targ_y1.expand(batch_size, predictions.size(1), target.size(1))
 
-    #Compute All Deltas
-    point_deltas = (expanded_pred_points - expanded_target_points)
-    if bias_long_side:
-        norm_heights = ((expanded_target_heights+expanded_pred_heights)/2)
-        norm_widths = ((expanded_target_widths+expanded_pred_widths)/2)
-    else:
-        norm_heights=norm_widths = (expanded_target_heights+expanded_pred_heights+expanded_target_widths+expanded_pred_widths)/4
+    pred_y2 = p_bot[:,:,None]
+    pred_y2 = pred_y2.expand(batch_size, predictions.size(1), target.size(1))
+    targ_y2 = t_bot[:,None,:]
+    targ_y2 = targ_y2.expand(batch_size, predictions.size(1), target.size(1))
+
 
     middle_right = -1000*torch.ones_like(targ_y2)
-    middle_right = torch.where( targ_x1<pred_x2 and pred_x2<targ_x2, pred_x2, middle_right)
-    middle_right = torch.where( pred_x1<targ_x2 and targ_x2<pred_x2, targ_x2, middle_right)
+    middle_right = torch.where( (targ_x1<pred_x2)*(pred_x2<targ_x2), pred_x2, middle_right)
+    middle_right = torch.where( (pred_x1<targ_x2)*(targ_x2<pred_x2), targ_x2, middle_right)
 
     middle_left = -1000*torch.ones_like(targ_x1)
-    middle_left = torch.where( targ_x1<pred_x1 and pred_x1<targ_x2, pred_x1, middle_left)
-    middle_left = torch.where( pred_x1<targ_x1 and targ_x1<pred_x2, targ_x1, middle_left)
+    middle_left = torch.where( (targ_x1<pred_x1)*(pred_x1<targ_x2), pred_x1, middle_left)
+    middle_left = torch.where( (pred_x1<targ_x1)*(targ_x1<pred_x2), targ_x1, middle_left)
 
     middle_bot = -1000*torch.ones_like(targ_y2)
-    middle_bot = torch.where( targ_y1<pred_y2 and pred_y2<targ_y2, pred_y2, middle_bot)
-    middle_bot = torch.where( pred_y1<targ_y2 and targ_y2<pred_y2, targ_y2, middle_bot)
+    middle_bot = torch.where( (targ_y1<pred_y2)*(pred_y2<targ_y2), pred_y2, middle_bot)
+    middle_bot = torch.where( (pred_y1<targ_y2)*(targ_y2<pred_y2), targ_y2, middle_bot)
 
     middle_top = -1000*torch.ones_like(targ_y1)
-    middle_top = torch.where( targ_y1<pred_y1 and pred_y1<targ_y2, pred_y1, middle_top)
-    middle_top = torch.where( pred_y1<targ_y1 and targ_y1<pred_y2, targ_y1, middle_top)
+    middle_top = torch.where( (targ_y1<pred_y1)*(pred_y1<targ_y2), pred_y1, middle_top)
+    middle_top = torch.where( (pred_y1<targ_y1)*(targ_y1<pred_y2), targ_y1, middle_top)
 
     inter_h = middle_bot-middle_top
     inter_w = middle_right-middle_left
@@ -391,7 +388,7 @@ def iou_alignment_loss(predictions, target, target_sizes, num_anchors, ignore_th
             #import pdb; pdb.set_trace()
             #TODO loss using deactivated values
             #This will require haveing the model keep the anchors channel
-            box_loss = F.mse_loss(predictions[b,best,1:6],target_box[b,:target_sizes[b],0:5],size_average=False,reduce=True) #skip conf and classes. this does error between activated  offsets/scaled of achors, not actual
+            box_loss = F.mse_loss(predictions[b,best,1:6],target[b,:target_sizes[b],0:5],size_average=False,reduce=True) #skip conf and classes. this does error between activated  offsets/scaled of achors, not actual
             #import pdb; pdb.set_trace()
             box_loss += F.binary_cross_entropy_with_logits(confidences[b,best],torch.ones_like(confidences[b,best]),size_average=False,reduce=True) #here's conf
             box_loss += F.binary_cross_entropy_with_logits(pred_classes[b,best],target_classes[b,:target_sizes[b]],size_average=False,reduce=True) #yolov3 doesnt use softmax

@@ -191,6 +191,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 bbs.append((conf,j))
             #pred_points.append(
         bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
+        #import pdb; pdb.set_trace()
         for conf, j in bbs:
             #circle aligned predictions
             if outDir is not None:

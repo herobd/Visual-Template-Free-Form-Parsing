@@ -222,7 +222,7 @@ class YoloBoxDetector(BaseModel):
             if self.rotation:
                 rot_dif = (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:])
             else:
-                rot_dif = 0
+                rot_dif = torch.zeros_like(y[:,3+offset:4+offset,:,:])
 
             stackedPred = [
                 y[:,0+offset:1+offset,:,:],                #0. confidence

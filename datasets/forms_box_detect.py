@@ -235,7 +235,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     os.mkdir(self.cache_path)
         else:
             self.cache_resized = False
-        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 2200000
+        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 220000000
         if 'only_types' in config:
             self.only_types = config['only_types']
         else:

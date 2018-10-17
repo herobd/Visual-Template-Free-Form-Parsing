@@ -274,7 +274,10 @@ class CropBoxTransform(object):
         #pad out to allow random samples to take space off of the page
         ##tic=timeit.default_timer()
         #org_img = np.pad(org_img, self.pad_params, 'mean')
-        org_img = np.pad(org_img, self.pad_params, 'constant')
+        if len(org_img.shape)==3:
+            org_img = np.pad(org_img, self.pad_params, 'constant')
+        else:
+            org_img = np.pad(org_img, self.pad_params[:2], 'constant')
         if pixel_gt is not None:
             pixel_gt = np.pad(pixel_gt, self.pad_params, 'constant')
         ##print('pad: {}'.format(timeit.default_timer()-##tic))

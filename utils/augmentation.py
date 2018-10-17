@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 def tensmeyer_brightness(img, foreground=0, background=0):
-    if img.shape[2]>1:
+    if img.shape[2]==3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img

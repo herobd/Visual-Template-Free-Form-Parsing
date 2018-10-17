@@ -91,20 +91,6 @@ class BaseTrainer:
                     else:
                         log[key] = value
 
-            if self.iteration%self.log_step==0:
-                #prinpt()#clear inplace text
-                print('                   ', end='\r')
-                if self.iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
-                    for key in sumLog:
-                        sumLog[key] /= self.log_step
-                    #self._minor_log(sumLog)
-                    log = {**log, **sumLog}
-                self._minor_log(log)
-                for key in sumLog:
-                    sumLog[key] =0
-                if self.iteration%self.val_step!=0: #we'll do it later if we have a validation pass
-                    self.train_logger.add_entry(log)
-
             if self.iteration%self.val_step==0:
                 val_result = self._valid_epoch()
                 for key, value in val_result.items():
@@ -128,6 +114,21 @@ class BaseTrainer:
                         or (self.monitor_mode == 'max' and log[self.monitor] > self.monitor_best):
                     self.monitor_best = log[self.monitor]
                     self._save_checkpoint(self.iteration, log, save_best=True)
+
+            if self.iteration%self.log_step==0:
+                #prinpt()#clear inplace text
+                print('                   ', end='\r')
+                if self.iteration-self.start_iteration>=self.log_step: #skip avg if started in odd spot
+                    for key in sumLog:
+                        sumLog[key] /= self.log_step
+                    #self._minor_log(sumLog)
+                    log = {**log, **sumLog}
+                self._minor_log(log)
+                for key in sumLog:
+                    sumLog[key] =0
+                if self.iteration%self.val_step!=0: #we'll do it later if we have a validation pass
+                    self.train_logger.add_entry(log)
+
             if self.iteration % self.save_step == 0:
                 self._save_checkpoint(self.iteration, log)
                 if self.iteration%self.log_step!=0:

@@ -425,18 +425,26 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             pixel_gt = out['pixel_gt']
 
             ##tic=timeit.default_timer()
-            if np_img.shape[2]==3:
+            if len(np_img.shape)==3:
                 np_img = augmentation.apply_random_color_rotation(np_img)
-            np_img = augmentation.apply_tensmeyer_brightness(np_img)
+                np_img = augmentation.apply_tensmeyer_brightness(np_img)
+            else:
+                np_img = augmentation.apply_tensmeyer_brightness(np_img[:,:,None])
             ##print('augmentation: {}'.format(timeit.default_timer()-tic))
+        elif len(np_img.shape)==2:
+            np_img=np_img[:,:,None]
         ##print('transfrm: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
 
-
+        #if len(np_img.shape)==2:
+        #    img=np_img[None,None,:,:] #add "color" channel and batch
+        #else:
         img = np_img.transpose([2,0,1])[None,...] #from [row,col,color] to [batch,color,row,col]
         img = img.astype(np.float32)
         img = torch.from_numpy(img)
         img = 1.0 - img / 128.0 #ideally the median value would be 0
         #img = 1.0 - img / 255.0 #this way ink is on, page is off
+        if not self.color and img.size(1)!=1:
+            import pdb; pdb.set_trace()
         if pixel_gt is not None:
             pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
             pixel_gt = torch.from_numpy(pixel_gt)
@@ -565,14 +573,14 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         blY = bbs[:,:,7]
 
         if not self.rotate:
-            tlX = min(tlX,blX,trX,brX)
-            tlY = min(tlY,trY,blY,brY)
-            trX = max(tlX,blX,trX,brX)
-            trY = min(tlY,trY,blY,brY)
-            brX = max(tlX,blX,trX,brX)
-            brY = max(tlY,trY,blY,brY)
-            blX = min(tlX,blX,trX,brX)
-            blY = max(tlY,trY,blY,brY)
+            tlX = np.minimum.reduce((tlX,blX,trX,brX))
+            tlY = np.minimum.reduce((tlY,trY,blY,brY))
+            trX = np.maximum.reduce((tlX,blX,trX,brX))
+            trY = np.minimum.reduce((tlY,trY,blY,brY))
+            brX = np.maximum.reduce((tlX,blX,trX,brX))
+            brY = np.maximum.reduce((tlY,trY,blY,brY))
+            blX = np.minimum.reduce((tlX,blX,trX,brX))
+            blY = np.maximum.reduce((tlY,trY,blY,brY))
 
         lX = (tlX+blX)/2.0
         lY = (tlY+blY)/2.0

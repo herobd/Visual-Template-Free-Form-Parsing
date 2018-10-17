@@ -19,7 +19,43 @@ def offsetFunc(netPred): #this changes the offset prediction from the network
 def rotFunc(netPred):
     return math.pi/2 * netPred
 
-def make_layers(cfg, batch_norm=False, instance_norm=False, use_weight_norm=False):
+class ResBlock(nn.Module):
+    def __init__(self,in_ch,out_ch,dilation=1,norm=''):
+        super(ResBlock, self).__init__()
+        layers=[]
+        if norm=='batch_norm':
+            layers.append(nn.BatchNorm2d(out_ch))
+        if norm=='instance_norm':
+            layers.append(nn.InstanceNorm2d(out_ch))
+        if norm=='group_norm':
+            layers.append(nn.GroupNorm(8,out_ch))
+        layers.append(nn.ReLU(inplace=True)) 
+        conv1=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, dilation=dilation)
+        if norm=='weight_norm':
+            layers.append(weight_norm(conv1))
+        else:
+            layers.append(conv1)
+
+
+        if norm=='batch_norm':
+            layers.append(nn.BatchNorm2d(out_ch))
+        if norm=='instance_norm':
+            layers.append(nn.InstanceNorm2d(out_ch))
+        if norm=='group_norm':
+            layers.append(nn.GroupNorm(8,out_ch))
+        layers.append(nn.ReLU(inplace=True)) 
+        conv2=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)
+        if norm=='weight_norm':
+            layers.append(weight_norm(conv2))
+        else:
+            layers.append(conv2)
+
+        self.side = nn.Sequential(*layers)
+
+    def forward(self,x):
+        return x+self.side(x)
+
+def make_layers(cfg, dilation=1, norm=None):
     modules = []
     in_channels = [cfg[0]]
     
@@ -30,6 +66,8 @@ def make_layers(cfg, batch_norm=False, instance_norm=False, use_weight_norm=Fals
             modules.append(nn.Sequential(*layers))
             layers = [nn.MaxPool2d(kernel_size=2, stride=2)]
             layerCodes = [v]
+        elif type(v)==str and v == 'ReLU':
+            layerCodes.append( nn.ReLU(inplace=True) )
         elif type(v)==str and v[:2] == 'U+':
             if len(layers)>0:
                 if type(layerCodes[0])==str and layerCodes[0][:2]=='U+':
@@ -41,16 +79,37 @@ def make_layers(cfg, batch_norm=False, instance_norm=False, use_weight_norm=Fals
             layerCodes = [v]
 
             in_channels.append(int(v[2:])+in_channels[-1])
+        elif type(v)==str and v[0] == 'R':
+            outCh=int(v[1:])
+            layers.append(ResBlock(in_channels[-1],outCh,dilation,norm))
+            layerCodes.append(v)
+            in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'C':
+            outCh=int(v[1:])
+            conv2d = nn.Conv2d(in_channels[-1], outCh, kernel_size=5, padding=2)
+            #if i == len(cfg)-1:
+            #    layers += [conv2d]
+            #    break
+            layers.append(conv2d)
+            layerCodes.append(v)
+            in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'D':
+            outCh=int(v[1:]) #down sampling layer, linear
+            layers.append(nn.Conv2d(in_channels[-1], outCh, kernel_size=2, stride=2, bias=False))
+            layerCodes.append(v)
+            in_channels.append(outCh)
         else:
             conv2d = nn.Conv2d(in_channels[-1], v, kernel_size=3, padding=1)
             #if i == len(cfg)-1:
             #    layers += [conv2d]
             #    break
-            if batch_norm:
+            if norm=='batch_norm':
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
-            elif instance_norm:
+            elif norm=='instance_norm':
                 layers += [conv2d, nn.InstanceNorm2d(v), nn.ReLU(inplace=True)]
-            elif use_weight_norm:
+            elif norm=='group_norm':
+                layers += [conv2d, nn.GroupNorm(8,v), nn.ReLU(inplace=True)]
+            elif norm=='weight_norm':
                 layers += [weight_norm(conv2d), nn.ReLU(inplace=True)]
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
@@ -63,6 +122,7 @@ def make_layers(cfg, batch_norm=False, instance_norm=False, use_weight_norm=Fals
         else:
             modules.append(nn.Sequential(*layers))
     return modules, in_channels[-1] #nn.Sequential(*layers)
+
 
 class up(nn.Module):
     def __init__(self, in_ch, bilinear=True):
@@ -90,6 +150,7 @@ class up(nn.Module):
 class YoloBoxDetector(BaseModel):
     def __init__(self, config): # predCount, base_0, base_1):
         super(YoloBoxDetector, self).__init__(config)
+        self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
         with open(config['anchors_file']) as f:
@@ -99,16 +160,10 @@ class YoloBoxDetector(BaseModel):
         self.predPointCount = config['number_of_point_types']
         self.predPixelCount = config['number_of_pixel_types']
         in_ch = 3 if 'color' not in config or config['color'] else 1
-        if "norm_type" in config:
-            batch_norm=config["norm_type"]=='batch_norm'
-            instance_norm=config["norm_type"]=='instance_norm'
-            weight_norm=config["norm_type"]=='weight_norm'
-        else:
-            batch_norm=False
-            instance_norm=False
-            weight_norm=False
-        if not (batch_norm or instance_norm or weight_norm):
+        norm = config['norm_type'] if "norm_type" in config else None
+        if norm is None:
             print('Warning: YoloBoxDetector has no normalization!')
+        dilation = config['dilation'] if 'dilation' in config else 1
         #self.cnn, self.scale = vgg.vgg11_custOut(self.predLineCount*5+self.predPointCount*3,batch_norm=batch_norm, weight_norm=weight_norm)
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
         self.numOutPoint = self.predPointCount*3
@@ -118,12 +173,12 @@ class YoloBoxDetector(BaseModel):
         else:
             layers_cfg=[in_ch,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
 
-        self.net_down_modules, down_last_channels = make_layers(layers_cfg, batch_norm, instance_norm, weight_norm)
+        self.net_down_modules, down_last_channels = make_layers(layers_cfg, dilation,norm)
         self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutPoint, kernel_size=1, padding=1))
         self._hack_down = nn.Sequential(*self.net_down_modules)
         self.scale=1
         for a in layers_cfg:
-            if a=='M':
+            if a=='M' or (type(a) is str and a[0]=='D'):
                 self.scale*=2
 
         if self.predPixelCount>0:
@@ -131,7 +186,7 @@ class YoloBoxDetector(BaseModel):
                 up_layers_cfg =  config['up_layers_cfg']
             else:
                 up_layers_cfg=[512, 'U+512', 256, 'U+256', 128, 'U+128', 64, 'U+64']
-            self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, batch_norm, weight_norm)
+            self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, 1, norm)
             self.net_up_modules.append(nn.Conv2d(up_last_channels, self.predPixelCount, kernel_size=1, padding=1))
             self._hack_up = nn.Sequential(*self.net_up_modules)
 
@@ -139,11 +194,13 @@ class YoloBoxDetector(BaseModel):
         #self.base_1 = config['base_1']
 
     def forward(self, img):
+        #import pdb; pdb.set_trace()
         #y = self.cnn(img)
         levels=[img]
         for module in self.net_down_modules:
             levels.append(module(levels[-1]))
         y=levels[-1]
+
 
         #priors_0 = Variable(torch.arange(0,y.size(2)).type_as(img.data), requires_grad=False)[None,:,None]
         priors_0 = torch.arange(0,y.size(2)).type_as(img.data)[None,:,None]
@@ -162,12 +219,16 @@ class YoloBoxDetector(BaseModel):
         for i in range(self.numAnchors):
 
             offset = i*(self.numBBParams+self.numBBTypes)
+            if self.rotation:
+                rot_dif = (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:])
+            else:
+                rot_dif = 0
 
             stackedPred = [
                 y[:,0+offset:1+offset,:,:],                #0. confidence
                 torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
-                (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:]) + anchor[i]['rot'],      #3. rotation (radians)
+                rot_dif + anchor[i]['rot'],      #3. rotation (radians)
                 torch.exp(y[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
                 torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
             ]
@@ -180,6 +241,7 @@ class YoloBoxDetector(BaseModel):
         
         bbPredictions = bbPredictions.transpose(2,4).contiguous()#from [batch, anchors, channel, rows, cols] to [batch, anchros, cols, rows, channels]
         bbPredictions = bbPredictions.view(bbPredictions.size(0),bbPredictions.size(1),-1,bbPredictions.size(4))#flatten to [batch, anchors, instances, channel]
+        #avg_conf_per_anchor = bbPredictions[:,:,:,0].mean(dim=0).mean(dim=1)
         bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3)) #[batch, instances+anchors, channel]
 
         pointPreds=[]
@@ -208,5 +270,5 @@ class YoloBoxDetector(BaseModel):
 
 
 
-        return bbPredictions, pointPreds, pixelPreds
+        return bbPredictions, pointPreds, pixelPreds #, avg_conf_per_anchor
 

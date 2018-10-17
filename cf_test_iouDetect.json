@@ -6,9 +6,9 @@
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
         "data_dir": "/home/ubuntu/brian/data/testF",
-        "batch_size": 3,
+        "batch_size": 2,
         "shuffle": true,
-        "num_workers": 3,
+        "num_workers": 2,
         "crop_to_page":false,
         "color":false,
         "rescale_range": [0.4,0.65],
@@ -44,11 +44,11 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.000001,
+        "lr": 0.001,
         "weight_decay": 0
     },
     "loss": {
-        "box":"iou_alignment_loss"
+        "box":"YoloLoss"
     },
     "loss_params": {
         "box": {
@@ -62,8 +62,8 @@
         "iterations": 40000,
         "save_dir": "saved/",
         "val_step": 1000,
-        "save_step": 2000,
-        "log_step": 100,
+        "save_step": 1000,
+        "log_step": 50,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none"
@@ -75,7 +75,7 @@
         "number_of_point_types": 0,
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
-        "down_layers_cfg": [1,"C64", "M", "R64", "R64", "D128", "R128", "R128", "D256", "R256", "R256", "D512", "R512", "R512", "D1024", "R1024", "R1024", "R1024", "ReLU"],
+        "down_layers_cfg": [1,"C64", "M", "R64", "R64", "D128", "R128", "R128", "D256", "R256", "R256", "D512", "R512", "R512", "D1024", "R1024", "R1024", "U1024", "R1024", "ReLU"],
         "up_layers_cfg":[],
         "anchors_file": "anchors_1.json",
         "rotation":false

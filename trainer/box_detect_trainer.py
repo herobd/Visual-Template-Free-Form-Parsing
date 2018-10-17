@@ -22,6 +22,11 @@ class BoxDetectTrainer(BaseTrainer):
             self.loss_params=config['loss_params']
         else:
             self.loss_params={}
+        self.loss['box'] = self.loss['box'](**self.loss_params['box'], 
+                num_classes=model.numBBTypes, 
+                rotation=model.rotation, 
+                scale=model.scale,
+                anchors=model.anchors)
         if 'loss_weights' in config:
             self.loss_weight=config['loss_weights']
         else:
@@ -121,7 +126,7 @@ class BoxDetectTrainer(BaseTrainer):
         ##tic=timeit.default_timer()
 
         self.optimizer.zero_grad()
-        outputBoxes, outputPoints, outputPixels = self.model(data)
+        outputBoxes, outputOffsets, outputPoints, outputPixels = self.model(data)
 
         ##toc=timeit.default_timer()
         ##print('for: '+str(toc-tic))
@@ -131,7 +136,7 @@ class BoxDetectTrainer(BaseTrainer):
         losses={}
         ##tic=timeit.default_timer()
         #predictions = util.pt_xyrs_2_xyxy(outputBoxes)
-        this_loss = self.loss['box'](outputBoxes,targetBoxes,targetBoxes_sizes, self.model.numAnchors, **self.loss_params['box'])
+        this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
         this_loss*=self.loss_weight['box']
         loss+=this_loss
         losses['box_loss']=this_loss.item()
@@ -188,6 +193,11 @@ class BoxDetectTrainer(BaseTrainer):
 
         log = {
             'loss': loss,
+            'recall':recall,
+            'precision':precision,
+            'position_loss':position_loss,
+            'conf_loss':conf_loss,
+            'class_loss':class_loss,
             #'minGrad':minGrad,
             #'maxGrad':maxGrad,
             #'cor_conf_loss':cor_conf_loss,

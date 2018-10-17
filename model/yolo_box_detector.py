@@ -98,6 +98,11 @@ def make_layers(cfg, dilation=1, norm=None):
             layers.append(nn.Conv2d(in_channels[-1], outCh, kernel_size=2, stride=2, bias=False))
             layerCodes.append(v)
             in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'U':
+            outCh=int(v[1:]) #down sampling layer, linear
+            layers.append(nn.ConvTranspose2d(in_channels[-1], outCh, kernel_size=2, stride=2, bias=False))
+            layerCodes.append(v)
+            in_channels.append(outCh)
         else:
             conv2d = nn.Conv2d(in_channels[-1], v, kernel_size=3, padding=1)
             #if i == len(cfg)-1:
@@ -180,6 +185,8 @@ class YoloBoxDetector(BaseModel):
         for a in layers_cfg:
             if a=='M' or (type(a) is str and a[0]=='D'):
                 self.scale*=2
+            elif type(a) is str and a[0]=='U':
+                self.scale/=2
 
         if self.predPixelCount>0:
             if 'up_layers_cfg' in config:
@@ -215,7 +222,8 @@ class YoloBoxDetector(BaseModel):
         priors_1 = priors_1[:,None,:,:]
 
         anchor = self.anchors
-        pred_anchors=[]
+        pred_boxes=[]
+        pred_offsets=[]
         for i in range(self.numAnchors):
 
             offset = i*(self.numBBParams+self.numBBTypes)
@@ -225,7 +233,7 @@ class YoloBoxDetector(BaseModel):
                 rot_dif = torch.zeros_like(y[:,3+offset:4+offset,:,:])
 
             stackedPred = [
-                y[:,0+offset:1+offset,:,:],                #0. confidence
+                torch.sigmoid(y[:,0+offset:1+offset,:,:]),                #0. confidence
                 torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
                 rot_dif + anchor[i]['rot'],      #3. rotation (radians)
@@ -233,16 +241,31 @@ class YoloBoxDetector(BaseModel):
                 torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
             ]
 
+            stackedOffsets = [
+                    y[:,0+offset:1+offset,:,:],
+                    torch.tanh(y[:,1+offset:2+offset,:,:])+0.5,
+                    torch.tanh(y[:,2+offset:3+offset,:,:])+0.5,
+                    y[:,4+offset:5+offset,:,:],
+                    y[:,4+offset:5+offset,:,:]
+            ]
+            if self.rotation:
+                stackedOffsets.append( rot_dif )
+
             for j in range(self.numBBTypes):
                 stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
-            pred_anchors.append(torch.cat(stackedPred, dim=1))
+                stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
+            pred_boxes.append(torch.cat(stackedPred, dim=1))
+            pred_offsets.append(torch.cat(stackedOffsets, dim=1))
 
-        bbPredictions = torch.stack(pred_anchors, dim=1)
+        bbPredictions = torch.stack(pred_boxes, dim=1)
+        offsetPredictions = torch.stack(pred_offsets, dim=1)
         
         bbPredictions = bbPredictions.transpose(2,4).contiguous()#from [batch, anchors, channel, rows, cols] to [batch, anchros, cols, rows, channels]
         bbPredictions = bbPredictions.view(bbPredictions.size(0),bbPredictions.size(1),-1,bbPredictions.size(4))#flatten to [batch, anchors, instances, channel]
         #avg_conf_per_anchor = bbPredictions[:,:,:,0].mean(dim=0).mean(dim=1)
         bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3)) #[batch, instances+anchors, channel]
+
+        offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous()
 
         pointPreds=[]
         for i in range(self.predPointCount):
@@ -270,5 +293,5 @@ class YoloBoxDetector(BaseModel):
 
 
 
-        return bbPredictions, pointPreds, pixelPreds #, avg_conf_per_anchor
+        return bbPredictions, offsetPredictions, pointPreds, pixelPreds #, avg_conf_per_anchor
 

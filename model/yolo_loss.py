@@ -241,16 +241,11 @@ class YoloDistLoss (nn.Module):
 
         x = prediction[..., 1]  # Center x
         y = prediction[..., 2]  # Center y
-        w = prediction[..., 4]  # Width
-        h = prediction[..., 3]  # Height
-        clsIdx=5
-        bbParams=4
-        if self.rotation:
-            r = prediction[..., 5]
-            clsIdx=6
-            bbParams=5
+        w = prediction[..., 5]  # Width
+        h = prediction[..., 4]  # Height
+        r = prediction[..., 3]  # Rotation
         pred_conf = prediction[..., 0]  # Conf 
-        pred_cls = prediction[..., clsIdx:]  # Cls pred.
+        pred_cls = prediction[..., 6:]  # Cls pred.
 
         grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor)
         grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor)
@@ -267,11 +262,11 @@ class YoloDistLoss (nn.Module):
         #pred_boxes[..., 2] = torch.exp(w.data) * anchor_w
         #pred_boxes[..., 3] = torch.exp(h.data) * anchor_h
         #pred_boxes[..., 4] = r.data
-        o_x = x + grid_x
-        o_y = y.data + grid_y
+        o_x = torch.tanh(x)+0.5 + grid_x
+        o_y = torch.tanh(y)+0.5 + grid_y
         o_w = torch.exp(w) * anchor_w
         o_h = torch.exp(h) * anchor_h
-        o_r = r + anchor_r
+        o_r =  (math.pi/2)*torch.tanh(r) + anchor_r
 
         cos_rot = torch.cos(o_r)
         sin_rot = torch.sin(o_r)
@@ -403,10 +398,10 @@ def build_targets_rot(
             mask[b, best_n, gj, gi] = 1
             conf_mask[b, best_n, gj, gi] = 1
             # Coordinates
-            tx[b, best_n, gj, gi] = gx - gi
-            ty[b, best_n, gj, gi] = gy - gj
+            tx[b, best_n, gj, gi] = inv_tanh(gx - (gi+0.5))
+            ty[b, best_n, gj, gi] = inv_tanh(gy - (gj+0.5))
             # Rotation
-            tr[b, best_n, gj, gi] = gr-anchors[best_n][2]
+            tr[b, best_n, gj, gi] = inv_tanh((gr-anchors[best_n][2])/(math.pi/2))
             # Width and height
             tw[b, best_n, gj, gi] = math.log(gw / anchors[best_n][0] + 1e-16)
             th[b, best_n, gj, gi] = math.log(gh / anchors[best_n][1] + 1e-16)

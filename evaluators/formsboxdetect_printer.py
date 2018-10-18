@@ -138,7 +138,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     data = data.cpu().data.numpy()
     #outputBB = outputBB.cpu().data.numpy()
-    outputBBs[:,:,0] = torch.sigmoid(outputBBs[:,:,0])
+    #outputBBs[:,:,0] = torch.sigmoid(outputBBs[:,:,0])
     outputBBs = outputBBs.cpu().data.numpy()
 
     outputPointsOld = outputPoints
@@ -203,7 +203,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         bbs=[]
         #pred_points=[]
         maxConf = outputBBs[b,:,0].max()
-        threshConf = max(maxConf*0.5,0.5)
+        threshConf = 0.5 #max(maxConf*0.7,0.5)
         for j in range(outputBBs.shape[1]):
             conf = outputBBs[b,j,0]
             if conf>threshConf:

@@ -40,11 +40,11 @@
     },
 
     
-    "lr_scheduler_type": "none",
+    "lr_scheduler_type": "custom in trainer",
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.0001,
+        "lr": 0.005,
         "weight_decay": 0
     },
     "loss": {

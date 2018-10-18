@@ -38,6 +38,11 @@ class BoxDetectTrainer(BaseTrainer):
         self.valid_data_loader = valid_data_loader
         self.valid = True if self.valid_data_loader is not None else False
         #self.log_step = int(np.sqrt(self.batch_size))
+        #lr schedule from "Attention is all you need"
+        #base_lr=config['optimizer']['lr']
+        warmup_steps = config['warmup_steps'] if 'warmup_steps' in config else 1000
+        lr_lambda = lambda step_num: min((step_num+1)**-0.5, (step_num+1)*warmup_steps**-1.5)
+        self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
 
     def _to_tensor(self, instance):
         data = instance['img']
@@ -112,6 +117,7 @@ class BoxDetectTrainer(BaseTrainer):
             The metrics in log must have the key 'metrics'.
         """
         self.model.train()
+        self.lr_schedule.step()
 
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)

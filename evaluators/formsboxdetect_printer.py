@@ -238,7 +238,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #    #print(rad)
             #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-            saveName = '{:06}_boxes'.format(startIndex+b)
+            saveName = '{:06}_boxes_r:{:.3f}_p:{:.3f}'.format(startIndex+b,recall,precision)
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

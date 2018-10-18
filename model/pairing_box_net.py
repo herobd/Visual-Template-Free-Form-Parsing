@@ -157,7 +157,7 @@ class PairingBoxNet(BaseModel):
         super(PairingBoxNet, self).__init__(config)
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
-        self.numBBParams = 5 #x-off,y-off,h-scale,w-scale,rot-off
+        self.numBBParams = 6 #conf,x-off,y-off,rot-off,h-scale,w-scale
         with open(config['anchors_file']) as f:
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
         #TODO Rescale anchors?
@@ -207,10 +207,10 @@ class PairingBoxNet(BaseModel):
         input = np.cat([image,mask,up_features],dim=1)
         at_box_res = self.net_down_modules(input)
         with_detections = np.cat([at_box_res,detected_boxes],dim=1)
-        out = self.final(with_detections)
+        pred = self.final(with_detections)
         
-        pred_offsets = out[:,:,:,:,1:]+detected_boxes[:,:,:,:,1:]
-        pred_confs = out[:,:,:,:,0:1]#*detected_boxes[:,:,:,:,0:1]
+        pred[:,:,:,:,1:]+=detected_boxes[:,:,:,:,1:]
+        #pred[:,:,:,:,0:1]*=detected_boxes[:,:,:,:,0:1]
 
 
 
@@ -233,34 +233,25 @@ class PairingBoxNet(BaseModel):
 
             offset = i*(self.numBBParams+self.numBBTypes)
             if self.rotation:
-                rot_dif = (math.pi/2)*torch.tanh(pred_offsets[:,3+offset:4+offset,:,:])
+                rot_dif = (math.pi/2)*torch.tanh(pred[:,3+offset:4+offset,:,:])
             else:
                 rot_dif = torch.zeros_like(y[:,3+offset:4+offset,:,:])
 
             stackedPred = [
-                torch.sigmoid(pred_confs[:,0+i:1+i,:,:]),                #0. confidence
-                torch.tanh(pred_offsets[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
-                torch.tanh(pred_offsets[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
+                torch.sigmoid(pred[:,0+offset:1+offset,:,:]),                #0. confidence
+                torch.tanh(pred[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
+                torch.tanh(pred[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
                 rot_dif + anchor[i]['rot'],      #3. rotation (radians)
-                torch.exp(pred_offsets[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
-                torch.exp(pred_offsets[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
+                torch.exp(pred[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
+                torch.exp(pred[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
             ]
 
-            stackedOffsets = [
-                    pred_confs[:,0+offset:1+offset,:,:],
-                    pred_offsets[:,1+offset:2+offset,:,:],
-                    pred_offsets[:,2+offset:3+offset,:,:],
-                    pred_offsets[:,4+offset:5+offset,:,:],
-                    pred_offsets[:,4+offset:5+offset,:,:]
-            ]
-            if self.rotation:
-                stackedOffsets.append( rot_dif )
 
             for j in range(self.numBBTypes):
                 stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
-                stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
+                #stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
             pred_boxes.append(torch.cat(stackedPred, dim=1))
-            pred_offsets.append(torch.cat(stackedOffsets, dim=1))
+            pred_offsets.append(y[:,offset:offset+self.numBBParams+self.numBBTypes,:,:])
 
         bbPredictions = torch.stack(pred_boxes, dim=1)
         offsetPredictions = torch.stack(pred_offsets, dim=1)

@@ -191,7 +191,7 @@ def build_targets(
             # Masks
             mask[b, best_n, gj, gi] = 1
             conf_mask[b, best_n, gj, gi] = 1 #why not just set this to 0?
-            # Coordinates
+            # Coordigates
             tx[b, best_n, gj, gi] = inv_tanh(gx - (gi+0.5))
             ty[b, best_n, gj, gi] = inv_tanh(gy - (gj+0.5))
             # Width and height
@@ -206,6 +206,7 @@ def build_targets(
             iou = bbox_iou(gt_box, pred_box, x1y1x2y2=False)
             pred_label = torch.argmax(pred_cls[b, best_n, gj, gi])
             score = pred_conf[b, best_n, gj, gi]
+            #import pdb; pdb.set_trace()
             if iou > 0.5 and pred_label == torch.argmax(target[b,t,13:]) and score > 0:
                 nCorrect += 1
 

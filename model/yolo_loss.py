@@ -139,6 +139,9 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
 
     return iou
 
+def inv_tanh(y):
+    return 0.5*(math.log(1+y)/(1-y))
+
 def build_targets(
     pred_boxes, pred_conf, pred_cls, target, target_sizes, anchors, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale
 ):
@@ -189,8 +192,8 @@ def build_targets(
             mask[b, best_n, gj, gi] = 1
             conf_mask[b, best_n, gj, gi] = 1 #why not just set this to 0?
             # Coordinates
-            tx[b, best_n, gj, gi] = gx - gi
-            ty[b, best_n, gj, gi] = gy - gj
+            tx[b, best_n, gj, gi] = inv_tanh(gx - (gi+0.5))
+            ty[b, best_n, gj, gi] = inv_tanh(gy - (gj+0.5))
             # Width and height
             tw[b, best_n, gj, gi] = math.log(gw / anchors[best_n][0] + 1e-16)
             th[b, best_n, gj, gi] = math.log(gh / anchors[best_n][1] + 1e-16)

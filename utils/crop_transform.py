@@ -275,9 +275,9 @@ class CropBoxTransform(object):
         ##tic=timeit.default_timer()
         #org_img = np.pad(org_img, self.pad_params, 'mean')
         if len(org_img.shape)==3:
-            org_img = np.pad(org_img, self.pad_params, 'constant')
+            org_img = np.pad(org_img, self.pad_params, 'constant', constant_values=[255,255,255])
         else:
-            org_img = np.pad(org_img, self.pad_params[:2], 'constant')
+            org_img = np.pad(org_img, self.pad_params[:2], 'constant', constant_values=255)
         if pixel_gt is not None:
             pixel_gt = np.pad(pixel_gt, self.pad_params, 'constant')
         ##print('pad: {}'.format(timeit.default_timer()-##tic))

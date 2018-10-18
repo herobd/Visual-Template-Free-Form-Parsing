@@ -152,22 +152,22 @@ class up(nn.Module):
         return self.conv(x)
 
 
-class YoloBoxDetector(BaseModel):
+class PairingBoxNet(BaseModel):
     def __init__(self, config): # predCount, base_0, base_1):
-        super(YoloBoxDetector, self).__init__(config)
+        super(PairingBoxNet, self).__init__(config)
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
-        self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
+        self.numBBParams = 5 #x-off,y-off,h-scale,w-scale,rot-off
         with open(config['anchors_file']) as f:
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
         #TODO Rescale anchors?
         self.numAnchors = len(self.anchors)
         self.predPointCount = config['number_of_point_types']
         self.predPixelCount = config['number_of_pixel_types']
-        in_ch = 3 if 'color' not in config or config['color'] else 1
+        im_ch = 1+( 3 if 'color' not in config or config['color'] else 1 ) #+1 for query mask
         norm = config['norm_type'] if "norm_type" in config else None
         if norm is None:
-            print('Warning: YoloBoxDetector has no normalization!')
+            print('Warning: PairingBoxNet has no normalization!')
         dilation = config['dilation'] if 'dilation' in config else 1
         #self.cnn, self.scale = vgg.vgg11_custOut(self.predLineCount*5+self.predPointCount*3,batch_norm=batch_norm, weight_norm=weight_norm)
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
@@ -200,13 +200,18 @@ class YoloBoxDetector(BaseModel):
         #self.base_0 = config['base_0']
         #self.base_1 = config['base_1']
 
-    def forward(self, img):
+    def forward(self, img, mask, detector_features, detected_boxes):
         #import pdb; pdb.set_trace()
         #y = self.cnn(img)
-        levels=[img]
-        for module in self.net_down_modules:
-            levels.append(module(levels[-1]))
-        y=levels[-1]
+        up_features = self.up_sample(detector_features)
+        input = np.cat([image,mask,up_features],dim=1)
+        at_box_res = self.net_down_modules(input)
+        with_detections = np.cat([at_box_res,detected_boxes],dim=1)
+        out = self.final(with_detections)
+        
+        pred_offsets = out[:,:,:,:,1:]+detected_boxes[:,:,:,:,1:]
+        pred_confs = out[:,:,:,:,0:1]#*detected_boxes[:,:,:,:,0:1]
+
 
 
         #priors_0 = Variable(torch.arange(0,y.size(2)).type_as(img.data), requires_grad=False)[None,:,None]
@@ -223,40 +228,39 @@ class YoloBoxDetector(BaseModel):
 
         anchor = self.anchors
         pred_boxes=[]
-        pred_offsets=[] #we seperate anchor predictions here. And compute actual bounding boxes
+        pred_offsets=[]
         for i in range(self.numAnchors):
 
             offset = i*(self.numBBParams+self.numBBTypes)
             if self.rotation:
-                rot_dif = (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:])
+                rot_dif = (math.pi/2)*torch.tanh(pred_offsets[:,3+offset:4+offset,:,:])
             else:
                 rot_dif = torch.zeros_like(y[:,3+offset:4+offset,:,:])
 
             stackedPred = [
-                torch.sigmoid(y[:,0+offset:1+offset,:,:]),                #0. confidence
-                torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
-                torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
+                torch.sigmoid(pred_confs[:,0+i:1+i,:,:]),                #0. confidence
+                torch.tanh(pred_offsets[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
+                torch.tanh(pred_offsets[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
                 rot_dif + anchor[i]['rot'],      #3. rotation (radians)
-                torch.exp(y[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
-                torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
+                torch.exp(pred_offsets[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
+                torch.exp(pred_offsets[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
             ]
 
-            #stackedOffsets = [
-            #        y[:,0+offset:1+offset,:,:],
-            #        y[:,1+offset:2+offset,:,:],
-            #        y[:,2+offset:3+offset,:,:],
-            #        y[:,4+offset:5+offset,:,:],
-            #        y[:,4+offset:5+offset,:,:]
-            #]
-            #if self.rotation:
-            #    stackedOffsets.append( rot_dif )
+            stackedOffsets = [
+                    pred_confs[:,0+offset:1+offset,:,:],
+                    pred_offsets[:,1+offset:2+offset,:,:],
+                    pred_offsets[:,2+offset:3+offset,:,:],
+                    pred_offsets[:,4+offset:5+offset,:,:],
+                    pred_offsets[:,4+offset:5+offset,:,:]
+            ]
+            if self.rotation:
+                stackedOffsets.append( rot_dif )
 
             for j in range(self.numBBTypes):
                 stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
-                #stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
+                stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
             pred_boxes.append(torch.cat(stackedPred, dim=1))
-            #pred_offsets.append(torch.cat(stackedOffsets, dim=1))
-            pred_offsets.append(y[:,offset:offset+self.numBBParams+self.numBBTypes,:,:])
+            pred_offsets.append(torch.cat(stackedOffsets, dim=1))
 
         bbPredictions = torch.stack(pred_boxes, dim=1)
         offsetPredictions = torch.stack(pred_offsets, dim=1)
@@ -266,7 +270,7 @@ class YoloBoxDetector(BaseModel):
         #avg_conf_per_anchor = bbPredictions[:,:,:,0].mean(dim=0).mean(dim=1)
         bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3)) #[batch, instances+anchors, channel]
 
-        offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous()
+        offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous() #to [batch, anchor, row, col, channels]
 
         pointPreds=[]
         for i in range(self.predPointCount):

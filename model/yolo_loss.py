@@ -30,14 +30,11 @@ class YoloLoss (nn.Module):
 
         x = prediction[..., 1]  # Center x
         y = prediction[..., 2]  # Center y
-        w = prediction[..., 4]  # Width
-        h = prediction[..., 3]  # Height
-        clsIdx=5
-        if self.rotation:
-            r = prediction[..., 5]
-            clsIdx=6
+        w = prediction[..., 5]  # Width
+        h = prediction[..., 4]  # Height
+        #r = prediction[..., 3]  # Rotation (not used here)
         pred_conf = prediction[..., 0]  # Conf 
-        pred_cls = prediction[..., clsIdx:]  # Cls pred.
+        pred_cls = prediction[..., 6:]  # Cls pred.
 
         grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor)
         grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor)
@@ -47,8 +44,8 @@ class YoloLoss (nn.Module):
 
         # Add offset and scale with anchors
         pred_boxes = FloatTensor(prediction[..., :4].shape)
-        pred_boxes[..., 0] = x.data + grid_x
-        pred_boxes[..., 1] = y.data + grid_y
+        pred_boxes[..., 0] = torch.tanh(x.data)+0.5 + grid_x
+        pred_boxes[..., 1] = torch.tanh(y.data)+0.5 + grid_y
         pred_boxes[..., 2] = torch.exp(w.data) * anchor_w
         pred_boxes[..., 3] = torch.exp(h.data) * anchor_h
 

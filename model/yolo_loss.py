@@ -161,6 +161,7 @@ def build_targets(
 
     nGT = 0
     nCorrect = 0
+    #import pdb; pdb.set_trace()
     for b in range(nB):
         for t in range(target_sizes[b]): #range(target.shape[1]):
             #if target[b, t].sum() == 0:

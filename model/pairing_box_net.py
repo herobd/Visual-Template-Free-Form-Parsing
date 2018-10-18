@@ -179,7 +179,7 @@ class PairingBoxNet(BaseModel):
             layers_cfg=[in_ch,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
 
         self.net_down_modules, down_last_channels = make_layers(layers_cfg, dilation,norm)
-        self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutPoint, kernel_size=1, padding=1))
+        self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutPoint, kernel_size=1))
         self._hack_down = nn.Sequential(*self.net_down_modules)
         self.scale=1
         for a in layers_cfg:
@@ -194,7 +194,7 @@ class PairingBoxNet(BaseModel):
             else:
                 up_layers_cfg=[512, 'U+512', 256, 'U+256', 128, 'U+128', 64, 'U+64']
             self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, 1, norm)
-            self.net_up_modules.append(nn.Conv2d(up_last_channels, self.predPixelCount, kernel_size=1, padding=1))
+            self.net_up_modules.append(nn.Conv2d(up_last_channels, self.predPixelCount, kernel_size=1))
             self._hack_up = nn.Sequential(*self.net_up_modules)
 
         #self.base_0 = config['base_0']

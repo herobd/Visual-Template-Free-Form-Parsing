@@ -63,6 +63,65 @@ def AI2D_printer(config, instance, model, gpu, metrics, outDir=None, startIndex=
 
 def FormsPair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
     return AI2D_printer(config,instance, model, gpu, metrics, outDir, startIndex)
+def Cancer_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
+    #for key, value in metrics.items():
+    #    print(key+': '+value)
+    def __eval_metrics(data,target):
+        acc_metrics = np.zeros((output.shape[0],len(metrics)))
+        for ind in range(output.shape[0]):
+            for i, metric in enumerate(metrics):
+                acc_metrics[ind,i] += metric(output[ind:ind+1], target[ind:ind+1])
+        return acc_metrics
+
+    def __to_tensor(data, gpu):
+        if type(data) is np.ndarray:
+            data = torch.FloatTensor(data.astype(np.float32))
+        elif type(data) is torch.Tensor:
+            data = data.type(torch.FloatTensor)
+        if gpu is not None:
+            data = data.to(gpu)
+        return data
+
+    data, target = instance
+    dataT = __to_tensor(data,gpu)
+    output = model(dataT)
+
+    data = data.cpu().data.numpy()
+    output = output.cpu().data.numpy()
+    target = target.data.numpy()
+    metricsOut = __eval_metrics(output,target)
+    if outDir is None:
+        return metricsOut
+
+    batchSize = data.shape[0]
+    for i in range(batchSize):
+        image = np.transpose(data[i],(1,2,0))
+
+        grayIm = color.rgb2grey(image)
+
+        #invQuery = 1-queryMask
+        invTarget = 1-target[i]
+        invOutput = output[i]<=0.0 #assume not sigmoided
+
+
+        highlightIm = np.stack([grayIm*invOutput, grayIm*invTarget, grayIm],axis=2)
+
+        #sideBySide = np.empty(image.shape[0],image.shape[1]*2)
+        #sideBySide[:,0:image.shape[1]]=1-invOutput
+        #sideBySid
+        colorOutput = np.stack([1-invOutput,1-invOutput,1-invOutput],axis=2)
+        sideBySide = np.concatenate([colorOutput,image],axis=1)
+
+        saveName = '{:06}'.format(startIndex+i)
+        for j in range(metricsOut.shape[1]):
+            saveName+='_iou:{0:.3f}'.format(metricsOut[i,j])
+        saveSepName = saveName+'_sep.png'
+        saveName+='.png'
+        io.imsave(os.path.join(outDir,saveName),highlightIm)
+        io.imsave(os.path.join(outDir,saveSepName),sideBySide)
+        
+    return metricsOut
+
 
 def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
     def __eval_metrics(data,target):

@@ -3,11 +3,11 @@ import json
 import logging
 import argparse
 import torch
-from model.model import *
-from model.unet import UNet
-from model.sol_eol_finder import SOL_EOL_Finder
-from model.detector import Detector
-from model.line_follower import LineFollower
+from model import *
+#from model.unet import UNet
+#from model.sol_eol_finder import SOL_EOL_Finder
+#from model.detector import Detector
+#from model.line_follower import LineFollower
 from model.metric import *
 from data_loader import getDataLoader
 from utils.printers import *
@@ -26,6 +26,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
     config = checkpoint['config']
     config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
     config['data_loader']['shuffle']=shuffle
+    config['data_loader']['rot']=False
     config['validation']['shuffle']=shuffle
     #config['validation']
 
@@ -155,7 +156,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
         #print (target.shape)
         #print ((target.amin(), target.amin()))
         #metricsO = _eval_metrics_ind(metrics,output, target)
-        saveFunc(instance,model,gpu,metrics,saveDir,batchIndex*batchSize)
+        saveFunc(config,instance,model,gpu,metrics,saveDir,batchIndex*batchSize)
 
 
 if __name__ == '__main__':

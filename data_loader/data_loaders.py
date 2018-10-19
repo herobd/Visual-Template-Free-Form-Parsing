@@ -1,6 +1,7 @@
 import torch
 import torch.utils.data
 import numpy as np
+from datasets.cancer import CancerDataset
 from datasets.ai2d import AI2D
 from datasets import forms_detect
 from datasets.forms_detect import FormsDetect
@@ -107,6 +108,14 @@ def getDataLoader(config,split):
                 testData = FormsLF(dirPath=data_dir, split='test', config=config['data_loader'])
                 testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers)
                 return testLoader, None
+        elif data_set_name=='Cancer':
+            if split=='train':
+                rot=config['rot'] if 'rot' in config else None
+                trainData = CancerDataset(data_dir, train=True, rot=rot)
+                trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers)
+                validData = CancerDataset(data_dir, train=False)
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
+                return trainLoader, validLoader
 
 
 

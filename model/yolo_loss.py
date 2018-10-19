@@ -95,14 +95,17 @@ class YoloLoss (nn.Module):
         loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false]) + self.bce_loss(
             pred_conf[conf_mask_true], tconf[conf_mask_true]
         )
-        loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
+        if target is not None:
+            loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
+        else:
+            loss_cls = 0
         loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
 
         return (
             loss,
             loss_x.item()+loss_y.item()+loss_w.item()+loss_h.item(),
             loss_conf.item(),
-            loss_cls.item(),
+            loss_cls.item() if type(loss_cls)!=int else loss_cls,
             recall,
             precision,
         )

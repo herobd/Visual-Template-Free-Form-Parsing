@@ -180,7 +180,7 @@ class BaseTrainer:
         }
         filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
                                 .format(iteration))
-        print(self.module.state_dict().keys())
+        #print(self.module.state_dict().keys())
         torch.save(state, filename)
         if save_best:
             os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))
@@ -198,7 +198,7 @@ class BaseTrainer:
         checkpoint = torch.load(resume_path)
         self.start_iteration = checkpoint['iteration'] + 1
         self.monitor_best = checkpoint['monitor_best']
-        print(checkpoint['state_dict'].keys())
+        #print(checkpoint['state_dict'].keys())
         self.model.load_state_dict(checkpoint['state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         if self.with_cuda:

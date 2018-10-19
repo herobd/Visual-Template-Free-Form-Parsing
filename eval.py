@@ -102,7 +102,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics_ind(metrics,output, target)
-                    metricsO = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
+                    metricsO,_ = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
                     if type(metricsO) == dict:
                         for typ,typeLists in metricsO.items():
                             for name,lst in typeLists.items():

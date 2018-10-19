@@ -4,6 +4,7 @@ from base import BaseTrainer
 import timeit
 from utils import util
 from collections import defaultdict
+from evaluators import FormsBoxDetect_printer
 
 
 class BoxDetectTrainer(BaseTrainer):
@@ -122,17 +123,16 @@ class BoxDetectTrainer(BaseTrainer):
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
-            data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
+            thisInstance = self.data_loader_iter.next()
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
-            data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels= self._to_tensor(self.data_loader_iter.next())
+            thisInstance = self.data_loader_iter.next()
         ##toc=timeit.default_timer()
         ##print('data: '+str(toc-tic))
         
         ##tic=timeit.default_timer()
 
         self.optimizer.zero_grad()
-        outputBoxes, outputOffsets, outputPoints, outputPixels = self.model(data)
 
         ##toc=timeit.default_timer()
         ##print('for: '+str(toc-tic))
@@ -142,7 +142,15 @@ class BoxDetectTrainer(BaseTrainer):
         losses={}
         ##tic=timeit.default_timer()
         #predictions = util.pt_xyrs_2_xyxy(outputBoxes)
-        this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+        if self.iteration % self.save_step == 0:
+            targetPoints={}
+            targetPixels=None
+            _,lossC=FormsBoxDetect_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
+            this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
+        else:
+            data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
+            outputBoxes, outputOffsets, outputPoints, outputPixels = self.model(data)
+            this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
         this_loss*=self.loss_weight['box']
         loss+=this_loss
         losses['box_loss']=this_loss.item()

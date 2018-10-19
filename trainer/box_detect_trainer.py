@@ -4,6 +4,7 @@ from base import BaseTrainer
 import timeit
 from utils import util
 from collections import defaultdict
+from evaluators import FormsBoxDetect_printer
 
 
 class BoxDetectTrainer(BaseTrainer):
@@ -142,6 +143,8 @@ class BoxDetectTrainer(BaseTrainer):
         ##tic=timeit.default_timer()
         #predictions = util.pt_xyrs_2_xyxy(outputBoxes)
         if self.iteration % self.save_step == 0:
+            targetPoints={}
+            targetPixels=None
             _,lossC=FormsBoxDetect_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
             this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         else:

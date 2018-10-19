@@ -173,7 +173,8 @@ class BaseTrainer:
             'arch': arch,
             'iteration': iteration,
             'logger': self.train_logger,
-            'state_dict': self.model.state_dict(),
+            #'state_dict': self.model.state_dict(),
+            'model': self.model,
             'optimizer': self.optimizer.state_dict(),
             'monitor_best': self.monitor_best,
             'config': self.config
@@ -188,6 +189,14 @@ class BaseTrainer:
         else:
             self.logger.info("Saving checkpoint: {} ...".format(filename))
 
+        ######DEBUG
+        #checkpoint = torch.load(filename)
+        #model_dict=self.model.state_dict()
+        #for name in checkpoint['state_dict']:
+            #if (checkpoint['state_dict'][name]!=model_dict[name]).any():
+                #        print('state not equal at: '+name)
+        #        import pdb; pdb.set_trace()
+
     def _resume_checkpoint(self, resume_path):
         """
         Resume from saved checkpoints
@@ -199,7 +208,10 @@ class BaseTrainer:
         self.start_iteration = checkpoint['iteration'] + 1
         self.monitor_best = checkpoint['monitor_best']
         #print(checkpoint['state_dict'].keys())
-        self.model.load_state_dict(checkpoint['state_dict'])
+        if 'state_dict' in checkpoint:
+            self.model.load_state_dict(checkpoint['state_dict'])
+        else:
+            self.model = checkpoint['model']
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         if self.with_cuda:
             for state in self.optimizer.state.values():

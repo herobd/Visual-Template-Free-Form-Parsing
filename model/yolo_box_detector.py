@@ -160,7 +160,6 @@ class YoloBoxDetector(BaseModel):
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
         with open(config['anchors_file']) as f:
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
-        #TODO Rescale anchors?
         self.numAnchors = len(self.anchors)
         self.predPointCount = config['number_of_point_types']
         self.predPixelCount = config['number_of_pixel_types']
@@ -202,11 +201,11 @@ class YoloBoxDetector(BaseModel):
 
     def forward(self, img):
         #import pdb; pdb.set_trace()
-        #y = self.cnn(img)
-        levels=[img]
-        for module in self.net_down_modules:
-            levels.append(module(levels[-1]))
-        y=levels[-1]
+        y = self._hack_down(img)
+        #levels=[img]
+        #for module in self.net_down_modules:
+        #    levels.append(module(levels[-1]))
+        #y=levels[-1]
 
 
         #priors_0 = Variable(torch.arange(0,y.size(2)).type_as(img.data), requires_grad=False)[None,:,None]

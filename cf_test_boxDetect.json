@@ -1,0 +1,80 @@
+{
+    "name": "test_boxDetect",
+    "cuda": true,
+    "gpu": 0,
+    "override": true,
+    "data_loader": {
+        "data_set_name": "FormsBoxDetect",
+        "data_dir": "/home/ubuntu/brian/data/testF",
+        "batch_size": 1,
+        "shuffle": true,
+        "num_workers": 1,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.52,0.52],
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "cache_resized_images": true,
+        "only_types": {
+            "boxes":true
+        }
+
+
+    },
+    "validation": {
+        "shuffle": false,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.52,0.52],
+        "only_types": {
+            "boxes":true
+        },
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "batch_size":1
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.000001,
+        "weight_decay": 0
+    },
+    "loss": {
+        "box":"box_alignment_loss"
+    },
+    "loss_params": {
+        "box": {
+            "ignore_thresh": 9.0,
+            "use_point_loss": false
+        }
+    },
+    "loss_weights":{"box":1.0},
+    "metrics": [],
+    "trainer": {
+        "class": "BoxDetectTrainer",
+        "iterations": 40000,
+        "save_dir": "saved/",
+        "val_step": 1000,
+        "save_step": 2000,
+        "log_step": 100,
+        "verbosity": 1,
+        "monitor": "loss",
+        "monitor_mode": "none"
+    },
+    "arch": "YoloBoxDetector", 
+    "model": {
+        "color":false,
+        "number_of_box_types": 2,
+        "number_of_point_types": 0,
+        "number_of_pixel_types": 0,
+        "norm_type": "group_norm",
+        "down_layers_cfg": [1,"C64", "M", "R64", "R64", "D128", "R128", "R128", "D256", "R256", "R256", "D512", "R512", "R512", "D1024", "R1024", "R1024", "R1024", "ReLU"],
+        "up_layers_cfg":[],
+        "anchors_file": "anchors_1.json"
+    }
+}

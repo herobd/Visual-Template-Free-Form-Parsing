@@ -6,14 +6,14 @@ import json
 #import skimage.transform as sktransform
 import os
 import math
-from utils.crop_transform import CropTransform
+from utils.crop_transform import CropBoxTransform
 from utils import augmentation
 from collections import defaultdict
 import timeit
 
 import cv2
 
-IAIN_CATCH=['193','194','197','200']
+IAIN_CATCH=[]#['193','194','197','200']
 ONE_DONE=[]
 
 def polyIntersect(poly1, poly2):
@@ -95,6 +95,8 @@ def collate(batch):
     point_label_sizes = defaultdict(list)
     largest_line_label = {}
     largest_point_label = {}
+    bb_sizes=[]
+    bb_dim=None
     for b in batch:
         if b is None:
             continue
@@ -104,11 +106,12 @@ def collate(batch):
         pixel_gt.append(b['pixel_gt'])
         max_h = max(max_h,b["img"].size(2))
         max_w = max(max_w,b["img"].size(3))
-        for name,gt in b['line_gt'].items():
-            if gt is None:
-                line_label_sizes[name].append(0)
-            else:
-                line_label_sizes[name].append(gt.size(1)) 
+        gt = b['bb_gt']
+        if gt is None:
+            bb_sizes.append(0)
+        else:
+            bb_sizes.append(gt.size(1)) 
+            bb_dim=gt.size(2)
         for name,gt in b['point_gt'].items():
             if gt is None:
                 point_label_sizes[name].append(0)
@@ -117,8 +120,7 @@ def collate(batch):
     if len(imgs) == 0:
         return None
 
-    for name in b['line_gt']:
-        largest_line_label[name] = max(line_label_sizes[name])
+    largest_bb_count = max(bb_sizes)
     for name in b['point_gt']:
         largest_point_label[name] = max(point_label_sizes[name])
 
@@ -154,21 +156,15 @@ def collate(batch):
 
             
 
-    line_labels = {}
-    for name,count in largest_line_label.items():
-        if count != 0:
-            line_labels[name] = torch.zeros(batch_size, count, 4)
-        else:
-            line_labels[name]=None
+    if largest_bb_count != 0:
+        bbs = torch.zeros(batch_size, largest_bb_count, bb_dim)
+    else:
+        bbs=None
     for i, b in enumerate(batch):
-        for name,gt in b['line_gt'].items():
-            if line_label_sizes[name][i] == 0:
-                continue
-            #if gt is None:
-            #    ##print('n {}, {}: {}    None'.format(i, name, line_label_sizes[name][i]))
-            #else:
-            #    ##print('n {}, {}: {}    {}'.format(i, name, line_label_sizes[name][i],gt.size()))
-            line_labels[name][i, :line_label_sizes[name][i]] = gt
+        gt = b['bb_gt']
+        if bb_sizes[i] == 0:
+            continue
+        bbs[i, :bb_sizes[i]] = gt
 
     point_labels = {}
     for name,count in largest_point_label.items():
@@ -195,8 +191,8 @@ def collate(batch):
     ##print('collate: '+str(timeit.default_timer()-tic))
     return {
         'img': imgs,
-        'line_gt': line_labels,
-        "line_label_sizes": line_label_sizes,
+        'bb_gt': bbs,
+        "bb_sizes": bb_sizes,
         'point_gt': point_labels,
         "point_label_sizes": point_label_sizes,
         'pixel_gt': pixel_gt,
@@ -205,7 +201,7 @@ def collate(batch):
     }
 
 
-class FormsDetect(torch.utils.data.Dataset):
+class FormsBoxDetect(torch.utils.data.Dataset):
     """
     Class for reading forms dataset and creating starting and ending gt
     """
@@ -219,7 +215,7 @@ class FormsDetect(torch.utils.data.Dataset):
         self.cropToPage=config['crop_to_page']
         #patchSize=config['patch_size']
         if 'crop_params' in config:
-            self.transform = CropTransform(config['crop_params'])
+            self.transform = CropBoxTransform(config['crop_params'])
         else:
             self.transform = None
         self.rescale_range = config['rescale_range']
@@ -239,15 +235,18 @@ class FormsDetect(torch.utils.data.Dataset):
                     os.mkdir(self.cache_path)
         else:
             self.cache_resized = False
-        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 2200000
+        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 220000000
         if 'only_types' in config:
             self.only_types = config['only_types']
         else:
             self.only_types=None
+        #print( self.only_types)
         if 'swap_circle' in config:
             self.swapCircle = config['swap_circle']
         else:
             self.swapCircle = False
+        self.color = config['color'] if 'color' in config else True
+        self.rotate = config['rotation'] if 'rotation' in config else True
 
         if images is not None:
             self.images=images
@@ -261,21 +260,21 @@ class FormsDetect(torch.utils.data.Dataset):
             self.images=[]
             for groupName, imageNames in groupsToUse.items():
                 #print('{} {}'.format(groupName, imageNames))
-                oneonly=False
-                if groupName in IAIN_CATCH:
-                    if groupName in ONE_DONE:
-                        oneonly=True
-                        with open(os.path.join(dirPath,'groups',groupName,'template'+groupName+'.json')) as f:
-                            T_annotations = json.loads(f.read())
-                    else:
-                        print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
-                        continue
+                #oneonly=False
+                #if groupName in IAIN_CATCH:
+                #    if groupName in ONE_DONE:
+                #        oneonly=True
+                #        with open(os.path.join(dirPath,'groups',groupName,'template'+groupName+'.json')) as f:
+                #            T_annotations = json.loads(f.read())
+                #    else:
+                #        print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
+                #        continue
                 for imageName in imageNames:
-                    if oneonly and T_annotations['imageFilename']!=imageName:
-                        #print('skipped {} {}'.format(imageName,groupName))
-                        continue
-                    elif oneonly:
-                        print('only {} from {}'.format(imageName,groupName))
+                    #if oneonly and T_annotations['imageFilename']!=imageName:
+                    #    #print('skipped {} {}'.format(imageName,groupName))
+                    #    continue
+                    #elif oneonly:
+                    #    print('only {} from {}'.format(imageName,groupName))
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
                     if self.cache_resized:
                         path = os.path.join(self.cache_path,imageName)
@@ -289,6 +288,9 @@ class FormsDetect(torch.utils.data.Dataset):
                             rescale = self.rescale_range[1]
                             if not os.path.exists(path):
                                 org_img = cv2.imread(org_path)
+                                if org_img is None:
+                                    print('WARNING, could not read {}'.format(org_img))
+                                    continue
                                 #target_dim1 = self.rescale_range[1]
                                 #target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
                                 #resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
@@ -306,8 +308,10 @@ class FormsDetect(torch.utils.data.Dataset):
 
                             #target_dim1 = self.rescale_range[1]
                             #rescale = target_dim1/float(imW)
-
+                        #print('addint {}'.format(imageName))
                         self.images.append({'id':imageName, 'imagePath':path, 'annotationPath':jsonPath, 'rescaled':rescale, 'imageName':imageName[:imageName.rfind('.')]})
+                    #else:
+                    #    print('couldnt find {}'.format(jsonPath))
                             
                         # with open(path+'.json') as f:
                         #    annotations = json.loads(f.read())
@@ -324,6 +328,7 @@ class FormsDetect(torch.utils.data.Dataset):
             self.no_print_fields = config['no_print_fields']
         else:
             self.no_print_fields = False
+        self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
         
 
 
@@ -352,7 +357,7 @@ class FormsDetect(torch.utils.data.Dataset):
                 del annotations['fieldBBs'][i]
 
         ##tic=timeit.default_timer()
-        np_img = cv2.imread(imagePath)#/255.0
+        np_img = cv2.imread(imagePath, 1 if self.color else 0)#/255.0
         ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         ##print('       channels : {}'.format(len(np_img.shape)))
         if self.cropToPage:
@@ -365,17 +370,15 @@ class FormsDetect(torch.utils.data.Dataset):
         #target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
         s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
         partial_rescale = s/rescaled
-        if self.transform is None: #we're doing the whole image
-            #this is a check to be sure we don't send too big images through
-            pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
-            if pixel_count > self.pixel_count_thresh:
-                partial_rescale = self.pixel_count_thresh/pixel_count
-                s = rescaled*partial_rescale
-                print('exceed thresh: {}, new scale {}'.format(pixel_count,s))
-        #s = target_dim1 / float(np_img.shape[1])
-        #s *= rescaled
-        #print(s)
-        #target_dim0 = int(np_img.shape[0]/float(np_img.shape[1]) * target_dim1)
+        #if self.transform is None: #we're doing the whole image
+        #    #this is a check to be sure we don't send too big images through
+        #    pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
+        #    if pixel_count > self.pixel_count_thresh:
+        #        partial_rescale = self.pixel_count_thresh/pixel_count
+        #        s = rescaled*partial_rescale
+        #        print('{} exceed thresh: {}, new scale {}'.format(imageName,pixel_count,s))
+        
+        
         ##tic=timeit.default_timer()
         #np_img = cv2.resize(np_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
         np_img = cv2.resize(np_img,(0,0),
@@ -385,14 +388,21 @@ class FormsDetect(torch.utils.data.Dataset):
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
         ##tic=timeit.default_timer()
-        text_start_gt, text_end_gt = self.getStartEndGT(annotations['textBBs'],s)
-        field_start_gt, field_end_gt = self.getStartEndGT(annotations['fieldBBs'],s,fields=True)
-        table_points, table_pixels = self.getTables(
-                annotations['fieldBBs'],
-                s, 
-                np_img.shape[0], 
-                np_img.shape[1],
-                annotations['samePairs'])
+        text_bbs = self.getBBGT(annotations['textBBs'],s)
+        field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
+        bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
+        try:
+            table_points, table_pixels = self.getTables(
+                    annotations['fieldBBs'],
+                    s, 
+                    np_img.shape[0], 
+                    np_img.shape[1],
+                    annotations['samePairs'])
+        except Exception as inst:
+            table_points=None
+            table_pixels=None
+            print(inst)
+            print('Table error on: '+annotationPath)
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
         pixel_gt = table_pixels
@@ -401,57 +411,54 @@ class FormsDetect(torch.utils.data.Dataset):
         if self.transform is not None:
             out = self.transform({
                 "img": np_img,
-                "line_gt": {
-                        "text_start_gt": text_start_gt,
-                        "text_end_gt": text_end_gt,
-                        "field_start_gt": field_start_gt,
-                        "field_end_gt": field_end_gt
-                        },
+                "bb_gt": bbs,
                 "point_gt": {
                         "table_points": table_points
                         },
                 "pixel_gt": pixel_gt
             })
             np_img = out['img']
-            text_start_gt = out['line_gt']['text_start_gt']
-            text_end_gt = out['line_gt']['text_end_gt']
-            field_start_gt = out['line_gt']['field_start_gt']
-            field_end_gt = out['line_gt']['field_end_gt']
+            bbs = out['bb_gt']
             table_points = out['point_gt']['table_points']
             pixel_gt = out['pixel_gt']
 
             ##tic=timeit.default_timer()
-            np_img = augmentation.apply_random_color_rotation(np_img)
-            np_img = augmentation.apply_tensmeyer_brightness(np_img)
+            if len(np_img.shape)==3:
+                np_img = augmentation.apply_random_color_rotation(np_img)
+                np_img = augmentation.apply_tensmeyer_brightness(np_img)
+            else:
+                np_img = augmentation.apply_tensmeyer_brightness(np_img[:,:,None])
             ##print('augmentation: {}'.format(timeit.default_timer()-tic))
+        elif len(np_img.shape)==2:
+            np_img=np_img[:,:,None]
         ##print('transfrm: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
 
-
+        #if len(np_img.shape)==2:
+        #    img=np_img[None,None,:,:] #add "color" channel and batch
+        #else:
         img = np_img.transpose([2,0,1])[None,...] #from [row,col,color] to [batch,color,row,col]
         img = img.astype(np.float32)
         img = torch.from_numpy(img)
         img = 1.0 - img / 128.0 #ideally the median value would be 0
         #img = 1.0 - img / 255.0 #this way ink is on, page is off
-        pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
-        pixel_gt = torch.from_numpy(pixel_gt)
+        if not self.color and img.size(1)!=1:
+            import pdb; pdb.set_trace()
+        if pixel_gt is not None:
+            pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
+            pixel_gt = torch.from_numpy(pixel_gt)
         
-        text_start_gt = None if text_start_gt.shape[1] == 0 else torch.from_numpy(text_start_gt)
-        text_end_gt = None if text_end_gt.shape[1] == 0 else torch.from_numpy(text_end_gt)
-        field_start_gt = None if field_start_gt.shape[1] == 0 else torch.from_numpy(field_start_gt)
-        field_end_gt = None if field_end_gt.shape[1] == 0 else torch.from_numpy(field_end_gt)
+        #import pdb; pdb.set_trace()
+        #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
+        bbs = self.convertBBs(bbs)
 
-        table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
+        if table_points is not None:
+            table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
 
         ##print('__getitem__: '+str(timeit.default_timer()-ticFull))
         if self.only_types is None:
             return {
                 "img": img,
-                "line_gt": {
-                        "text_start_gt": text_start_gt,
-                        "text_end_gt": text_end_gt,
-                        "field_start_gt": field_start_gt,
-                        "field_end_gt": field_end_gt
-                        },
+                "bb_gt": bbs,
                 "point_gt": {
                         "table_points":table_points
                         },
@@ -460,22 +467,8 @@ class FormsDetect(torch.utils.data.Dataset):
                 "scale": s
                 }
         else:
-            line_gt={}
-            if 'line' in self.only_types:
-                for ent in self.only_types['line']:
-                    if type(ent)==list:
-                        toComb=[]
-                        for inst in ent[1:]:
-                            einst = eval(inst)
-                            if einst is not None:
-                                toComb.append(einst)
-                        if len(toComb)>0:
-                            comb = torch.cat(toComb,dim=1)
-                            line_gt[ent[0]]=comb
-                        else:
-                            line_gt[ent[0]]=None
-                    else:
-                        line_gt[ent]=eval(ent)
+            if 'boxes' not in self.only_types or not self.only_types['boxes']:
+                bbs=None
             point_gt={}
             if 'point' in self.only_types:
                 for ent in self.only_types['point']:
@@ -506,7 +499,7 @@ class FormsDetect(torch.utils.data.Dataset):
 
             return {
                 "img": img,
-                "line_gt": line_gt,
+                "bb_gt": bbs,
                 "point_gt": point_gt,
                 "pixel_gt": pixel_gtR,
                 "imgName": imageName,
@@ -515,7 +508,7 @@ class FormsDetect(torch.utils.data.Dataset):
 
 
 
-    def getStartEndGT(self,bbs,s, fields=False):
+    def getBBGT(self,bbs,s, fields=False):
 
         useBBs=[]
         for bb in bbs:
@@ -526,10 +519,10 @@ class FormsDetect(torch.utils.data.Dataset):
                     bb['type'] == 'fieldCol' or
                     bb['type'] == 'fieldRegion' )):
                 continue
+            #TODO connect things that blanks bridged
             else:
                 useBBs.append(bb)
-        start_gt = np.empty((1,len(useBBs), 4), dtype=np.float32)
-        end_gt = np.empty((1,len(useBBs), 4), dtype=np.float32)
+        bbs = np.empty((1,len(useBBs), 8+8+2), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
         j=0
         for bb in useBBs:
             tlX = bb['poly_points'][0][0]
@@ -541,38 +534,105 @@ class FormsDetect(torch.utils.data.Dataset):
             blX = bb['poly_points'][3][0]
             blY = bb['poly_points'][3][1]
 
-            lX = (tlX+blX)/2.0
-            lY = (tlY+blY)/2.0
-            rX = (trX+brX)/2.0
-            rY = (trY+brY)/2.0
-            d=math.sqrt((lX-rX)**2 + (lY-rY)**2)
-
-            hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
-            hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
-            h = (hl+hr)/2.0
-
-            tX = lX + h*-(rY-lY)/d
-            tY = lY + h*(rX-lX)/d
-            bX = lX - h*-(rY-lY)/d
-            bY = lY - h*(rX-lX)/d
-            start_gt[:,j,0] = tX*s
-            start_gt[:,j,1] = tY*s
-            start_gt[:,j,2] = bX*s
-            start_gt[:,j,3] = bY*s
-
-            etX =tX + rX-lX
-            etY =tY + rY-lY
-            ebX =bX + rX-lX
-            ebY =bY + rY-lY
-            end_gt[:,j,0] = etX*s
-            end_gt[:,j,1] = etY*s
-            end_gt[:,j,2] = ebX*s
-            end_gt[:,j,3] = ebY*s
-            #if j<10:
-            #    ##print('f {},{}   {},{}'.format(tX,tY,bX,bY))
-            #    ##print('s {},{}   {},{}'.format(start_gt[:,j,0],start_gt[:,j,1],start_gt[:,j,2],start_gt[:,j,3]))
+            bbs[:,j,0]=tlX*s
+            bbs[:,j,1]=tlY*s
+            bbs[:,j,2]=trX*s
+            bbs[:,j,3]=trY*s
+            bbs[:,j,4]=brX*s
+            bbs[:,j,5]=brY*s
+            bbs[:,j,6]=blX*s
+            bbs[:,j,7]=blY*s
+            #we add these for conveince to crop BBs within window
+            bbs[:,j,8]=s*(tlX+blX)/2
+            bbs[:,j,9]=s*(tlY+blY)/2
+            bbs[:,j,10]=s*(trX+brX)/2
+            bbs[:,j,11]=s*(trY+brY)/2
+            bbs[:,j,12]=s*(tlX+trX)/2
+            bbs[:,j,13]=s*(tlY+trY)/2
+            bbs[:,j,14]=s*(brX+blX)/2
+            bbs[:,j,15]=s*(brY+blY)/2
+            bbs[:,j,16]=1 if not fields else 0
+            bbs[:,j,17]=1 if fields else 0
             j+=1
-        return start_gt, end_gt
+        return bbs
+
+    def convertBBs(self,bbs):
+        if bbs.shape[1]==0:
+            return None
+        new_bbs = np.empty((1,bbs.shape[1], 5+8+2), dtype=np.float32) #5 params, 8 points (used in loss), 2 classes
+        
+        tlX = bbs[:,:,0]
+        tlY = bbs[:,:,1]
+        trX = bbs[:,:,2]
+        trY = bbs[:,:,3]
+        brX = bbs[:,:,4]
+        brY = bbs[:,:,5]
+        blX = bbs[:,:,6]
+        blY = bbs[:,:,7]
+
+        if not self.rotate:
+            tlX = np.minimum.reduce((tlX,blX,trX,brX))
+            tlY = np.minimum.reduce((tlY,trY,blY,brY))
+            trX = np.maximum.reduce((tlX,blX,trX,brX))
+            trY = np.minimum.reduce((tlY,trY,blY,brY))
+            brX = np.maximum.reduce((tlX,blX,trX,brX))
+            brY = np.maximum.reduce((tlY,trY,blY,brY))
+            blX = np.minimum.reduce((tlX,blX,trX,brX))
+            blY = np.maximum.reduce((tlY,trY,blY,brY))
+
+        lX = (tlX+blX)/2.0
+        lY = (tlY+blY)/2.0
+        rX = (trX+brX)/2.0
+        rY = (trY+brY)/2.0
+        d=np.sqrt((lX-rX)**2 + (lY-rY)**2)
+
+        hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
+        hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
+        h = (hl+hr)/2.0
+
+        #tX = lX + h*-(rY-lY)/d
+        #tY = lY + h*(rX-lX)/d
+        #bX = lX - h*-(rY-lY)/d
+        #bY = lY - h*(rX-lX)/d
+
+        #etX =tX + rX-lX
+        #etY =tY + rY-lY
+        #ebX =bX + rX-lX
+        #ebY =bY + rY-lY
+
+        cX = (lX+rX)/2.0
+        cY = (lY+rY)/2.0
+        rot = np.arctan2((rY-lY),rX-lX)
+        height = np.abs(h)    #this is half height
+        width = d/2.0 #and half width
+
+        topX = (tlX+trX)/2.0
+        topY = (tlY+trY)/2.0
+        botX = (blX+brX)/2.0
+        botY = (blY+brY)/2.0
+        leftX = lX
+        leftY = lY
+        rightX = rX
+        rightY = rY
+
+        new_bbs[:,:,0]=cX
+        new_bbs[:,:,1]=cY
+        new_bbs[:,:,2]=rot
+        new_bbs[:,:,3]=height
+        new_bbs[:,:,4]=width
+        new_bbs[:,:,5]=leftX
+        new_bbs[:,:,6]=leftY
+        new_bbs[:,:,7]=rightX
+        new_bbs[:,:,8]=rightY
+        new_bbs[:,:,9]=topX
+        new_bbs[:,:,10]=topY
+        new_bbs[:,:,11]=botX
+        new_bbs[:,:,12]=botY
+        new_bbs[:,:,13]=bbs[:,:,16]
+        new_bbs[:,:,14]=bbs[:,:,17]
+
+
+        return torch.from_numpy(new_bbs)
 
     def getTables(self,bbs,s, sH, sW,selfPairs):
         #find which rows and cols are part of the same tables
@@ -799,8 +859,7 @@ class FormsDetect(torch.utils.data.Dataset):
                 #print(pointsU)
                 #print(pointsL)
                 if len(pointsU) != len(pointsL):
-                    import pdb; pdb.set_trace()
-                assert(len(pointsU)==len(pointsL))
+                    raise Exception(i,pointsU,pointsL)
                 #average the upper and lower points (and scale them)
                 for pi in range(len(pointsU)):
                     intersectionPoints.append(s*(pointsU[pi]+pointsL[pi])/2.0)
@@ -859,6 +918,127 @@ class FormsDetect(torch.utils.data.Dataset):
             j+=1
             
         return intersectionPointsM, pixelMap
+
+    def cluster(self,k,sample_count,outPath):
+        pointsAndRects=[]
+        for inst in self.images:
+            annotationPath = inst['annotationPath']
+            #rescaled = inst['rescaled']
+            with open(annotationPath) as annFile:
+                annotations = json.loads(annFile.read())
+            for i in range(sample_count):
+                if i==0:
+                    s = (self.rescale_range[0]+self.rescale_range[1])/2
+                else:
+                    s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
+                #partial_rescale = s/rescaled
+                text_bbs = self.getBBGT(annotations['textBBs'],s)
+                field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
+                bbs = np.concatenate([text_bbs,field_bbs],axis=1)
+                bbs = self.convertBBs(bbs).numpy()[0]
+                cos_rot = np.cos(bbs[:,2])
+                sin_rot = np.sin(bbs[:,2])
+                p_left_x = -cos_rot*bbs[:,4]
+                p_left_y = -sin_rot*bbs[:,4]
+                p_right_x = cos_rot*bbs[:,4]
+                p_right_y = sin_rot*bbs[:,4]
+                p_top_x = sin_rot*bbs[:,3]
+                p_top_y = -cos_rot*bbs[:,3]
+                p_bot_x = -sin_rot*bbs[:,3]
+                p_bot_y = cos_rot*bbs[:,3]
+                points = np.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],axis=1)
+                pointsAndRects.append(np.concatenate([points,bbs[:,:5]],axis=1))
+        pointsAndRects = np.concatenate(pointsAndRects,axis=0)
+        #all_points = pointsAndRects[:,0:8]
+        #all_heights = pointsAndRects[:,11]
+        #all_widths = pointsAndRects[:,12]
+        
+        bestDistsFromMean=None
+        for attempt in range(20):
+            randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
+            means=pointsAndRects[randomIndexes]
+            #pointsAndRects [0:p_left_x, 1:p_left_y,2:p_right_x,3:p_right_y,4:p_top_x,5:p_top_y,6:p_bot_x,7:p_bot_y, 8:xc, 9:yc, 10:rot, 11:h, 12:w
+            prevDistsFromMean=None
+            for iteration in range(1000000): #intended to break out
+                print('attempt:{}, bestDistsFromMean:{}, iteration:{}, bestDistsFromMean:{}'.format(attempt,bestDistsFromMean,iteration,prevDistsFromMean), end='\r')
+                #means_points = means[:,0:8]
+                #means_heights = means[:,11]
+                #means_widths = means[:,12]
+                # = groups = assignGroups(means,pointsAndRects)
+                expanded_all_points = pointsAndRects[:,None,0:8]
+                expanded_all_heights = pointsAndRects[:,None,11]
+                expanded_all_widths = pointsAndRects[:,None,12]
+
+                expanded_means_points = means[None,:,0:8]
+                expanded_means_heights = means[None,:,11]
+                expanded_means_widths = means[None,:,12]
+
+                #expanded_all_points = expanded_all_points.expand(all_points.shape[0], all_points.shape[1], means_points.shape[1], all_points.shape[2])
+                expanded_all_points = np.tile(expanded_all_points,(1,means.shape[0],1))
+                expanded_all_heights = np.tile(expanded_all_heights,(1,means.shape[0]))
+                expanded_all_widths = np.tile(expanded_all_widths,(1,means.shape[0]))
+                #expanded_means_points = expanded_means_points.expand(means_points.shape[0], all_points.shape[0], means_points.shape[0], means_points.shape[2])
+                expanded_means_points = np.tile(expanded_means_points,(pointsAndRects.shape[0],1,1))
+                expanded_means_heights = np.tile(expanded_means_heights,(pointsAndRects.shape[0],1))
+                expanded_means_widths = np.tile(expanded_means_widths,(pointsAndRects.shape[0],1))
+
+                point_deltas = (expanded_all_points - expanded_means_points)
+                #avg_heights = ((expanded_means_heights+expanded_all_heights)/2)
+                #avg_widths = ((expanded_means_widths+expanded_all_widths)/2)
+                avg_heights=avg_widths = (expanded_means_heights+expanded_all_heights+expanded_means_widths+expanded_all_widths)/4
+                #print point_deltas
+
+                normed_difference = (
+                    np.linalg.norm(point_deltas[:,:,0:2],2,2)/avg_widths +
+                    np.linalg.norm(point_deltas[:,:,2:4],2,2)/avg_widths +
+                    np.linalg.norm(point_deltas[:,:,4:6],2,2)/avg_heights +
+                    np.linalg.norm(point_deltas[:,:,6:8],2,2)/avg_heights
+                    )**2
+                #print normed_difference
+                #import pdb; pdb.set_trace()
+
+                groups = normed_difference.argmin(1) #this should list the mean (index) for each element of all
+                distsFromMean = normed_difference.min(1).mean()
+                if prevDistsFromMean is not None and distsFromMean >= prevDistsFromMean:
+                    break
+                prevDistsFromMean = distsFromMean
+
+                #means = computeMeans(groups,pointsAndRects)
+                #means = np.zeros(k,13)
+                for ki in range(k):
+                    selected = (groups==ki)[:,None]
+                    numSel = float(selected.sum())
+                    if (numSel==0):
+                        break
+                    means[ki,:] = (pointsAndRects*np.tile(selected,(1,13))).sum(0)/numSel
+            if bestDistsFromMean is None or distsFromMean<bestDistsFromMean:
+                bestDistsFromMean = distsFromMean
+                cluster_centers=means
+        cluster_centers=means
+        draw = np.zeros([600,600,3],dtype=np.float)
+        toWrite = []
+        for ki in range(k):
+            color = np.random.uniform(0.2,1,3).tolist()
+            #d=math.sqrt(mean[ki,11]**2 + mean[ki,12]**2)
+            #theta = math.atan2(mean[ki,11],mean[ki,12]) + mean[ki,10]
+            h=cluster_centers[ki,11]
+            w=cluster_centers[ki,12]
+            rot=cluster_centers[ki,10]
+            toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item()})
+            tr = ( int(math.cos(rot)*w-math.sin(rot)*h)+300,   int(math.sin(rot)*w+math.cos(rot)*h)+300 )
+            tl = ( int(math.cos(rot)*-w-math.sin(rot)*h)+300,  int(math.sin(rot)*-w+math.cos(rot)*h)+300 )
+            br = ( int(math.cos(rot)*w-math.sin(rot)*-h)+300,  int(math.sin(rot)*w+math.cos(rot)*-h)+300 )
+            bl = ( int(math.cos(rot)*-w-math.sin(rot)*-h)+300, int(math.sin(rot)*-w+math.cos(rot)*-h)+300 )
+            
+            cv2.line(draw,tl,tr,color)
+            cv2.line(draw,tr,br,color)
+            cv2.line(draw,br,bl,color)
+            cv2.line(draw,bl,tl,color,2)
+        print(toWrite)
+        with open(outPath,'w') as out:
+            out.write(json.dumps(toWrite))
+        cv2.imshow('clusters',draw)
+        cv2.waitKey()
 
 def getWidthFromBB(bb):
     return (np.linalg.norm(bb[0]-bb[1]) + np.linalg.norm(bb[3]-bb[2]))/2
@@ -997,3 +1177,4 @@ def getIntersectsCols(line,cols,startInd,threshLine_low=10,threshLine_high=10,th
         return iPoints,i,tryBefore
     else:
         return getIntersectsCols(line,cols,startInd,threshLine_low,threshLine_high,threshLeft,threshRight,failed+1)
+

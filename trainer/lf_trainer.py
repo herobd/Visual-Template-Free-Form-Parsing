@@ -29,10 +29,10 @@ class LFTrainer(Trainer):
         #tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
         try:
-            data, positions_xyxy, positions_xyrs, step_count, forwards = self._to_tensor(*self.data_loader_iter.next())
+            data, positions_xyxy, positions_xyrs, step_count, forwards, detected_end_points = self._to_tensor(*self.data_loader_iter.next())
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
-            data, positions_xyxy, positions_xyrs, step_count, forwards = self._to_tensor(*self.data_loader_iter.next())
+            data, positions_xyxy, positions_xyrs, step_count, forwards, detected_end_points = self._to_tensor(*self.data_loader_iter.next())
         #toc=timeit.default_timer()
         #print('data: '+str(toc-tic))
 
@@ -59,9 +59,11 @@ class LFTrainer(Trainer):
                 detected_end_points=detected_end_points)
         pos_loss = self.loss['pos'](output, positions_xyxy)
         if len(output_end)>0:
-            end_loss = self.loss['end'](output_end,output,positions_xyrs[:,-1,0:2])
+            end_loss = self.end_loss_weight*self.loss['end'](output_end,output,positions_xyrs[-1][:,0:2])
+        else:
+            end_loss=0
         #loss = self.loss(outputrs, positions_xyrs)
-        loss = pos_loss + self.end_loss_weight*end_loss
+        loss = pos_loss + end_loss
         loss.backward()
         self.optimizer.step()
 
@@ -81,8 +83,8 @@ class LFTrainer(Trainer):
 
         log = {
             'loss': loss,
-            'pos_loss': pos_loss,
-            'end_loss': end_loss,
+            'pos_loss': pos_loss.item(),
+            'end_loss': end_loss.item(),
             'metrics': metrics
         }
 
@@ -101,19 +103,36 @@ class LFTrainer(Trainer):
         """
         self.model.eval()
         total_val_loss = 0
+        total_pos_loss = 0
+        total_end_loss = 0
         total_val_metrics = np.zeros(len(self.metrics))
         with torch.no_grad():
             for batch_idx, inst in enumerate(self.valid_data_loader):
-                data, positions_xyxy, positions_xyrs, step_count = self._to_tensor(*inst)
+                data, positions_xyxy, positions_xyrs, step_count, forwards, detected_end_points = self._to_tensor(*inst)
 
-                output,outputrs = self.model(data,positions_xyrs[:1],steps=step_count, skip_grid=True)
-                loss = self.loss(output, positions_xyxy)
+                output,outputrs,output_end = self.model(
+                        data,
+                        positions_xyrs[0],
+                        forwards,
+                        steps=step_count,
+                        skip_grid=True,
+                        detected_end_points=detected_end_points)
+                pos_loss = self.loss['pos'](output, positions_xyxy)
+                if len(output_end)>0:
+                    end_loss = self.end_loss_weight * self.loss['end'](output_end,output,positions_xyrs[-1][:,0:2])
+                else:
+                    end_loss=0
+                loss = pos_loss + end_loss
                 #loss = self.loss(outputrs, positions_xyrs)
 
                 total_val_loss += loss.item()
+                total_pos_loss += pos_loss.item()
+                total_end_loss += end_loss.item()
                 total_val_metrics += self._eval_metrics(output, positions_xyxy)
 
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
+            'val_pos_loss': total_pos_loss / len(self.valid_data_loader),
+            'val_end_loss': total_end_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist()
         }

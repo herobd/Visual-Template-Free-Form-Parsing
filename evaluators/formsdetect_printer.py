@@ -9,119 +9,6 @@ import math
 from model.loss import *
 from collections import defaultdict
 
-def AI2D_printer(config, instance, model, gpu, metrics, outDir=None, startIndex=None):
-    #for key, value in metrics.items():
-    #    print(key+': '+value)
-    def __eval_metrics(data,target):
-        acc_metrics = np.zeros((output.shape[0],len(metrics)))
-        for ind in range(output.shape[0]):
-            for i, metric in enumerate(metrics):
-                acc_metrics[ind,i] += metric(output[ind:ind+1], target[ind:ind+1])
-        return acc_metrics
-
-    def __to_tensor(data, gpu):
-        if type(data) is np.ndarray:
-            data = torch.FloatTensor(data.astype(np.float32))
-        elif type(data) is torch.Tensor:
-            data = data.type(torch.FloatTensor)
-        if gpu is not None:
-            data = data.to(gpu)
-        return data
-
-    data, target = instance
-    dataT = __to_tensor(data,gpu)
-    output = model(dataT)
-
-    data = data.cpu().data.numpy()
-    output = output.cpu().data.numpy()
-    target = target.data.numpy()
-    metricsOut = __eval_metrics(output,target)
-    if outDir is None:
-        return metricsOut
-
-    batchSize = data.shape[0]
-    for i in range(batchSize):
-        image = (1-np.transpose(data[i][0:3,:,:],(1,2,0)))/2.0
-        queryMask = data[i][3,:,:]
-
-        grayIm = color.rgb2grey(image)
-
-        invQuery = 1-queryMask
-        invTarget = 1-target[i]
-        invOutput = output[i]<=0.0 #assume not sigmoided
-
-
-        highlightIm = np.stack([grayIm*invOutput, grayIm*invTarget, grayIm*invQuery],axis=2)
-
-        saveName = '{:06}'.format(startIndex+i)
-        for j in range(metricsOut.shape[1]):
-            saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
-        saveName+='.png'
-        io.imsave(os.path.join(outDir,saveName),highlightIm)
-        
-    return metricsOut
-
-def FormsPair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
-    return AI2D_printer(config,instance, model, gpu, metrics, outDir, startIndex)
-def Cancer_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
-    #for key, value in metrics.items():
-    #    print(key+': '+value)
-    def __eval_metrics(data,target):
-        acc_metrics = np.zeros((output.shape[0],len(metrics)))
-        for ind in range(output.shape[0]):
-            for i, metric in enumerate(metrics):
-                acc_metrics[ind,i] += metric(output[ind:ind+1], target[ind:ind+1])
-        return acc_metrics
-
-    def __to_tensor(data, gpu):
-        if type(data) is np.ndarray:
-            data = torch.FloatTensor(data.astype(np.float32))
-        elif type(data) is torch.Tensor:
-            data = data.type(torch.FloatTensor)
-        if gpu is not None:
-            data = data.to(gpu)
-        return data
-
-    data, target = instance
-    dataT = __to_tensor(data,gpu)
-    output = model(dataT)
-
-    data = data.cpu().data.numpy()
-    output = output.cpu().data.numpy()
-    target = target.data.numpy()
-    metricsOut = __eval_metrics(output,target)
-    if outDir is None:
-        return metricsOut
-
-    batchSize = data.shape[0]
-    for i in range(batchSize):
-        image = np.transpose(data[i],(1,2,0))
-
-        grayIm = color.rgb2grey(image)
-
-        #invQuery = 1-queryMask
-        invTarget = 1-target[i]
-        invOutput = output[i]<=0.0 #assume not sigmoided
-
-
-        highlightIm = np.stack([grayIm*invOutput, grayIm*invTarget, grayIm],axis=2)
-
-        #sideBySide = np.empty(image.shape[0],image.shape[1]*2)
-        #sideBySide[:,0:image.shape[1]]=1-invOutput
-        #sideBySid
-        colorOutput = np.stack([1-invOutput,1-invOutput,1-invOutput],axis=2)
-        sideBySide = np.concatenate([colorOutput,image],axis=1)
-
-        saveName = '{:06}'.format(startIndex+i)
-        for j in range(metricsOut.shape[1]):
-            saveName+='_iou:{0:.3f}'.format(metricsOut[i,j])
-        saveSepName = saveName+'_sep.png'
-        saveName+='.png'
-        io.imsave(os.path.join(outDir,saveName),highlightIm)
-        io.imsave(os.path.join(outDir,saveSepName),sideBySide)
-        
-    return metricsOut
-
 
 def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
     def __eval_metrics(data,target):
@@ -178,6 +65,8 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
             if targetPixels is not None:
                 targetPixels=targetPixels.to(gpu)
         return data, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels
+
+
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -188,15 +77,28 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
     targetLines = instance['line_gt']
     targetPoints = instance['point_gt']
     targetPixels = instance['pixel_gt']
+    imageName = instance['imgName']
+    scale = instance['scale']
     dataT, targetLinesT, targetLinesSizes, targetPointsT, targetPointsSizes, targetPixelsT = __to_tensor(instance,gpu)
 
+    resultsDirName='results'
+    if outDir is not None and resultsDirName is not None:
+        rPath = os.path.join(outDir,resultsDirName)
+        if not os.path.exists(rPath):
+            os.mkdir(rPath)
+        for name in targetLines:
+            nPath = os.path.join(rPath,name)
+            if not os.path.exists(nPath):
+                os.mkdir(nPath)
 
     #dataT = __to_tensor(data,gpu)
-    outputLines, outputPoints, outputPixels = model(dataT)
+    print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
+    outputLines_xyrs, outputPoints, outputPixels = model(dataT)
     outputPixels = torch.sigmoid(outputPixels)
     index=0
+    outputLines = []
     for name, targ in targetLines.items():
-        outputLines[index] = util.pt_xyrs_2_xyxy(outputLines[index])
+        outputLines.append(util.pt_xyrs_2_xyxy(outputLines_xyrs[index]))
         index+=1
 
     alignmentLinesPred={}
@@ -232,8 +134,10 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
     data = data.cpu().data.numpy()
     #outputLine = outputLine.cpu().data.numpy()
     outputLinesOld = outputLines
+    outputLinesOld_xyrs = outputLines_xyrs
     targetLinesOld = targetLines
     outputLines={}
+    outputLines_xyrs={}
     targetLines={}
     i=0
     for name,targ in targetLinesOld.items():
@@ -242,6 +146,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
         else:
              targetLines[name]=None
         outputLines[name] = outputLinesOld[i].cpu().data.numpy()
+        outputLines_xyrs[name] = outputLinesOld_xyrs[i].cpu().data.numpy()
         i+=1
     outputPointsOld = outputPoints
     targetPointsOld = targetPoints
@@ -271,6 +176,16 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
         #lineImage = np.ones_like(image)
         for name, out in outputLines.items():
             if outDir is not None:
+                #Write the results so we can train LF with them
+                saveFile = os.path.join(outDir,resultsDirName,name,'{}'.format(imageName[b]))
+                #we must rescale the output to be according to the original image
+                rescaled_outputLines_xyrs = outputLines_xyrs[name][b]
+                rescaled_outputLines_xyrs[:,1] /= scale[b]
+                rescaled_outputLines_xyrs[:,2] /= scale[b]
+                rescaled_outputLines_xyrs[:,4] /= scale[b]
+
+                np.save(saveFile,rescaled_outputLines_xyrs)
+
                 image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()
                 #if name=='text_start_gt':
                 for j in range(targetLinesSizes[name][b]):
@@ -285,6 +200,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                     #print(p2)
                     cv2.line(image,p1,p2,(1,0.5,0),1)
             lines=[]
+            #pred_points=[]
             maxConf = out[b,:,0].max()
             threshConf = maxConf*0.1
             for j in range(out.shape[1]):
@@ -293,6 +209,7 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
                     p1 = (out[b,j,1],out[b,j,2])
                     p2 = (out[b,j,3],out[b,j,4])
                     lines.append((conf,p1,p2,j))
+                #pred_points.append(
             lines.sort(key=lambda a: a[0]) #so most confident lines are draw last (on top)
             for conf, p1, p2, j in lines:
                 #circle aligned predictions
@@ -418,73 +335,3 @@ def FormsDetect_printer(config,instance, model, gpu, metrics, outDir=None, start
              }
 
 
-def FormsLF_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
-    def _to_tensor( *datas):
-        ret=(_to_tensor_individual(datas[0]),)
-        for i in range(1,len(datas)):
-            ret+=(_to_tensor_individual(datas[i]),)
-        return ret
-    def _to_tensor_individual( data):
-        if type(data)==list:
-            return [_to_tensor_individual(d) for d in data]
-        if (len(data.size())==1 and data.size(0)==1):
-            return data[0]
-
-        if type(data) is np.ndarray:
-            data = torch.FloatTensor(data.astype(np.float32))
-        elif type(data) is torch.Tensor:
-            data = data.type(torch.FloatTensor)
-        if gpu is not None:
-            data = data.to(gpu)
-        return data
-
-    b=0 #assume batchsize of 1
-
-    data, positions_xyxy, positions_xyrs, steps = _to_tensor(*instance)
-    #print(steps)
-    output_xyxy, output_xyrs = model(data,positions_xyrs[:1],steps=steps, skip_grid=True)
-    loss = lf_line_loss(output_xyxy, positions_xyxy)
-    image = (1-((1+np.transpose(instance[0][b][:,:,:].numpy(),(1,2,0)))/2.0)).copy()
-    #print(image.shape)
-    #print(type(image))
-    minX=minY=9999999
-    maxX=maxY=-1
-
-    if outDir is not None:
-        for pointPair in  instance[1]:
-            pointPair=pointPair[0].numpy()
-            #print (pointPair)
-            xU=int(pointPair[0,0])
-            yU=int(pointPair[1,0])
-            xL=int(pointPair[0,1])
-            yL=int(pointPair[1,1])
-            cv2.circle(image,(xU,yU),2,(0.25,1,0),-1)
-            cv2.circle(image,(xL,yL),2,(0,1,0.25),-1)
-            minX=min(minX,xU,xL)
-            maxX=max(maxX,xU,xL)
-            minY=min(minY,yU,yL)
-            maxY=max(maxY,yU,yL)
-
-        for pointPair in output_xyxy:
-            pointPair = pointPair[0].data.cpu().numpy()
-            xU=int(pointPair[0,0])
-            yU=int(pointPair[1,0])
-            xL=int(pointPair[0,1])
-            yL=int(pointPair[1,1])
-            cv2.circle(image,(xU,yU),2,(1,0,0),-1)
-            cv2.circle(image,(xL,yL),2,(0,0,1),-1)
-            minX=min(minX,xU,xL)
-            maxX=max(maxX,xU,xL)
-            minY=min(minY,yU,yL)
-            maxY=max(maxY,yU,yL)
-
-        horzPad = int((maxX-minX)/2)
-        vertPad = int((maxY-minY)/2)
-        image=image[max(0,minY-vertPad):min(image.shape[0],maxY+vertPad) , max(0,minX-horzPad):min(image.shape[1],maxX+horzPad)]
-
-        saveName = '{:06}_lf_l:{:.3f}.png'.format(startIndex+b,loss.item())
-        io.imsave(os.path.join(outDir,saveName),image)
-
-    return {
-            "loss":{'xy':[loss.item()]}
-            }

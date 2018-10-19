@@ -8,6 +8,11 @@ from utils import transformation_utils
 #from lf_cnn import makeCnn
 #from fast_patch_view import get_patches
 
+#from https://stackoverflow.com/questions/46595157/how-to-apply-the-torch-inverse-function-of-pytorch-to-every-sample-in-the-batc
+def b_inv(b_mat):
+    eye = b_mat.new_ones(b_mat.size(-1)).diag().expand_as(b_mat)
+    b_inv, _ = torch.gesv(eye, b_mat)
+    return b_inv
 
 def get_xyrs(mats):
     x=mats[:,2,0]
@@ -30,9 +35,9 @@ def convRelu(i, batchNormalization=False, leakyRelu=False, numChanIn=3, split=Fa
     nIn = nc if i == 0 else nm[i - 1]
     nOut = nm[i]
     if split:
-        nOut/=2
-    cnn.add_module('conv{0}'.format(i),
-                   nn.Conv2d(nIn, nOut, ks[i], ss[i], ps[i]))
+        nOut=nOut//2
+    conv = nn.Conv2d(nIn, nOut, ks[i], ss[i], ps[i])
+    cnn.add_module('conv{0}'.format(i),conv)
     if batchNormalization:
         cnn.add_module('batchnorm{0}'.format(i), nn.InstanceNorm2d(nOut))
         # cnn.add_module('batchnorm{0}'.format(i), nn.BatchNorm2d(nOut))
@@ -97,7 +102,7 @@ class LineFollower(BaseModel):
             colorCh=1
         else:
             colorCh=3
-        pointCh=3 #confidence, rot, scale; we assume the point has been aligned according to its offset
+        pointCh=1 #confidence, (only, no rot, scale yet); we assume the point has been aligned according to its offset
         inputChannels = (colorCh+pointCh) if self.pred_end else colorCh
         
       
@@ -110,7 +115,7 @@ class LineFollower(BaseModel):
             #self.scale_linear.bias.data[0] = 0 #scale is zero as well
             self.scale_root = 2 #nn.Parameter(torch.tensor(2,dtype=torch.float), requires_grad=True)
         if self.pred_end:
-            self.end_linear = nn.Linear(512,1)
+            self.end_linear = nn.Sequential(nn.Linear(512,1), nn.Sigmoid())
 
         if 'noise_scale' in config:
             self.noise_scale = config['noise_scale']
@@ -135,7 +140,7 @@ class LineFollower(BaseModel):
             self.output_grid_size=self.view_window_size
 
         self.dtype = dtype
-        self.cnn1, self.shared_conv, self.forward_conv, self.backward_conv, self.cnn1 = makeCnn(batchNorm,leakyReLU, inputChannels, self.split_cnn_forback)
+        self.cnn1, self.shared_conv, self.forward_conv, self.backward_conv, self.cnn2 = makeCnn(batchNorm,leakyReLU, inputChannels, self.split_cnn_forback)
         self.position_linear = position_linear
 
         self.grid_gen = GridGen(self.view_window_size,self.view_window_size)
@@ -294,26 +299,30 @@ class LineFollower(BaseModel):
                 #Odd case where it start completely off of the edge
                 #This happens rarely, but maybe should be more eligantly handled
                 #in the future
-                resampled = torch.zeros(crop_window.size(0), 3, 32, 32).type_as(image.data)
+                resampled = torch.zeros(crop_window.size(0), 3, self.view_window_size, self.view_window_size).type_as(image.data)
 
             if self.pred_end:
                 #transform all detected end points to the resampled coordinates ([-1,1])
                 #add any in the resampled image
                 # shape of detected_end_points [instances, features] feautres:conf,x,y,rot,scale
-                detected_end_points_xy = torch.zeros(detected_end_points.size(0), 3)
-                detected_end_points_xy[:,0:2] = detected_end_points[:,1:3]
-                detected_end_points_xy = detected_end_points_xy.t() #so matrics mult is correct
-                trans_detected_points = torch.inverse(crop_window.data).bmm(detected_end_points_xy)
-                valid_points = (trans_detected_points[0,:]>=-1 and trans_detected_points[0,:]<=1 and
-                        trans_detected_points[1,:]>=-1 and trans_detected_points[1,:]<=1)
-                xys = self.view_window_size*(trans_detected_points[:,valid_points].floor()+1)/2
-                confs = detected_end_points[valid_points,0]
-
-                detected_img = torch.zeros(crop_window.size(0), 1, 32, 32).type_as(image.data) #1 channel for conf
-                detected_img[:,0,xys[1,:],xyx[0,:]]=confs
+                #detected_end_points_xy = torch.zeros(detected_end_points.size(0), 3)
+                #detected_end_points_xy[:,0:2] = detected_end_points[:,1:3]
+                detected_end_points_xy = detected_end_points[:,:,1:3]
+                detected_end_points_xy = torch.cat([detected_end_points_xy,torch.ones(detected_end_points_xy.size(0),detected_end_points_xy.size(1),1).cuda()], dim=2)
+                detected_end_points_xy = detected_end_points_xy.transpose(1,2) #so matrics mult is correct
+                trans_detected_points = torch.bmm(b_inv(crop_window.data), detected_end_points_xy)
+                valid_points =( (trans_detected_points[:,0,:]>=-1) & (trans_detected_points[:,0,:]<=1) &
+                        (trans_detected_points[:,1,:]>=-1) & (trans_detected_points[:,1,:]<=1) )
+                detected_img = torch.zeros(crop_window.size(0), 1, self.view_window_size,self.view_window_size).type_as(image.data) #1 channel for conf
+                for b in range(crop_window.size(0)):
+                    xys = (trans_detected_points[b,0:2,valid_points[b]]+1)/2 #get selected points on convert to range [0,1)
+                    if xys.size(0)>0:
+                        xys = ((self.view_window_size-1)*xys).round().type(torch.LongTensor) #convert to range [0,31]
+                        confs = detected_end_points[0,valid_points[b],0]
+                        detected_img[b,0,xys[1,:],xys[0,:]]=confs
                 #TODO change rotation and scale according to the transformation and include them
 
-                resampled = torch.cat(resampled,confs,dim=1)
+                resampled = torch.cat([resampled,detected_img],dim=1)
 
                 #meh, handle this in loss function
                 ##is the correct end point in the window?
@@ -329,11 +338,11 @@ class LineFollower(BaseModel):
             cnn_out = self.cnn1(resampled)
             if self.shared_conv is not None:
                 shared_out = self.shared_conv(cnn_out)
-                if forwards:
+                if forward:
                     part_out = self.forward_conv(cnn_out)
                 else:
                     part_out = self.backward_conv(cnn_out)
-                cnn_out = torch.cat(shared_out,part_out,dim=1)
+                cnn_out = torch.cat([shared_out,part_out],dim=1)
             cnn_out = self.cnn2(cnn_out)
             #cnn_out = self.cnn(resampled)
             cnn_out = torch.squeeze(cnn_out, dim=2)
@@ -341,9 +350,11 @@ class LineFollower(BaseModel):
             delta = self.position_linear(cnn_out)
             if self.pred_scale:
                 #scale_out = self.scale_linear(cnn_out)
-                twos = 2*torch.ones_like(scale_out)
+                #twos = 2*torch.ones_like(scale_out)
+                twos = 2*torch.ones_like(delta[:,self.scale_index])
                 #delta_scale = torch.pow(twos, scale_out)
-                delta[:,self.scale_index] = 2*torch.ones_like(delta[:,self.scale_index])
+                delta[:,self.scale_index] = torch.pow(twos, delta[:,self.scale_index].clone())
+                #print('{}  {}'.format(len(next_windows),delta[0,self.scale_index]))
                 #delta_scale = torch.pow(self.scale_root, scale_out)
             #else:
             #    delta_scale = None

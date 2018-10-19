@@ -4,13 +4,9 @@ import logging
 import argparse
 import torch
 from model import *
-#from model.unet import UNet
-#from model.sol_eol_finder import SOL_EOL_Finder
-#from model.detector import Detector
-#from model.line_follower import LineFollower
 from model.metric import *
 from data_loader import getDataLoader
-from utils.printers import *
+from evaluators import *
 import math
 from collections import defaultdict
 
@@ -25,10 +21,16 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
     checkpoint = torch.load(resume)
     config = checkpoint['config']
     config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
+    
     config['data_loader']['shuffle']=shuffle
     config['data_loader']['rot']=False
     config['validation']['shuffle']=shuffle
     #config['validation']
+
+    if config['data_loader']['data_set_name']=='FormsDetect':
+        config['data_loader']['batch_size']=1
+        del config['data_loader']["crop_params"]
+        config['data_loader']["rescale_range"]= config['validation']["rescale_range"]
 
     #print(config['data_loader'])
     data_loader, valid_data_loader = getDataLoader(config,'train')
@@ -101,7 +103,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics_ind(metrics,output, target)
-                    metricsO = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
+                    metricsO,_ = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
                     if type(metricsO) == dict:
                         for typ,typeLists in metricsO.items():
                             for name,lst in typeLists.items():
@@ -120,7 +122,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False):
                     #output = output.cpu().data.numpy()
                     #target = target.data.numpy()
                     #metricsO = _eval_metrics(metrics,output, target)
-                    metricsO = saveFunc(config,train_iter.next(),model,gpu,metrics)
+                    metricsO,_ = saveFunc(config,train_iter.next(),model,gpu,metrics)
                     if type(metricsO) == dict:
                         for typ,typeLists in metricsO.items():
                             for name,lst in typeLists.items():

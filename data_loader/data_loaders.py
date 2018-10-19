@@ -5,6 +5,8 @@ from datasets.cancer import CancerDataset
 from datasets.ai2d import AI2D
 from datasets import forms_detect
 from datasets.forms_detect import FormsDetect
+from datasets import forms_box_detect
+from datasets.forms_box_detect import FormsBoxDetect
 from datasets.forms_pair import FormsPair
 from datasets.forms_lf import FormsLF
 from torchvision import datasets, transforms
@@ -57,6 +59,7 @@ def getDataLoader(config,split):
         data_set_name = config['data_loader']['data_set_name']
         data_dir = config['data_loader']['data_dir']
         batch_size = config['data_loader']['batch_size']
+        valid_batch_size = config['validation']['batch_size'] if 'batch_size' in config['validation'] else batch_size
         if 'augmentation_params' in config['data_loader']:
             aug_param = config['data_loader']['augmentation_params']
         else:
@@ -80,33 +83,44 @@ def getDataLoader(config,split):
                 trainData = FormsDetect(dirPath=data_dir, split='train', config=config['data_loader'])
                 trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
                 validData = FormsDetect(dirPath=data_dir, split='valid', config=config['validation'])
-                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=valid_batch_size, shuffle=shuffleValid, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
                 return trainLoader, validLoader
             elif split=='test':
                 testData = FormsDetect(dirPath=data_dir, split='test', config=config['data_loader'])
-                testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
+                testLoader = torch.utils.data.DataLoader(testData, batch_size=valid_batch_size, shuffle=False, num_workers=numDataWorkers, collate_fn=forms_detect.collate)
+                return testLoader, None
+        elif data_set_name=='FormsBoxDetect':
+            if split=='train':
+                trainData = FormsBoxDetect(dirPath=data_dir, split='train', config=config['data_loader'])
+                trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers, collate_fn=forms_box_detect.collate)
+                validData = FormsBoxDetect(dirPath=data_dir, split='valid', config=config['validation'])
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=valid_batch_size, shuffle=shuffleValid, num_workers=numDataWorkers, collate_fn=forms_box_detect.collate)
+                return trainLoader, validLoader
+            elif split=='test':
+                testData = FormsBoxDetect(dirPath=data_dir, split='test', config=config['data_loader'])
+                testLoader = torch.utils.data.DataLoader(testData, batch_size=valid_batch_size, shuffle=False, num_workers=numDataWorkers, collate_fn=forms_box_detect.collate)
                 return testLoader, None
         elif data_set_name=='FormsPair':
             if split=='train':
                 trainData = FormsPair(dirPath=data_dir, split='train', config=config['data_loader'])
                 trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers)
                 validData = FormsPair(dirPath=data_dir, split='valid', config=config['validation'])
-                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=valid_batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
                 return trainLoader, validLoader
             elif split=='test':
                 testData = FormsPair(dirPath=data_dir, split='test', config=config['data_loader'])
-                testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers)
+                testLoader = torch.utils.data.DataLoader(testData, batch_size=valid_batch_size, shuffle=False, num_workers=numDataWorkers)
                 return testLoader, None
         elif data_set_name=='FormsLF':
             if split=='train':
                 trainData = FormsLF(dirPath=data_dir, split='train', config=config['data_loader'])
                 trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers)
                 validData = FormsLF(dirPath=data_dir, split='valid', config=config['validation'])
-                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
+                validLoader = torch.utils.data.DataLoader(validData, batch_size=valid_batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
                 return trainLoader, validLoader
             elif split=='test':
                 testData = FormsLF(dirPath=data_dir, split='test', config=config['data_loader'])
-                testLoader = torch.utils.data.DataLoader(testData, batch_size=batch_size, shuffle=False, num_workers=numDataWorkers)
+                testLoader = torch.utils.data.DataLoader(testData, batch_size=valid_batch_size, shuffle=False, num_workers=numDataWorkers)
                 return testLoader, None
         elif data_set_name=='Cancer':
             if split=='train':

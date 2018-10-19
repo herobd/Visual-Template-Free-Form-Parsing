@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
 import math
 import json
+import numpy as np
 
 
 def offsetFunc(netPred): #this changes the offset prediction from the network
@@ -152,9 +153,11 @@ class up(nn.Module):
         return self.conv(x)
 
 
-class YoloBoxDetector(BaseModel):
+class YoloBoxDetector(nn.Module): #BaseModel
     def __init__(self, config): # predCount, base_0, base_1):
-        super(YoloBoxDetector, self).__init__(config)
+        #super(YoloBoxDetector, self).__init__(config)
+        super(YoloBoxDetector, self).__init__()
+        self.config = config
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
@@ -295,3 +298,10 @@ class YoloBoxDetector(BaseModel):
 
         return bbPredictions, offsetPredictions, pointPreds, pixelPreds #, avg_conf_per_anchor
 
+    def summary(self):
+        """
+        Model summary
+        """
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        print('Trainable parameters: {}'.format(params))

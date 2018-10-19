@@ -173,12 +173,14 @@ class BaseTrainer:
             'arch': arch,
             'iteration': iteration,
             'logger': self.train_logger,
-            #'state_dict': self.model.state_dict(),
-            'model': self.model,
             'optimizer': self.optimizer.state_dict(),
             'monitor_best': self.monitor_best,
             'config': self.config
         }
+        if 'save_mode' not in self.config or self.config['save_mode']=='state_dict':
+            state['state_dict']= self.model.state_dict()
+        else:
+            state['model'] = self.model
         filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
                                 .format(iteration))
         #print(self.module.state_dict().keys())
@@ -205,10 +207,12 @@ class BaseTrainer:
         """
         self.logger.info("Loading checkpoint: {} ...".format(resume_path))
         checkpoint = torch.load(resume_path)
+        if 'override' not in self.config or not self.config['override']:
+            self.config = checkpoint['config']
         self.start_iteration = checkpoint['iteration'] + 1
         self.monitor_best = checkpoint['monitor_best']
         #print(checkpoint['state_dict'].keys())
-        if 'state_dict' in checkpoint:
+        if 'save_mode' not in self.config or self.config['save_mode']=='state_dict':
             self.model.load_state_dict(checkpoint['state_dict'])
         else:
             self.model = checkpoint['model']
@@ -219,6 +223,4 @@ class BaseTrainer:
                     if isinstance(v, torch.Tensor):
                         state[k] = v.cuda(self.gpu)
         self.train_logger = checkpoint['logger']
-        if 'override' not in self.config or not self.config['override']:
-            self.config = checkpoint['config']
         self.logger.info("Checkpoint '{}' (iteration {}) loaded".format(resume_path, self.start_iteration))

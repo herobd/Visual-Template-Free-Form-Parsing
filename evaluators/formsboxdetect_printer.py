@@ -10,7 +10,7 @@ from model.loss import *
 from collections import defaultdict
 
 
-def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):
+def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
     def plotRect(img,color,xyrhw):
         xc=xyrhw[0].item()
         yc=xyrhw[1].item()
@@ -90,7 +90,10 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    print(instance)
     #    print(startIndex)
     #data, targetBB, targetBBSizes = instance
-    yolo_loss = YoloLoss(model.numBBTypes,model.rotation,model.scale,model.anchors,**config['loss_params']['box'])
+    if lossFunc is None:
+        yolo_loss = YoloLoss(model.numBBTypes,model.rotation,model.scale,model.anchors,**config['loss_params']['box'])
+    else:
+        yolo_loss = lossFunc
     data = instance['img']
     batchSize = data.shape[0]
     targetBBs = instance['bb_gt']
@@ -298,6 +301,6 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         
     #return metricsOut
     return { 
-             }
+             }, (lossThis, position_loss, conf_loss, class_loss, recall, precision)
 
 

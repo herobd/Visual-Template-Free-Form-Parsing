@@ -88,27 +88,34 @@ class YoloLoss (nn.Module):
         conf_mask_false = conf_mask - mask
 
         # Mask outputs to ignore non-existing objects
-        loss_x = self.mse_loss(x[mask], tx[mask])
-        loss_y = self.mse_loss(y[mask], ty[mask])
-        loss_w = self.mse_loss(w[mask], tw[mask])
-        loss_h = self.mse_loss(h[mask], th[mask])
-        loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false]) + self.bce_loss(
-            pred_conf[conf_mask_true], tconf[conf_mask_true]
-        )
+        loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
         if target is not None:
+            loss_x = self.mse_loss(x[mask], tx[mask])
+            loss_y = self.mse_loss(y[mask], ty[mask])
+            loss_w = self.mse_loss(w[mask], tw[mask])
+            loss_h = self.mse_loss(h[mask], th[mask])
             loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
+            loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
+            loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
+            return (
+                loss,
+                loss_x.item()+loss_y.item()+loss_w.item()+loss_h.item(),
+                loss_conf.item(),
+                loss_cls.item(),
+                recall,
+                precision,
+            )
         else:
-            loss_cls = 0
-        loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
+            return (
+                loss_conf,
+                0,
+                loss_conf,
+                0,
+                recall,
+                precision,
+            )
 
-        return (
-            loss,
-            loss_x.item()+loss_y.item()+loss_w.item()+loss_h.item(),
-            loss_conf.item(),
-            loss_cls.item() if type(loss_cls)!=int else loss_cls,
-            recall,
-            precision,
-        )
+
 
 def bbox_iou(box1, box2, x1y1x2y2=True):
     """
@@ -176,8 +183,8 @@ def build_targets(
             gw = target[b, t, 4] / scale
             gh = target[b, t, 3] / scale
             # Get grid box indices
-            gi = int(gx)
-            gj = int(gy)
+            gi = max(min(int(gx),conf_mask.size(3)-1),0)
+            gj = max(min(int(gy),conf_mask.size(2)-1),0)
             # Get shape of gt box
             gt_box = torch.FloatTensor(np.array([0, 0, gw, gh])).unsqueeze(0)
             # Get shape of anchor box

@@ -150,7 +150,11 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
     return iou
 
 def inv_tanh(y):
-    return 0.5*(math.log(1+y)/(1-y))
+    if y<=-1:
+        return -2
+    elif y >=1:
+        return 2
+    return 0.5*(math.log((1+y)/(1-y)))
 
 def build_targets(
     pred_boxes, pred_conf, pred_cls, target, target_sizes, anchors, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale
@@ -176,12 +180,15 @@ def build_targets(
         for t in range(target_sizes[b]): #range(target.shape[1]):
             #if target[b, t].sum() == 0:
             #    continue
-            nGT += 1
             # Convert to position relative to box
             gx = target[b, t, 0] / scale
             gy = target[b, t, 1] / scale
             gw = target[b, t, 4] / scale
             gh = target[b, t, 3] / scale
+        
+            if gw==0 or gh==0:
+                continue
+            nGT += 1
             # Get grid box indices
             gi = max(min(int(gx),conf_mask.size(3)-1),0)
             gj = max(min(int(gy),conf_mask.size(2)-1),0)

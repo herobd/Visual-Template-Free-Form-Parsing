@@ -42,7 +42,7 @@ class BoxDetectTrainer(BaseTrainer):
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
         warmup_steps = config['warmup_steps'] if 'warmup_steps' in config else 1000
-        lr_lambda = lambda step_num: min((step_num+1)**-0.5, (step_num+1)*warmup_steps**-1.5)
+        lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
         self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
 
     def _to_tensor(self, instance):

@@ -8,6 +8,7 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
+from utils.yolo_tools import non_max_sup_iou
 
 
 def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
@@ -140,9 +141,12 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         index+=1
 
     data = data.cpu().data.numpy()
-    #outputBB = outputBB.cpu().data.numpy()
-    #outputBBs[:,:,0] = torch.sigmoid(outputBBs[:,:,0])
-    outputBBs = outputBBs.cpu().data.numpy()
+    maxConf = outputBBs[:,:,0].max().item()
+    threshConf = max(maxConf*0.92,0.5)
+    #print("threshConf:{}".format(threshConf))
+    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
+    for b in range(len(outputBBs)):
+        outputBBs[b] = outputBBs[b].data.numpy()
 
     outputPointsOld = outputPoints
     targetPointsOld = targetPoints
@@ -203,19 +207,23 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #        color=(shade,shade,0) #field
             #    plotRect(image,color,outputBBs[b,aj,1:6])
 
-        bbs=[]
+        #bbs=[]
         #pred_points=[]
-        maxConf = outputBBs[b,:,0].max()
-        threshConf = 0.5 #max(maxConf*0.7,0.5)
-        for j in range(outputBBs.shape[1]):
-            conf = outputBBs[b,j,0]
-            if conf>threshConf:
-                bbs.append((conf,j))
-            #pred_points.append(
-        bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
+        #maxConf = outputBBs[b,:,0].max()
+        #threshConf = 0.5 
+        #threshConf = max(maxConf*0.9,0.5)
+        #print("threshConf:{}".format(threshConf))
+        #for j in range(outputBBs.shape[1]):
+        #    conf = outputBBs[b,j,0]
+        #    if conf>threshConf:
+        #        bbs.append((conf,j))
+        #    #pred_points.append(
+        #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
         #import pdb; pdb.set_trace()
-        for conf, j in bbs:
+        bbs = outputBBs[b]
+        for j in range(bbs.shape[0]):
             #circle aligned predictions
+            conf = bbs[j,0]
             if outDir is not None:
                 shade = 0.0+(conf-threshConf)/(maxConf-threshConf)
                 #print(shade)
@@ -225,11 +233,11 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 #    cv2.bb(bbImage[:,:,2],p1,p2,shade,2)
                 #elif name=='field_end_gt' or name=='field_start_gt':
                 #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
-                if outputBBs[b,j,6] > outputBBs[b,j,7]:
+                if bbs[j,6] > bbs[j,7]:
                     color=(0,0,shade) #text
                 else:
                     color=(shade,0,0) #field
-                plotRect(image,color,outputBBs[b,j,1:6])
+                plotRect(image,color,bbs[j,1:6])
 
         if outDir is not None:
             #for j in alignmentBBsTarg[name][b]:

@@ -1,7 +1,7 @@
 import torch
 import torch.utils.data
 import numpy as np
-from datasets.cancer import CancerDataset
+#from datasets.cancer import CancerDataset
 from datasets.ai2d import AI2D
 from datasets import forms_detect
 from datasets.forms_detect import FormsDetect

@@ -1,5 +1,5 @@
 {
-    "name": "forms10_iouRes",
+    "name": "forms10_iouRes_fast",
     "cuda": true,
     "gpu": 0,
     "save_mode": "model",
@@ -37,7 +37,8 @@
         },
         "no_blanks": true,
         "swap_circle":true,
-        "no_graphics":true
+        "no_graphics":true,
+        "rotation": false
     },
 
     
@@ -45,7 +46,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.005,
+        "lr": 0.01,
         "weight_decay": 0
     },
     "loss": {
@@ -62,12 +63,13 @@
         "class": "BoxDetectTrainer",
         "iterations": 100000,
         "save_dir": "saved/",
-        "val_step": 1000,
-        "save_step": 2000,
-        "log_step": 200,
+        "val_step": 2000,
+        "save_step": 4000,
+        "log_step": 250,
         "verbosity": 1,
         "monitor": "loss",
-        "monitor_mode": "none"
+        "monitor_mode": "none",
+        "warmup_steps":3000
     },
     "arch": "YoloBoxDetector", 
     "model": {

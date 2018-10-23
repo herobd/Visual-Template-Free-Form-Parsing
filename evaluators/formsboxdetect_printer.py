@@ -8,7 +8,7 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou
+from utils.yolo_tools import non_max_sup_iou, AP_iou
 
 
 def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
@@ -145,7 +145,26 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     threshConf = max(maxConf*0.92,0.5)
     #print("threshConf:{}".format(threshConf))
     outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
-    for b in range(len(outputBBs)):
+    aps_3=[]
+    aps_5=[]
+    aps_7=[]
+    recalls_5=[]
+    precs_5=[]
+    for b in range(batchSize):
+        if targetBBs is not None:
+            target_for_b = targetBBs[b,:targetBBsSizes[b],:]
+        else:
+            target_for_b = torch.empty(0)
+        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,model.numBBTypes)
+        ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
+        ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
+
+        aps_5.append(ap_5 )
+        aps_3.append(ap_3 )
+        aps_7.append(ap_7 )
+        recalls_5.append(recall_5)
+        precs_5.append(prec_5)
+        #for b in range(len(outputBBs)):
         outputBBs[b] = outputBBs[b].data.numpy()
 
     outputPointsOld = outputPoints
@@ -190,56 +209,55 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
             #if name=='text_start_gt':
 
-        for j in range(targetBBsSizes[b]):
-            plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
-            #if alignmentBBs[b] is not None:
-            #    aj=alignmentBBs[b][j]
-            #    xc_gt = targetBBs[b,j,0]
-            #    yc_gt = targetBBs[b,j,1]
-            #    xc=outputBBs[b,aj,1]
-            #    yc=outputBBs[b,aj,2]
-            #    cv2.line(image,(xc,yc),(xc_gt,yc_gt),(0,1,0),1)
-            #    shade = 0.0+(outputBBs[b,aj,0]-threshConf)/(maxConf-threshConf)
-            #    shade = max(0,shade)
-            #    if outputBBs[b,aj,6] > outputBBs[b,aj,7]:
-            #        color=(0,shade,shade) #text
-            #    else:
-            #        color=(shade,shade,0) #field
-            #    plotRect(image,color,outputBBs[b,aj,1:6])
+            for j in range(targetBBsSizes[b]):
+                plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
+                #if alignmentBBs[b] is not None:
+                #    aj=alignmentBBs[b][j]
+                #    xc_gt = targetBBs[b,j,0]
+                #    yc_gt = targetBBs[b,j,1]
+                #    xc=outputBBs[b,aj,1]
+                #    yc=outputBBs[b,aj,2]
+                #    cv2.line(image,(xc,yc),(xc_gt,yc_gt),(0,1,0),1)
+                #    shade = 0.0+(outputBBs[b,aj,0]-threshConf)/(maxConf-threshConf)
+                #    shade = max(0,shade)
+                #    if outputBBs[b,aj,6] > outputBBs[b,aj,7]:
+                #        color=(0,shade,shade) #text
+                #    else:
+                #        color=(shade,shade,0) #field
+                #    plotRect(image,color,outputBBs[b,aj,1:6])
 
-        #bbs=[]
-        #pred_points=[]
-        #maxConf = outputBBs[b,:,0].max()
-        #threshConf = 0.5 
-        #threshConf = max(maxConf*0.9,0.5)
-        #print("threshConf:{}".format(threshConf))
-        #for j in range(outputBBs.shape[1]):
-        #    conf = outputBBs[b,j,0]
-        #    if conf>threshConf:
-        #        bbs.append((conf,j))
-        #    #pred_points.append(
-        #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
-        #import pdb; pdb.set_trace()
-        bbs = outputBBs[b]
-        for j in range(bbs.shape[0]):
-            #circle aligned predictions
-            conf = bbs[j,0]
-            if outDir is not None:
-                shade = 0.0+(conf-threshConf)/(maxConf-threshConf)
-                #print(shade)
-                #if name=='text_start_gt' or name=='field_end_gt':
-                #    cv2.bb(bbImage[:,:,1],p1,p2,shade,2)
-                #if name=='text_end_gt':
-                #    cv2.bb(bbImage[:,:,2],p1,p2,shade,2)
-                #elif name=='field_end_gt' or name=='field_start_gt':
-                #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
-                if bbs[j,6] > bbs[j,7]:
-                    color=(0,0,shade) #text
-                else:
-                    color=(shade,0,0) #field
-                plotRect(image,color,bbs[j,1:6])
+            #bbs=[]
+            #pred_points=[]
+            #maxConf = outputBBs[b,:,0].max()
+            #threshConf = 0.5 
+            #threshConf = max(maxConf*0.9,0.5)
+            #print("threshConf:{}".format(threshConf))
+            #for j in range(outputBBs.shape[1]):
+            #    conf = outputBBs[b,j,0]
+            #    if conf>threshConf:
+            #        bbs.append((conf,j))
+            #    #pred_points.append(
+            #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
+            #import pdb; pdb.set_trace()
+            bbs = outputBBs[b]
+            for j in range(bbs.shape[0]):
+                #circle aligned predictions
+                conf = bbs[j,0]
+                if outDir is not None:
+                    shade = 0.0+(conf-threshConf)/(maxConf-threshConf)
+                    #print(shade)
+                    #if name=='text_start_gt' or name=='field_end_gt':
+                    #    cv2.bb(bbImage[:,:,1],p1,p2,shade,2)
+                    #if name=='text_end_gt':
+                    #    cv2.bb(bbImage[:,:,2],p1,p2,shade,2)
+                    #elif name=='field_end_gt' or name=='field_start_gt':
+                    #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
+                    if bbs[j,6] > bbs[j,7]:
+                        color=(0,0,shade) #text
+                    else:
+                        color=(shade,0,0) #field
+                    plotRect(image,color,bbs[j,1:6])
 
-        if outDir is not None:
             #for j in alignmentBBsTarg[name][b]:
             #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
             #    p2 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
@@ -249,13 +267,12 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #    #print(rad)
             #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-            saveName = '{:06}_boxes_r:{:.3f}_p:{:.3f}'.format(startIndex+b,recall,precision)
+            saveName = '{:06}_boxes_0.3_t:{:.2f}_f:{:.2f}_0.5_t:{:.2f}_f:{:.2f}_0.7_t:{:.2f}_f:{:.2f}'.format(startIndex+b,aps_3[b][0],aps_3[b][1],aps_5[b][0],aps_5[b][1],aps_7[b][0],aps_7[b][1])
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'
             io.imsave(os.path.join(outDir,saveName),image)
 
-        if outDir is not None:
             for name, out in outputPoints.items():
                 image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()
                 #if name=='text_start_gt':
@@ -308,7 +325,20 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #print('finished writing {}'.format(startIndex+b))
         
     #return metricsOut
-    return { 
-             }, (lossThis, position_loss, conf_loss, class_loss, recall, precision)
+    return (
+             #{ 'ap_5':np.array(aps_5).sum(axis=0),
+             #  'ap_3':np.array(aps_3).sum(axis=0),
+             #  'ap_7':np.array(aps_7).sum(axis=0),
+             #  'recall':np.array(recalls_5).sum(axis=0),
+             #  'prec':np.array(precs_5).sum(axis=0),
+             #}, 
+             { 'ap_5':aps_5,
+               'ap_3':aps_3,
+               'ap_7':aps_7,
+               'recall':recalls_5,
+               'prec':precs_5,
+             }, 
+             (lossThis, position_loss, conf_loss, class_loss, recall, precision)
+            )
 
 

@@ -137,9 +137,12 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         metricsO,_ = saveFunc(config,train_iter.next(),model,gpu,metrics)
                         if type(metricsO) == dict:
                             for typ,typeLists in metricsO.items():
-                                for name,lst in typeLists.items():
-                                    val_metrics_list[typ][name]+=lst
-                                    val_comb_metrics[typ]+=lst
+                                if type(typeLists) == dict:
+                                    for name,lst in typeLists.items():
+                                        val_metrics_list[typ][name]+=lst
+                                        val_comb_metrics[typ]+=lst
+                                else:
+                                    val_comb_metrics[typ]+=typeLists
                         else:
                             val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                 except StopIteration:
@@ -150,9 +153,9 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                 for i in range(len(metrics)):
                     print(metrics[i].__name__ + ': '+str(val_metrics_sum[i]))
                 for typ in val_comb_metrics:
-                    print('{} overall mean: {}, std {}'.format(typ,np.mean(val_comb_metrics[typ]), np.std(val_comb_metrics[typ])))
+                    print('{} overall mean: {}, std {}'.format(typ,np.mean(val_comb_metrics[typ],axis=0), np.std(val_comb_metrics[typ],axis=0)))
                     for name, typeLists in val_metrics_list[typ].items():
-                        print('{} {} mean: {}, std {}'.format(typ,name,np.mean(typeLists),np.std(typeLists)))
+                        print('{} {} mean: {}, std {}'.format(typ,name,np.mean(typeLists,axis=0),np.std(typeLists,axis=0)))
 
         else:
             batchIndex = index//batchSize

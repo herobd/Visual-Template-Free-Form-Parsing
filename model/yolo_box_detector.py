@@ -31,7 +31,7 @@ class ResBlock(nn.Module):
         if norm=='group_norm':
             layers.append(nn.GroupNorm(8,out_ch))
         layers.append(nn.ReLU(inplace=True)) 
-        conv1=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, dilation=dilation)
+        conv1=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation)
         if norm=='weight_norm':
             layers.append(weight_norm(conv1))
         else:

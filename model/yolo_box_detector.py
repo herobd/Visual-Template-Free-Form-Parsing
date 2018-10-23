@@ -56,6 +56,23 @@ class ResBlock(nn.Module):
     def forward(self,x):
         return x+self.side(x)
 
+def convReLU(in_ch,out_ch,norm,dilation=1):
+    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=3, padding=dilation,dilation=dilation)
+    #if i == len(cfg)-1:
+    #    layers += [conv2d]
+    #    break
+    if norm=='batch_norm':
+        layers = [conv2d, nn.BatchNorm2d(out_ch), nn.ReLU(inplace=True)]
+    elif norm=='instance_norm':
+        layers = [conv2d, nn.InstanceNorm2d(out_ch), nn.ReLU(inplace=True)]
+    elif norm=='group_norm':
+        layers = [conv2d, nn.GroupNorm(8,out_ch), nn.ReLU(inplace=True)]
+    elif norm=='weight_norm':
+        layers = [weight_norm(conv2d), nn.ReLU(inplace=True)]
+    else:
+        layers = [conv2d, nn.ReLU(inplace=True)]
+    return layers
+
 def make_layers(cfg, dilation=1, norm=None):
     modules = []
     in_channels = [cfg[0]]
@@ -85,7 +102,7 @@ def make_layers(cfg, dilation=1, norm=None):
             layers.append(ResBlock(in_channels[-1],outCh,dilation,norm))
             layerCodes.append(v)
             in_channels.append(outCh)
-        elif type(v)==str and v[0] == 'C':
+        elif type(v)==str and v[0] == 'C': 
             outCh=int(v[1:])
             conv2d = nn.Conv2d(in_channels[-1], outCh, kernel_size=5, padding=2)
             #if i == len(cfg)-1:
@@ -105,25 +122,17 @@ def make_layers(cfg, dilation=1, norm=None):
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'U':
-            outCh=int(v[1:]) #down sampling layer, linear
+            outCh=int(v[1:]) #up sampling layer, linear
             layers.append(nn.ConvTranspose2d(in_channels[-1], outCh, kernel_size=2, stride=2, bias=False))
             layerCodes.append(v)
             in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'W': #dilated conv later
+            outCh=int(v[1:])
+            layers += convReLU(in_channels[-1],outCh,norm,dilation)
+            layerCodes.append(outCh)
+            in_channels.append(outCh)
         else:
-            conv2d = nn.Conv2d(in_channels[-1], v, kernel_size=3, padding=1)
-            #if i == len(cfg)-1:
-            #    layers += [conv2d]
-            #    break
-            if norm=='batch_norm':
-                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
-            elif norm=='instance_norm':
-                layers += [conv2d, nn.InstanceNorm2d(v), nn.ReLU(inplace=True)]
-            elif norm=='group_norm':
-                layers += [conv2d, nn.GroupNorm(8,v), nn.ReLU(inplace=True)]
-            elif norm=='weight_norm':
-                layers += [weight_norm(conv2d), nn.ReLU(inplace=True)]
-            else:
-                layers += [conv2d, nn.ReLU(inplace=True)]
+            layers += convReLU(in_channels[-1],v,norm)
             layerCodes.append(v)
             in_channels.append(v)
     if len(layers)>0:

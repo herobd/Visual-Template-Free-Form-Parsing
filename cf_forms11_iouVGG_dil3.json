@@ -1,15 +1,15 @@
 {
-    "name": "test_iouDetect",
+    "name": "forms11_iouVGG_dil3",
     "cuda": true,
     "gpu": 0,
-    "save_mode":"model",
+    "save_mode": "model",
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
-        "data_dir": "/home/ubuntu/brian/data/testF",
+        "data_dir": "/home/ubuntu/brian/data/forms",
         "batch_size": 2,
         "shuffle": true,
-        "num_workers": 0,
+        "num_workers": 2,
         "crop_to_page":false,
         "color":false,
         "rescale_range": [0.4,0.65],
@@ -37,15 +37,17 @@
         },
         "no_blanks": true,
         "swap_circle":true,
-        "no_graphics":true
+        "no_graphics":true,
+        "batch_size": 1,
+        "rotation": false
     },
 
     
-    "lr_scheduler_type": "custom in trainer",
+    "lr_scheduler_type": "none",
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.005,
+        "lr": 0.01,
         "weight_decay": 0
     },
     "loss": {
@@ -60,14 +62,17 @@
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
-        "iterations": 40000,
+        "iterations": 100000,
         "save_dir": "saved/",
-        "val_step": 500,
-        "save_step": 500,
-        "log_step": 50,
+        "val_step": 5000,
+        "save_step": 10000,
+        "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
-        "monitor_mode": "none"
+        "monitor_mode": "none",
+        "warmup_steps": 3000,
+        "thresh_conf":0.92,
+        "thresh_intersect":0.4
     },
     "arch": "YoloBoxDetector", 
     "model": {
@@ -75,9 +80,9 @@
         "number_of_box_types": 2,
         "number_of_point_types": 0,
         "number_of_pixel_types": 0,
-        "norm_type": "none",
-        "Xdown_layers_cfg": [1,"C64", "M", "R64", "R64", "D128", "R128", "R128", "D256", "R256", "R256", "D512", "R512", "R512", "D1024", "R1024", "R1024", "U1024", "R1024", "ReLU"],
-        "down_layers_cfg": [1,64, "M", 128, 128, "M", 256, 256, "M", 512, 512, "M", 1024, 1024, 1024],
+        "norm_type": "group_norm",
+        "dilation": 3,
+        "down_layers_cfg": [1,64, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024", 1024, 1024],
         "up_layers_cfg":[],
         "anchors_file": "anchors_noRot_12.json",
         "rotation":false

@@ -94,6 +94,11 @@ def make_layers(cfg, dilation=1, norm=None):
             layers.append(conv2d)
             layerCodes.append(v)
             in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'K':
+            outCh=int(v[1:]) #down sampling layer, linear
+            layers.append(nn.Conv2d(in_channels[-1], outCh, kernel_size=1, stride=1, bias=False))
+            layerCodes.append(v)
+            in_channels.append(outCh)
         elif type(v)==str and v[0] == 'D':
             outCh=int(v[1:]) #down sampling layer, linear
             layers.append(nn.Conv2d(in_channels[-1], outCh, kernel_size=2, stride=2, bias=False))

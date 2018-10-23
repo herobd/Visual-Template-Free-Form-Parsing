@@ -88,7 +88,7 @@ class YoloLoss (nn.Module):
         conf_mask_false = conf_mask - mask
 
         # Mask outputs to ignore non-existing objects
-        loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+        loss_conf = 1.25*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
         if target is not None and nGT>0:
             loss_x = self.mse_loss(x[mask], tx[mask])
             loss_y = self.mse_loss(y[mask], ty[mask])

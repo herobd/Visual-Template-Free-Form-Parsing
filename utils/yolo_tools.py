@@ -118,7 +118,10 @@ def AP_iou(target,pred,iou_thresh,numClasses=2):
     for cls in range(numClasses):
         scores=[]
         clsTargInd = target[:,cls+13]==1
-        clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
+        if len(pred.size())>1:
+            clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
+        else:
+            clsPredInd = torch.empty(0,dtype=torch.uint8)
         if clsTargInd.any() and clsPredInd.any():
             clsTarg = target[clsTargInd]
             clsPred = pred[clsPredInd]

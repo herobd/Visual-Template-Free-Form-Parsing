@@ -5,6 +5,7 @@ import timeit
 from utils import util
 from collections import defaultdict
 from evaluators import FormsBoxDetect_printer
+from utils.yolo_tools import non_max_sup_iou, AP_iou
 
 
 class BoxDetectTrainer(BaseTrainer):
@@ -44,6 +45,9 @@ class BoxDetectTrainer(BaseTrainer):
         warmup_steps = config['warmup_steps'] if 'warmup_steps' in config else 1000
         lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
         self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+
+        self.thresh_conf = config['thresh_conf'] if 'thresh_conf' in config else 0.92
+        self.thresh_intersect = config['thresh_intersect'] if 'thresh_intersect' in config else 0.4
 
     def _to_tensor(self, instance):
         data = instance['img']
@@ -208,8 +212,8 @@ class BoxDetectTrainer(BaseTrainer):
         log = {
             'loss': loss,
             'recall':recall,
-            'precision':precision,
-            'position_loss':position_loss,
+            #'precision':precision,
+            #'position_loss':position_loss,
             'conf_loss':conf_loss,
             'class_loss':class_loss,
             #'minGrad':minGrad,
@@ -249,6 +253,9 @@ class BoxDetectTrainer(BaseTrainer):
         total_val_loss = 0
         total_val_metrics = np.zeros(len(self.metrics))
         losses={}
+        mAP = np.zeros(self.model.numBBTypes)
+        mRecall = np.zeros(self.model.numBBTypes)
+        mPrecision = np.zeros(self.model.numBBTypes)
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
@@ -263,6 +270,18 @@ class BoxDetectTrainer(BaseTrainer):
                 loss+=this_loss*self.loss_weight['box']
                 losses['val_box_loss']+=this_loss.item()
                 
+                threshConf = self.thresh_conf*outputBoxes[:,:,0].max()
+                outputBoxes = non_max_sup_iou(outputBoxes.cpu(),self.thresh_conf,self.thresh_intersect)
+                targetBoxes = targetBoxes.cpu()
+                for b in range(len(outputBoxes)):
+                    if targetBoxes is not None:
+                        target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
+                    else:
+                        target_for_b = torch.empty(0)
+                    ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
+                    mAP += np.array(ap_5)/len(outputBoxes)
+                    mRecall += np.array(recall_5)/len(outputBoxes)
+                    mPrecision += np.array(prec_5)/len(outputBoxes)
                 index=0
                 for name, target in targetPoints.items():
                     predictions = outputPoints[index]
@@ -282,8 +301,9 @@ class BoxDetectTrainer(BaseTrainer):
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
-            'val_recall':recall,
-            'val_precision':precision,
+            'val_recall':(mRecall/len(self.valid_data_loader)).tolist(),
+            'val_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
+            'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_position_loss':position_loss,
             'val_conf_loss':conf_loss,
             'val_class_loss':class_loss,

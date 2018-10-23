@@ -13,7 +13,7 @@ import timeit
 
 import cv2
 
-IAIN_CATCH=[]#['193','194','197','200']
+SKIP=['174']#['193','194','197','200']
 ONE_DONE=[]
 
 def polyIntersect(poly1, poly2):
@@ -261,14 +261,14 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             for groupName, imageNames in groupsToUse.items():
                 #print('{} {}'.format(groupName, imageNames))
                 #oneonly=False
-                #if groupName in IAIN_CATCH:
+                if groupName in IAIN_CATCH:
+                    print('Skipped group {}'.format(groupName))
+                    continue
                 #    if groupName in ONE_DONE:
                 #        oneonly=True
                 #        with open(os.path.join(dirPath,'groups',groupName,'template'+groupName+'.json')) as f:
                 #            T_annotations = json.loads(f.read())
                 #    else:
-                #        print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
-                #        continue
                 for imageName in imageNames:
                     #if oneonly and T_annotations['imageFilename']!=imageName:
                     #    #print('skipped {} {}'.format(imageName,groupName))
@@ -419,7 +419,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             })
             np_img = out['img']
             bbs = out['bb_gt']
-            table_points = out['point_gt']['table_points']
+            if 'table_points' in out['point_gt']:
+                table_points = out['point_gt']['table_points']
+            else:
+                table_points=None
             pixel_gt = out['pixel_gt']
 
             ##tic=timeit.default_timer()

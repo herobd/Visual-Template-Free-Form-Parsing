@@ -155,19 +155,20 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
 
         point_gt_match={}
         for name, gt in point_gts.items():
-            ##tic=timeit.default_timer()
-            point_gt_match[name] = np.zeros_like(gt)
-            point_gt_match[name][...,0][gt[...,0] < dim1] = 1
-            point_gt_match[name][...,0][gt[...,0] > dim1+cs] = 1
+            if gt is not None:
+                ##tic=timeit.default_timer()
+                point_gt_match[name] = np.zeros_like(gt)
+                point_gt_match[name][...,0][gt[...,0] < dim1] = 1
+                point_gt_match[name][...,0][gt[...,0] > dim1+cs] = 1
 
-            point_gt_match[name][...,1][gt[...,1] < dim0] = 1
-            point_gt_match[name][...,1][gt[...,1] > dim0+cs] = 1
+                point_gt_match[name][...,1][gt[...,1] < dim0] = 1
+                point_gt_match[name][...,1][gt[...,1] > dim0+cs] = 1
 
-            point_gt_match[name] = 1-point_gt_match[name]
-            point_gt_match[name] = np.logical_and(point_gt_match[name][...,0], point_gt_match[name][...,1])
-            if point_gt_match[name].sum() > 0:
-                hit=True
-            ##print('match: {}'.format(timeit.default_timer()-##tic))
+                point_gt_match[name] = 1-point_gt_match[name]
+                point_gt_match[name] = np.logical_and(point_gt_match[name][...,0], point_gt_match[name][...,1])
+                if point_gt_match[name].sum() > 0:
+                    hit=True
+                ##print('match: {}'.format(timeit.default_timer()-##tic))
         
         if (contains_label is None or
             (hit and contains_label or cnt > 100) or
@@ -178,7 +179,7 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
                         line_gt_match[name] = np.where(line_gt_match[name]!=0)
                 if bb_gt is not None:
                     bb_gt = bb_gt[np.where(bb_gt_candidate)]
-                for name in point_gts:
+                for name in point_gt_match:
                     point_gt_match[name] = np.where(point_gt_match[name]!=0)
                 return crop, cropped_gt_img, cropped_pixel_gt, line_gt_match, point_gt_match, bb_gt
 
@@ -304,8 +305,9 @@ class CropBoxTransform(object):
         bb_gt[:,:,15] = bb_gt[:,:,15] + self.pad_params[1][0]
 
         for name, gt in point_gts.items():
-            gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
-            gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
+            if gt is not None:
+                gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
+                gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 
         crop_params, org_img, pixel_gt, _, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, None, point_gts, self.random_crop_params, bb_gt=bb_gt)
         #print(crop_params)
@@ -325,10 +327,11 @@ class CropBoxTransform(object):
         #the cross/edge points are invalid now
         new_point_gts={}
         for name, gt in point_gts.items():
-            gt = gt[point_gt_match[name]][None,...] #add batch dim (?)
-            gt[...,0] = gt[...,0] - crop_params['dim1'][0]
-            gt[...,1] = gt[...,1] - crop_params['dim0'][0]
-            new_point_gts[name]=gt
+            if gt is not None:
+                gt = gt[point_gt_match[name]][None,...] #add batch dim (?)
+                gt[...,0] = gt[...,0] - crop_params['dim1'][0]
+                gt[...,1] = gt[...,1] - crop_params['dim0'][0]
+                new_point_gts[name]=gt
         ##print('pad-minus: {}'.format(timeit.default_timer()-##tic))
 
             #if 'start' in name:

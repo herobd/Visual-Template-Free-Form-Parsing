@@ -261,7 +261,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             for groupName, imageNames in groupsToUse.items():
                 #print('{} {}'.format(groupName, imageNames))
                 #oneonly=False
-                if groupName in IAIN_CATCH:
+                if groupName in SKIP:
                     print('Skipped group {}'.format(groupName))
                     continue
                 #    if groupName in ONE_DONE:

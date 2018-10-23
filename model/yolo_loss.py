@@ -89,7 +89,7 @@ class YoloLoss (nn.Module):
 
         # Mask outputs to ignore non-existing objects
         loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
-        if target is not None:
+        if target is not None and nGT>0:
             loss_x = self.mse_loss(x[mask], tx[mask])
             loss_y = self.mse_loss(y[mask], ty[mask])
             loss_w = self.mse_loss(w[mask], tw[mask])
@@ -342,26 +342,33 @@ class YoloDistLoss (nn.Module):
         conf_mask_false = conf_mask - mask
 
         # Mask outputs to ignore non-existing objects
-        loss_x = self.mse_loss(x[mask], tx[mask])
-        loss_y = self.mse_loss(y[mask], ty[mask])
-        loss_w = self.mse_loss(w[mask], tw[mask])
-        loss_h = self.mse_loss(h[mask], th[mask])
-        loss_r = self.mse_loss(r[mask], tr[mask])
-        loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false]) + self.bce_loss(
-            pred_conf[conf_mask_true], tconf[conf_mask_true]
-        )
-        loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
-        loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
-
-        return (
-            loss,
-            loss_x.item()+loss_y.item()+loss_w.item()+loss_h.item(),
-            loss_conf.item(),
-            loss_cls.item(),
-            recall,
-            precision,
-        )
-
+        loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+        if target is not None and nGT>0:
+            loss_x = self.mse_loss(x[mask], tx[mask])
+            loss_y = self.mse_loss(y[mask], ty[mask])
+            loss_w = self.mse_loss(w[mask], tw[mask])
+            loss_h = self.mse_loss(h[mask], th[mask])
+            loss_r = self.mse_loss(r[mask], tr[mask])
+            loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
+            loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
+            loss = loss_x + loss_y + loss_w + loss_h + loss_r + loss_conf + loss_cls
+            return (
+                loss,
+                loss_x.item()+loss_y.item()+loss_w.item()+loss_h.item()+loss_r.item(),
+                loss_conf.item(),
+                loss_cls.item(),
+                recall,
+                precision,
+            )
+        else:
+            return (
+                loss_conf,
+                0,
+                loss_conf,
+                0,
+                recall,
+                precision,
+            )
 
 
 
@@ -388,16 +395,19 @@ def build_targets_rot(
         for t in range(target_sizes[b]): #range(target.shape[1]):
             #if target[b, t].sum() == 0:
             #    continue
-            nGT += 1
+
             # Convert to position relative to box
             gx = target[b, t, 0] / scale
             gy = target[b, t, 1] / scale
             gw = target[b, t, 4] / scale
             gh = target[b, t, 3] / scale
-            gr = target[b, t, 2] / scale
+            gr = target[b, t, 2]
+            if gw==0 or gh==0:
+                continue
+            nGT += 1
             # Get grid box indices
-            gi = int(gx)
-            gj = int(gy)
+            gi = max(min(int(gx),conf_mask.size(3)-1),0)
+            gj = max(min(int(gy),conf_mask.size(2)-1),0)
             # Get shape of gt box
             gt_points = target[b,j,5:13] / scale
             # Get shape of anchor box
@@ -420,6 +430,11 @@ def build_targets_rot(
             tx[b, best_n, gj, gi] = inv_tanh(gx - (gi+0.5))
             ty[b, best_n, gj, gi] = inv_tanh(gy - (gj+0.5))
             # Rotation
+            rot_diff = gr-anchors[best_n][2]
+            if rot_diff>math.pi/2:
+                rot_diff-=math.pi/2
+            elif rot_diff<-match.pi/2:
+                rot_diff+=math.pi/2
             tr[b, best_n, gj, gi] = inv_tanh((gr-anchors[best_n][2])/(math.pi/2))
             # Width and height
             tw[b, best_n, gj, gi] = math.log(gw / anchors[best_n][0] + 1e-16)

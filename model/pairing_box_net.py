@@ -30,7 +30,7 @@ class ResBlock(nn.Module):
         if norm=='group_norm':
             layers.append(nn.GroupNorm(8,out_ch))
         layers.append(nn.ReLU(inplace=True)) 
-        conv1=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1, dilation=dilation)
+        conv1=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation)
         if norm=='weight_norm':
             layers.append(weight_norm(conv1))
         else:
@@ -160,52 +160,69 @@ class PairingBoxNet(BaseModel):
         self.numBBParams = 6 #conf,x-off,y-off,rot-off,h-scale,w-scale
         with open(config['anchors_file']) as f:
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
-        #TODO Rescale anchors?
         self.numAnchors = len(self.anchors)
-        self.predPointCount = config['number_of_point_types']
-        self.predPixelCount = config['number_of_pixel_types']
+        #self.predPointCount = config['number_of_point_types']
+        #self.predPixelCount = config['number_of_pixel_types']
+        self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
+        #self.numOutPoint = self.predPointCount*3
         im_ch = 1+( 3 if 'color' not in config or config['color'] else 1 ) #+1 for query mask
         norm = config['norm_type'] if "norm_type" in config else None
         if norm is None:
             print('Warning: PairingBoxNet has no normalization!')
         dilation = config['dilation'] if 'dilation' in config else 1
-        #self.cnn, self.scale = vgg.vgg11_custOut(self.predLineCount*5+self.predPointCount*3,batch_norm=batch_norm, weight_norm=weight_norm)
-        self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
-        self.numOutPoint = self.predPointCount*3
+
+
+        if 'up_sample_relu' not in config or config['up_sample_relu']:
+            self.up_sample = nn.Sequential(
+                    nn.ConvTranspose2d(detect_ch,detect_ch,kernel_size=detect_scale,stride=detect_scale),
+                    nn.ReLU(inplace=True)
+                    )
+        else:
+            self.up_sample = nn.ConvTranspose2d(detect_ch,detect_ch,kernel_size=detect_scale,stride=detect_scale)
 
         if 'down_layers_cfg' in config:
-            layers_cfg = config['down_layers_cfg']
+            layers_cfg_down = config['down_layers_cfg']
         else:
-            layers_cfg=[in_ch,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
+            layers_cfg_down=[im_ch,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
 
-        self.net_down_modules, down_last_channels = make_layers(layers_cfg, dilation,norm)
-        self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutPoint, kernel_size=1))
-        self._hack_down = nn.Sequential(*self.net_down_modules)
+        if layers_cfg_down[0]>4:
+            layers_cfg_down = [im_ch]+layers_cfg_down
+
+        down_modules, down_last_ch = make_layers(layers_cfg_down, dilation,norm)
+        self.net_down = nn.Sequential(*down_modules)
         self.scale=1
         for a in layers_cfg:
             if a=='M' or (type(a) is str and a[0]=='D'):
                 self.scale*=2
             elif type(a) is str and a[0]=='U':
                 self.scale/=2
+        assert(self.scale == detect_scale)
+        
+        if 'final_layers_cfg' in config:
+            layers_cfg_final = config['final_layers_cfg']
+        else:
+            layers_cfg_final=['R1024']
+        layers_cfg_final = [down_last_ch]+layers_cfg_final
+        final_modules, final_last_ch = make_layers(layers_cfg_final, dilation,norm)
+        final_modules.append( nn.Conv2d(final_last_ch+self.numOutBB, self.numOutBB, kernel_size=1) )
+        
 
-        if self.predPixelCount>0:
-            if 'up_layers_cfg' in config:
-                up_layers_cfg =  config['up_layers_cfg']
-            else:
-                up_layers_cfg=[512, 'U+512', 256, 'U+256', 128, 'U+128', 64, 'U+64']
-            self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, 1, norm)
-            self.net_up_modules.append(nn.Conv2d(up_last_channels, self.predPixelCount, kernel_size=1))
-            self._hack_up = nn.Sequential(*self.net_up_modules)
+        #if self.predPixelCount>0:
+        #    if 'up_layers_cfg' in config:
+        #        up_layers_cfg =  config['up_layers_cfg']
+        #    else:
+        #        up_layers_cfg=[512, 'U+512', 256, 'U+256', 128, 'U+128', 64, 'U+64']
+        #    self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, 1, norm)
+        #    self.net_up_modules.append(nn.Conv2d(up_last_channels, self.predPixelCount, kernel_size=1))
+        #    self._hack_up = nn.Sequential(*self.net_up_modules)
 
-        #self.base_0 = config['base_0']
-        #self.base_1 = config['base_1']
 
     def forward(self, img, mask, detector_features, detected_boxes):
         #import pdb; pdb.set_trace()
         #y = self.cnn(img)
         up_features = self.up_sample(detector_features)
         input = np.cat([image,mask,up_features],dim=1)
-        at_box_res = self.net_down_modules(input)
+        at_box_res = self.net_down(input)
         with_detections = np.cat([at_box_res,detected_boxes],dim=1)
         pred = self.final(with_detections)
         

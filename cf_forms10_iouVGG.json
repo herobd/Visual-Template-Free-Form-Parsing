@@ -1,5 +1,5 @@
 {
-    "name": "forms11_iouVGG_dil3",
+    "name": "forms10_iouVGG_fast",
     "cuda": true,
     "gpu": 0,
     "save_mode": "model",
@@ -62,17 +62,15 @@
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
-        "iterations": 200000,
+        "iterations": 100000,
         "save_dir": "saved/",
-        "val_step": 5000,
-        "save_step": 10000,
-        "log_step": 500,
+        "val_step": 2000,
+        "save_step": 4000,
+        "log_step": 250,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
-        "warmup_steps": 3000,
-        "thresh_conf":0.88,
-        "thresh_intersect":0.4
+        "warmup_steps": 3000
     },
     "arch": "YoloBoxDetector", 
     "model": {
@@ -81,8 +79,8 @@
         "number_of_point_types": 0,
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
-        "dilation": 3,
-        "down_layers_cfg": [1,64, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024", 1024, 1024],
+        "Xdown_layers_cfg": [1,"C64", "M", "R64", "R64", "D128", "R128", "R128", "D256", "R256", "R256", "D512", "R512", "R512", "D1024", "R1024", "R1024", "U1024", "R1024", "ReLU"],
+        "down_layers_cfg": [1,64, "M", 128, 128, "M", 256, 256, "M", 512, 512, "M", 1024, 1024, 1024],
         "up_layers_cfg":[],
         "anchors_file": "anchors_noRot_12.json",
         "rotation":false

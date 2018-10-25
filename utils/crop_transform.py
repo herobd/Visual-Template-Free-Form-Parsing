@@ -15,7 +15,7 @@ def perform_crop(img, gt, crop):
     return scaled_gt_img, scaled_gt
 
 
-def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None):
+def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None, query_bb=None):
     
     contains_label = np.random.random() < params['prob_label'] if 'prob_label' in params else None
     cs = params['crop_size']
@@ -23,8 +23,14 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
     cnt = 0
     while True:
 
-        dim0 = np.random.randint(0,img.shape[0]-cs)
-        dim1 = np.random.randint(0,img.shape[1]-cs)
+        if query_bb is None:
+            dim0 = np.random.randint(0,img.shape[0]-cs)
+            dim1 = np.random.randint(0,img.shape[1]-cs)
+        else:
+            dim0 = np.random.randint(max(0,query_bb[9]-cs,query_bb[11]-cs,query_bb[13]-cs,query_bb[15]-cs),
+                                     min(img.shape[0]-cs,query_bb[9],query_bb[11],query_bb[13],query_bb[15]))
+            dim1 = np.random.randint(max(0,query_bb[8]-cs,query_bb[10]-cs,query_bb[12]-cs,query_bb[14]-cs),
+                                     min(img.shape[1]-cs,query_bb[8],query_bb[10],query_bb[12],query_bb[14]))
 
         crop = {
             "dim0": [dim0, dim0+cs],
@@ -56,6 +62,22 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
                     hit=True
         else:
             line_gt_match=None
+
+        if query_bb is not None:
+            got_query= (
+                    query_bb[8]>=dim1 and query_bb[8]<dim1+cs and
+                    query_bb[9]>=dim0 and query_bb[9]<dim0+cs and
+                    query_bb[10]>=dim1 and query_bb[10]<dim1+cs and
+                    query_bb[11]>=dim0 and query_bb[11]<dim0+cs and
+                    query_bb[12]>=dim1 and query_bb[12]<dim1+cs and
+                    query_bb[13]>=dim0 and query_bb[13]<dim0+cs and
+                    query_bb[14]>=dim1 and query_bb[14]<dim1+cs and
+                    query_bb[15]>=dim0 and query_bb[15]<dim0+cs
+                    )
+            assert(got_query)
+
+
+        got_all=True
         if bb_gt is not None:
             bb_gt_match=np.zeros_like(bb_gt)
 
@@ -103,10 +125,10 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
             #bb_gt_candidate = np.logical_or( np.logical_and(np.logical_or(has_top,has_bot),np.logical_or(has_left,has_right)),
             bb_gt_candidate = np.logical_or( np.logical_or(has_left,has_right),
                                              np.logical_and(has_top,has_bot))
+            got_all = bb_gt_candidate.all()
+            
             
 
-            #bb_gt_part -= bb_gt_fullin
-            #import pdb; pdb.set_trace()
             #we're going to edit bb_gt to make boxes partially in crop to be fully in crop 
             #bring in left side
             #needs_left = np.logical_and(bb_gt_candidate,1-has_left)[:,:,None]#, [1,1,2]) # things that are candidates where the left point is out-of-bounds
@@ -132,7 +154,7 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
 
             #bring in right side
             #same process as left side
-            needs_right = np.logical_and(bb_gt_candidate,1-has_right)[:,:,None]#, [1,1,2])
+            #needs_right = np.logical_and(bb_gt_candidate,1-has_right)[:,:,None]#, [1,1,2])
             v_l = -bb_gt[...,10:12]+bb_gt[...,8:10]
             dist1_l = (1-right_inside_l)*(dim1-bb_gt[...,10])/v_l[...,0]
             dist1_r = (1-right_inside_r)*(dim1+cs-bb_gt[...,10])/v_l[...,0]
@@ -170,9 +192,21 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None)
                     hit=True
                 ##print('match: {}'.format(timeit.default_timer()-##tic))
         
-        if (contains_label is None or
-            (hit and contains_label or cnt > 100) or
-            (not hit and not contains_label) ):
+        if (
+            (
+            query_bb is not None and (
+                got_all or
+                cnt>50 ) 
+            )
+            or 
+            (
+            query_bb is None and (
+                cnt > 100 or 
+                    (contains_label is None or
+                    (hit and contains_label) or
+                    (not hit and not contains_label) ) )
+            )
+           ):
                 cropped_gt_img, cropped_pixel_gt = perform_crop(img,pixel_gt, crop)
                 if line_gts is not None:
                     for name in line_gts:
@@ -265,12 +299,14 @@ class CropBoxTransform(object):
         else:
             pad_by = crop_size//2
         self.pad_params = ((pad_by,pad_by),(pad_by,pad_by),(0,0))
+        #self.all_bbs=all_bbs
 
     def __call__(self, sample):
         org_img = sample['img']
         bb_gt = sample['bb_gt']
         point_gts = sample['point_gt']
         pixel_gt = sample['pixel_gt']
+        query_bb = sample['query_bb'] if 'query_bb' in sample else None
 
         #pad out to allow random samples to take space off of the page
         ##tic=timeit.default_timer()
@@ -304,12 +340,24 @@ class CropBoxTransform(object):
         bb_gt[:,:,14] = bb_gt[:,:,14] + self.pad_params[0][0]
         bb_gt[:,:,15] = bb_gt[:,:,15] + self.pad_params[1][0]
 
+        if query_bb is not None:
+            query_bb[8 ] = query_bb[8 ] + self.pad_params[0][0]
+            query_bb[9 ] = query_bb[9 ] + self.pad_params[1][0]
+            query_bb[10] = query_bb[10] + self.pad_params[0][0]
+            query_bb[11] = query_bb[11] + self.pad_params[1][0]
+            query_bb[12] = query_bb[12] + self.pad_params[0][0]
+            query_bb[13] = query_bb[13] + self.pad_params[1][0]
+            query_bb[14] = query_bb[14] + self.pad_params[0][0]
+            query_bb[15] = query_bb[15] + self.pad_params[1][0]
+
+
+
         for name, gt in point_gts.items():
             if gt is not None:
                 gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
                 gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 
-        crop_params, org_img, pixel_gt, _, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, None, point_gts, self.random_crop_params, bb_gt=bb_gt)
+        crop_params, org_img, pixel_gt, _, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, None, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
         #print(crop_params)
         #print(gt_match)
         

@@ -8,7 +8,7 @@ from evaluators import FormsBoxDetect_printer
 from utils.yolo_tools import non_max_sup_iou, AP_iou
 
 
-class BoxDetectTrainer(BaseTrainer):
+class BoxPairTrainer(BaseTrainer):
     """
     Trainer class
 
@@ -18,7 +18,7 @@ class BoxDetectTrainer(BaseTrainer):
     """
     def __init__(self, model, loss, metrics, resume, config,
                  data_loader, valid_data_loader=None, train_logger=None):
-        super(BoxDetectTrainer, self).__init__(model, loss, metrics, resume, config, train_logger)
+        super(BoxPairTrainer, self).__init__(model, loss, metrics, resume, config, train_logger)
         self.config = config
         if 'loss_params' in config:
             self.loss_params=config['loss_params']
@@ -45,28 +45,20 @@ class BoxDetectTrainer(BaseTrainer):
         warmup_steps = config['warmup_steps'] if 'warmup_steps' in config else 1000
         lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
         self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        self.unfreeze_detector = config['unfreeze_detector'] if 'unfreeze_detector' in config else None
 
         self.thresh_conf = config['thresh_conf'] if 'thresh_conf' in config else 0.92
         self.thresh_intersect = config['thresh_intersect'] if 'thresh_intersect' in config else 0.4
 
     def _to_tensor(self, instance):
         data = instance['img']
-        if 'bb_gt' in instance:
-            targetBoxes = instance['bb_gt']
-            targetBoxes_sizes = instance['bb_sizes']
+        if 'responseBBs' in instance:
+            targetBoxes = instance['responseBBs']
+            targetBoxes_sizes = instance['responseBB_sizes']
         else:
             targetBoxes = None
             targetBoxes_sizes = []
-        if 'point_gt' in instance:
-            targetPoints = instance['point_gt']
-            targetPoints_sizes = instance['point_label_sizes']
-        else:
-            targetPoints = {}
-            targetPoints_sizes = {}
-        if 'pixel_gt' in instance:
-            targetPixels = instance['pixel_gt']
-        else:
-            targetPixels = None
+        queryMask = instance['queryMask']
         if type(data) is np.ndarray:
             data = torch.FloatTensor(data.astype(np.float32))
         elif type(data) is torch.Tensor:
@@ -83,12 +75,11 @@ class BoxDetectTrainer(BaseTrainer):
 
         if self.with_cuda:
             data = data.to(self.gpu)
+            queryMask = queryMask.to(self.gpu)
             if targetBoxes is not None:
                 targetBoxes=targetBoxes.to(self.gpu)
             targetPoints=sendToGPU(targetPoints)
-            if targetPixels is not None:
-                targetPixels=targetPixels.to(self.gpu)
-        return data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels
+        return data, queryMask, targetBoxes, targetBoxes_sizes
 
     def _eval_metrics(self, typ,name,output, target):
         if len(self.metrics[typ])>0:
@@ -121,6 +112,8 @@ class BoxDetectTrainer(BaseTrainer):
 
             The metrics in log must have the key 'metrics'.
         """
+        if self.unfreeze_detector is not None and iteration>=self.unfreeze_detector:
+            self.model.detector_frozen=False
         self.model.train()
         self.lr_schedule.step()
 
@@ -141,7 +134,6 @@ class BoxDetectTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('for: '+str(toc-tic))
         #loss = self.loss(output, target)
-        loss = 0
         index=0
         losses={}
         ##tic=timeit.default_timer()
@@ -149,31 +141,13 @@ class BoxDetectTrainer(BaseTrainer):
         if self.iteration % self.save_step == 0:
             targetPoints={}
             targetPixels=None
-            _,lossC=FormsBoxDetect_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
-            this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
+            _,lossC=FormsBoxPair_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
+            loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         else:
-            data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
-            outputBoxes, outputOffsets, outputPoints, outputPixels = self.model(data)
-            this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
-        this_loss*=self.loss_weight['box']
-        loss+=this_loss
-        losses['box_loss']=this_loss.item()
+            image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(thisInstance)
+            outputBoxes, outputOffsets = self.model(image,queryMask)
+            loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
 
-        index=0
-        for name, target in targetPoints.items():
-            #print('point')
-            predictions = outputPoints[index]
-            this_loss = self.loss['point'](predictions,target,targetPoints_sizes[name], **self.loss_params['point'])
-            this_loss*=self.loss_weight['point']
-            loss+=this_loss
-            losses[name+'_loss']=this_loss.item()
-            index+=1
-        if targetPixels is not None:
-            #print('pixel')
-            this_loss = self.loss['pixel'](outputPixels,targetPixels, **self.loss_params['pixel'])
-            this_loss*=self.loss_weight['pixel']
-            loss+=this_loss
-            losses['pixel_loss']=this_loss.item()
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()

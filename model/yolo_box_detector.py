@@ -171,6 +171,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
     def __init__(self, config): # predCount, base_0, base_1):
         #super(YoloBoxDetector, self).__init__(config)
         super(YoloBoxDetector, self).__init__()
+        self.forPairing=False
         self.config = config
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
@@ -224,6 +225,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
     def forward(self, img):
         #import pdb; pdb.set_trace()
         y = self._hack_down(img)
+        if self.forPairing:
+            return y[:,:(self.numBBParams+self.numBBTypes)*self.numAnchors,:,:]
         #levels=[img]
         #for module in self.net_down_modules:
         #    levels.append(module(levels[-1]))

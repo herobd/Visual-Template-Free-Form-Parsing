@@ -6,6 +6,8 @@ def perform_crop(img, gt, crop):
     cs = crop['crop_size']
     cropped_gt_img = img[crop['dim0'][0]:crop['dim0'][1], crop['dim1'][0]:crop['dim1'][1]]
     scaled_gt_img = cv2.resize(cropped_gt_img, (cs, cs), interpolation = cv2.INTER_CUBIC)
+    if len(scaled_gt_img.shape)==2:
+        scaled_gt_img = scaled_gt_img[...,None]
     scaled_gt = None
     if gt is not None:
         cropped_gt = gt[crop['dim0'][0]:crop['dim0'][1], crop['dim1'][0]:crop['dim1'][1]]
@@ -27,10 +29,18 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
             dim0 = np.random.randint(0,img.shape[0]-cs)
             dim1 = np.random.randint(0,img.shape[1]-cs)
         else:
-            dim0 = np.random.randint(max(0,query_bb[9]-cs,query_bb[11]-cs,query_bb[13]-cs,query_bb[15]-cs),
-                                     min(img.shape[0]-cs,query_bb[9],query_bb[11],query_bb[13],query_bb[15]))
-            dim1 = np.random.randint(max(0,query_bb[8]-cs,query_bb[10]-cs,query_bb[12]-cs,query_bb[14]-cs),
-                                     min(img.shape[1]-cs,query_bb[8],query_bb[10],query_bb[12],query_bb[14]))
+            minY=int(max(0,query_bb[9]-cs,query_bb[11]-cs,query_bb[13]-cs,query_bb[15]-cs))
+            maxY=int(min(img.shape[0]-cs,query_bb[9],query_bb[11],query_bb[13],query_bb[15]))
+            if minY>=maxY:
+                minY=int(max(0,min(query_bb[9],query_bb[11],query_bb[13],query_bb[15])))
+                maxY=int(min(img.shape[0]-cs,max(query_bb[9]-cs,query_bb[11]-cs,query_bb[13]-cs,query_bb[15]-cs)))
+            minX=int(max(0,query_bb[8]-cs,query_bb[10]-cs,query_bb[12]-cs,query_bb[14]-cs))
+            maxX=int(min(img.shape[1]-cs,query_bb[8],query_bb[10],query_bb[12],query_bb[14]))
+            if minX>=maxX:
+                minX=int(max(0,min(query_bb[8],query_bb[10],query_bb[12],query_bb[14])))
+                maxX=int(min(img.shape[1]-cs,max(query_bb[8]-cs,query_bb[10]-cs,query_bb[12]-cs,query_bb[14]-cs)))
+            dim0 = np.random.randint(minY,maxY)
+            dim1 = np.random.randint(minX,maxX)
 
         crop = {
             "dim0": [dim0, dim0+cs],
@@ -63,18 +73,6 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
         else:
             line_gt_match=None
 
-        if query_bb is not None:
-            got_query= (
-                    query_bb[8]>=dim1 and query_bb[8]<dim1+cs and
-                    query_bb[9]>=dim0 and query_bb[9]<dim0+cs and
-                    query_bb[10]>=dim1 and query_bb[10]<dim1+cs and
-                    query_bb[11]>=dim0 and query_bb[11]<dim0+cs and
-                    query_bb[12]>=dim1 and query_bb[12]<dim1+cs and
-                    query_bb[13]>=dim0 and query_bb[13]<dim0+cs and
-                    query_bb[14]>=dim1 and query_bb[14]<dim1+cs and
-                    query_bb[15]>=dim0 and query_bb[15]<dim0+cs
-                    )
-            assert(got_query)
 
 
         got_all=True
@@ -176,21 +174,22 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
             bb_gt_match= None
 
         point_gt_match={}
-        for name, gt in point_gts.items():
-            if gt is not None:
-                ##tic=timeit.default_timer()
-                point_gt_match[name] = np.zeros_like(gt)
-                point_gt_match[name][...,0][gt[...,0] < dim1] = 1
-                point_gt_match[name][...,0][gt[...,0] > dim1+cs] = 1
+        if point_gts is not None:
+            for name, gt in point_gts.items():
+                if gt is not None:
+                    ##tic=timeit.default_timer()
+                    point_gt_match[name] = np.zeros_like(gt)
+                    point_gt_match[name][...,0][gt[...,0] < dim1] = 1
+                    point_gt_match[name][...,0][gt[...,0] > dim1+cs] = 1
 
-                point_gt_match[name][...,1][gt[...,1] < dim0] = 1
-                point_gt_match[name][...,1][gt[...,1] > dim0+cs] = 1
+                    point_gt_match[name][...,1][gt[...,1] < dim0] = 1
+                    point_gt_match[name][...,1][gt[...,1] > dim0+cs] = 1
 
-                point_gt_match[name] = 1-point_gt_match[name]
-                point_gt_match[name] = np.logical_and(point_gt_match[name][...,0], point_gt_match[name][...,1])
-                if point_gt_match[name].sum() > 0:
-                    hit=True
-                ##print('match: {}'.format(timeit.default_timer()-##tic))
+                    point_gt_match[name] = 1-point_gt_match[name]
+                    point_gt_match[name] = np.logical_and(point_gt_match[name][...,0], point_gt_match[name][...,1])
+                    if point_gt_match[name].sum() > 0:
+                        hit=True
+                    ##print('match: {}'.format(timeit.default_timer()-##tic))
         
         if (
             (
@@ -311,10 +310,10 @@ class CropBoxTransform(object):
         #pad out to allow random samples to take space off of the page
         ##tic=timeit.default_timer()
         #org_img = np.pad(org_img, self.pad_params, 'mean')
-        if len(org_img.shape)==3:
+        if org_img.shape[2]==3:
             org_img = np.pad(org_img, self.pad_params, 'constant', constant_values=[255,255,255])
         else:
-            org_img = np.pad(org_img, self.pad_params[:2], 'constant', constant_values=255)
+            org_img = np.pad(org_img, self.pad_params, 'constant', constant_values=255)
         if pixel_gt is not None:
             pixel_gt = np.pad(pixel_gt, self.pad_params, 'constant')
         ##print('pad: {}'.format(timeit.default_timer()-##tic))
@@ -351,11 +350,11 @@ class CropBoxTransform(object):
             query_bb[15] = query_bb[15] + self.pad_params[1][0]
 
 
-
-        for name, gt in point_gts.items():
-            if gt is not None:
-                gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
-                gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
+        if point_gts is not None:
+            for name, gt in point_gts.items():
+                if gt is not None:
+                    gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
+                    gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 
         crop_params, org_img, pixel_gt, _, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, None, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
         #print(crop_params)
@@ -374,12 +373,13 @@ class CropBoxTransform(object):
         new_bb_gt[...,7 ] = new_bb_gt[...,7 ] - crop_params['dim0'][0]
         #the cross/edge points are invalid now
         new_point_gts={}
-        for name, gt in point_gts.items():
-            if gt is not None:
-                gt = gt[point_gt_match[name]][None,...] #add batch dim (?)
-                gt[...,0] = gt[...,0] - crop_params['dim1'][0]
-                gt[...,1] = gt[...,1] - crop_params['dim0'][0]
-                new_point_gts[name]=gt
+        if point_gts is not None:
+            for name, gt in point_gts.items():
+                if gt is not None:
+                    gt = gt[point_gt_match[name]][None,...] #add batch dim (?)
+                    gt[...,0] = gt[...,0] - crop_params['dim1'][0]
+                    gt[...,1] = gt[...,1] - crop_params['dim0'][0]
+                    new_point_gts[name]=gt
         ##print('pad-minus: {}'.format(timeit.default_timer()-##tic))
 
             #if 'start' in name:

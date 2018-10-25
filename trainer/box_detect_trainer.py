@@ -272,7 +272,8 @@ class BoxDetectTrainer(BaseTrainer):
                 
                 threshConf = self.thresh_conf*outputBoxes[:,:,0].max()
                 outputBoxes = non_max_sup_iou(outputBoxes.cpu(),self.thresh_conf,self.thresh_intersect)
-                targetBoxes = targetBoxes.cpu()
+                if targetBoxes is not None:
+                    targetBoxes = targetBoxes.cpu()
                 for b in range(len(outputBoxes)):
                     if targetBoxes is not None:
                         target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]

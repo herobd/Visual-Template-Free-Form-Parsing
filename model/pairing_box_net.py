@@ -23,7 +23,7 @@ def rotFunc(netPred):
 
 
 class PairingBoxNet(nn.Module):
-    def __init__(self, config,detector_config,detect_ch): # predCount, base_0, base_1):
+    def __init__(self, config,detector_config,detect_ch,detect_scale): # predCount, base_0, base_1):
         super(PairingBoxNet, self).__init__()
         self.rotation = detector_config['rotation'] if 'rotation' in config else True
         self.numBBTypes = detector_config['number_of_box_types']
@@ -41,28 +41,42 @@ class PairingBoxNet(nn.Module):
             print('Warning: PairingBoxNet has no normalization!')
         dilation = config['dilation'] if 'dilation' in config else 1
 
+        if 'down1_layers_cfg' in config:
+            layers_cfg_down1 = config['down1_layers_cfg']
+        else:
+            layers_cfg_down1=[32, 'M']
+
+        if layers_cfg_down1[0]>4:
+            layers_cfg_down1 = [im_ch]+layers_cfg_down1
+        down1_modules, down1_last_ch = make_layers(layers_cfg_down1, dilation,norm)
+        self.net_down1 = nn.Sequential(*down1_modules)
+        down1scale=1
+        for a in layers_cfg_down1:
+            if a=='M' or (type(a) is str and a[0]=='D'):
+                down1scale*=2
+            elif type(a) is str and a[0]=='U':
+                down1scale/=2
+
         detect_ch_after_up = config['up_sample_ch'] if 'up_sample_ch' in config else 256
 
         if 'up_sample_relu' not in config or config['up_sample_relu']:
             self.up_sample = nn.Sequential(
-                    nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=detect_scale,stride=detect_scale),
+                    nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=detect_scale//down1scale,stride=detect_scale//down1scale),
                     nn.ReLU(inplace=True)
                     )
         else:
             self.up_sample = nn.ConvTranspose2d(detect_ch,detect_ch,kernel_size=detect_scale,stride=detect_scale)
 
-        if 'down_layers_cfg' in config:
-            layers_cfg_down = config['down_layers_cfg']
+        if 'down2_layers_cfg' in config:
+            layers_cfg_down2 = config['down2_layers_cfg']
         else:
-            layers_cfg_down=[4, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 1024, 1024]
+            layers_cfg_down2=[128,'M',256, "M", 512, "M", 1024]
 
-        if layers_cfg_down[0]>4:
-            layers_cfg_down = [im_ch+detect_ch_after_up]+layers_cfg_down
-
-        down_modules, down_last_ch = make_layers(layers_cfg_down, dilation,norm)
-        self.net_down = nn.Sequential(*down_modules)
-        self.scale=1
-        for a in layers_cfg:
+        layers_cfg_down2 = [down1_last_ch+detect_ch_after_up]+layers_cfg_down2
+        down2_modules, down2_last_ch = make_layers(layers_cfg_down2, dilation,norm)
+        self.net_down2 = nn.Sequential(*down2_modules)
+        self.scale=down1scale
+        for a in layers_cfg_down2:
             if a=='M' or (type(a) is str and a[0]=='D'):
                 self.scale*=2
             elif type(a) is str and a[0]=='U':
@@ -73,10 +87,10 @@ class PairingBoxNet(nn.Module):
             layers_cfg_final = config['final_layers_cfg']
         else:
             layers_cfg_final=[1024]
-        layers_cfg_final = [down_last_ch+self.numOutBB]+layers_cfg_final
+        layers_cfg_final = [down2_last_ch+self.numOutBB]+layers_cfg_final
         final_modules, final_last_ch = make_layers(layers_cfg_final, dilation,norm)
         final_modules.append( nn.Conv2d(final_last_ch, self.numOutBB, kernel_size=1) )
-        self.final = nn.nn.Sequential(*final_modules)
+        self.final = nn.Sequential(*final_modules)
 
         #if self.predPixelCount>0:
         #    if 'up_layers_cfg' in config:
@@ -92,9 +106,13 @@ class PairingBoxNet(nn.Module):
         #import pdb; pdb.set_trace()
         #y = self.cnn(img)
         up_features = self.up_sample(detector_features)
-        input = np.cat([image,mask,up_features],dim=1)
-        at_box_res = self.net_down(input)
-        with_detections = np.cat([at_box_res,detected_boxes],dim=1)
+        #input = torch.cat([img,mask,up_features],dim=1)
+        #at_box_res = self.net_down(input)
+        input = torch.cat([img,mask],dim=1)
+        down1 = self.net_down1(input)
+        input = torch.cat([down1,up_features],dim=1)
+        at_box_res = self.net_down2(input)
+        with_detections = torch.cat([at_box_res,detected_boxes],dim=1)
         pred = self.final(with_detections)
         
         pred+=detected_boxes
@@ -104,15 +122,15 @@ class PairingBoxNet(nn.Module):
 
 
         #priors_0 = Variable(torch.arange(0,y.size(2)).type_as(img.data), requires_grad=False)[None,:,None]
-        priors_0 = torch.arange(0,y.size(2)).type_as(img.data)[None,:,None]
+        priors_0 = torch.arange(0,pred.size(2)).type_as(img.data)[None,:,None]
         priors_0 = (priors_0 + 0.5) * self.scale #self.base_0
-        priors_0 = priors_0.expand(y.size(0), priors_0.size(1), y.size(3))
+        priors_0 = priors_0.expand(pred.size(0), priors_0.size(1), pred.size(3))
         priors_0 = priors_0[:,None,:,:]
 
         #priors_1 = Variable(torch.arange(0,y.size(3)).type_as(img.data), requires_grad=False)[None,None,:]
-        priors_1 = torch.arange(0,y.size(3)).type_as(img.data)[None,None,:]
+        priors_1 = torch.arange(0,pred.size(3)).type_as(img.data)[None,None,:]
         priors_1 = (priors_1 + 0.5) * self.scale #elf.base_1
-        priors_1 = priors_1.expand(y.size(0), y.size(2), priors_1.size(2))
+        priors_1 = priors_1.expand(pred.size(0), pred.size(2), priors_1.size(2))
         priors_1 = priors_1[:,None,:,:]
 
         anchor = self.anchors
@@ -124,7 +142,7 @@ class PairingBoxNet(nn.Module):
             if self.rotation:
                 rot_dif = (math.pi/2)*torch.tanh(pred[:,3+offset:4+offset,:,:])
             else:
-                rot_dif = torch.zeros_like(y[:,3+offset:4+offset,:,:])
+                rot_dif = torch.zeros_like(pred[:,3+offset:4+offset,:,:])
 
             stackedPred = [
                 torch.sigmoid(pred[:,0+offset:1+offset,:,:]),                #0. confidence
@@ -137,10 +155,10 @@ class PairingBoxNet(nn.Module):
 
 
             for j in range(self.numBBTypes):
-                stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
+                stackedPred.append(pred[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
                 #stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
             pred_boxes.append(torch.cat(stackedPred, dim=1))
-            pred_offsets.append(y[:,offset:offset+self.numBBParams+self.numBBTypes,:,:])
+            pred_offsets.append(pred[:,offset:offset+self.numBBParams+self.numBBTypes,:,:])
 
         bbPredictions = torch.stack(pred_boxes, dim=1)
         offsetPredictions = torch.stack(pred_offsets, dim=1)
@@ -152,31 +170,9 @@ class PairingBoxNet(nn.Module):
 
         offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous() #to [batch, anchor, row, col, channels]
 
-        pointPreds=[]
-        for i in range(self.predPointCount):
-            offset = i*3 + self.numAnchors*(self.numBBParams+self.numBBTypes)
-            predictions = torch.cat([
-                torch.sigmoid(y[:,0+offset:1+offset,:,:]),    #confidence
-                y[:,1+offset:2+offset,:,:] + priors_1,        #x
-                y[:,2+offset:3+offset,:,:] + priors_0         #y
-            ], dim=1)
-            
-            predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
-            predictions = predictions.view(predictions.size(0),-1,3)#flatten to [batch, instances, channel]
-            pointPreds.append(predictions)
-
-        pixelPreds=None
-        if self.predPixelCount>0:
-            y2=levels[-2]
-            p=-3
-            for module in self.net_up_modules[:-1]:
-                #print('uping {} , {}'.format(y2.size(), levels[p].size()))
-                y2 = module(y2,levels[p])
-                p-=1
-            pixelPreds = self.net_up_modules[-1](y2)
             
 
 
 
-        return bbPredictions, offsetPredictions, pointPreds, pixelPreds #, avg_conf_per_anchor
+        return bbPredictions, offsetPredictions #, avg_conf_per_anchor
 

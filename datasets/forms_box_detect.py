@@ -88,7 +88,8 @@ def convertBBs(bbs,rotate,numClasses):
     new_bbs[:,:,10]=topY
     new_bbs[:,:,11]=botX
     new_bbs[:,:,12]=botY
-    new_bbs[:,:,13:]=bbs[:,:,-numClasses]
+    #print("{} {}, {} {}".format(new_bbs.shape,new_bbs[:,:,13:].shape,bbs.shape,bbs[:,:,-numClasses].shape))
+    new_bbs[:,:,13:]=bbs[:,:,-numClasses:]
 
 
     return torch.from_numpy(new_bbs)

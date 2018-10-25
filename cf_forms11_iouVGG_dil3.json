@@ -2,7 +2,7 @@
     "name": "forms11_iouVGG_dil3",
     "cuda": true,
     "gpu": 0,
-    "save_mode": "model",
+    "save_mode": "state_dict",
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",

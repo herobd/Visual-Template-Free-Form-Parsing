@@ -592,7 +592,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
         useBBs=[]
         for bb in bbs:
-            if fields and self.isSkipField(bb)
+            if fields and self.isSkipField(bb):
                 continue
             else:
                 useBBs.append(bb)
@@ -1037,7 +1037,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         cv2.imshow('clusters',draw)
         cv2.waitKey()
 
-     def isSkipField(self,bb):
+    def isSkipField(self,bb):
         return (    (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
                     (self.no_print_fields and (bb['isBlank']=='print' or bb['isBlank']==2)) or
                     #TODO no graphics

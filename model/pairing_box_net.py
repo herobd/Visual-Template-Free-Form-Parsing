@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
 import math
 import json
-from model.yolo_box_detector import make_layers
+from .yolo_box_detector import make_layers
 
 
 def offsetFunc(netPred): #this changes the offset prediction from the network
@@ -23,28 +23,29 @@ def rotFunc(netPred):
 
 
 class PairingBoxNet(nn.Module):
-    def __init__(self, config): # predCount, base_0, base_1):
+    def __init__(self, config,detector_config,detect_ch): # predCount, base_0, base_1):
         super(PairingBoxNet, self).__init__()
-        self.rotation = config['rotation'] if 'rotation' in config else True
-        self.numBBTypes = config['number_of_box_types']
+        self.rotation = detector_config['rotation'] if 'rotation' in config else True
+        self.numBBTypes = detector_config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,rot-off,h-scale,w-scale
-        with open(config['anchors_file']) as f:
+        with open(detector_config['anchors_file']) as f:
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
         self.numAnchors = len(self.anchors)
         #self.predPointCount = config['number_of_point_types']
         #self.predPixelCount = config['number_of_pixel_types']
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
         #self.numOutPoint = self.predPointCount*3
-        im_ch = 1+( 3 if 'color' not in config or config['color'] else 1 ) #+1 for query mask
+        im_ch = 1+( 3 if 'color' not in detector_config or detector_config['color'] else 1 ) #+1 for query mask
         norm = config['norm_type'] if "norm_type" in config else None
         if norm is None:
             print('Warning: PairingBoxNet has no normalization!')
         dilation = config['dilation'] if 'dilation' in config else 1
 
+        detect_ch_after_up = config['up_sample_ch'] if 'up_sample_ch' in config else 256
 
         if 'up_sample_relu' not in config or config['up_sample_relu']:
             self.up_sample = nn.Sequential(
-                    nn.ConvTranspose2d(detect_ch,detect_ch,kernel_size=detect_scale,stride=detect_scale),
+                    nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=detect_scale,stride=detect_scale),
                     nn.ReLU(inplace=True)
                     )
         else:
@@ -53,10 +54,10 @@ class PairingBoxNet(nn.Module):
         if 'down_layers_cfg' in config:
             layers_cfg_down = config['down_layers_cfg']
         else:
-            layers_cfg_down=[im_ch,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 1024, 1024]
+            layers_cfg_down=[4, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 1024, 1024]
 
         if layers_cfg_down[0]>4:
-            layers_cfg_down = [im_ch]+layers_cfg_down
+            layers_cfg_down = [im_ch+detect_ch_after_up]+layers_cfg_down
 
         down_modules, down_last_ch = make_layers(layers_cfg_down, dilation,norm)
         self.net_down = nn.Sequential(*down_modules)
@@ -71,7 +72,7 @@ class PairingBoxNet(nn.Module):
         if 'final_layers_cfg' in config:
             layers_cfg_final = config['final_layers_cfg']
         else:
-            layers_cfg_final=['R1024']
+            layers_cfg_final=[1024]
         layers_cfg_final = [down_last_ch+self.numOutBB]+layers_cfg_final
         final_modules, final_last_ch = make_layers(layers_cfg_final, dilation,norm)
         final_modules.append( nn.Conv2d(final_last_ch, self.numOutBB, kernel_size=1) )

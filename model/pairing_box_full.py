@@ -1,6 +1,6 @@
 from base import BaseModel
 import torch
-from model import PairingBoxNet, YoloBoxDetector
+from .pairing_box_net import PairingBoxNet #, YoloBoxDetector
 
 
 class PairingBoxFull(BaseModel):
@@ -8,15 +8,15 @@ class PairingBoxFull(BaseModel):
         super(PairingBoxFull, self).__init__(config)
 
         checkpoint = torch.load(config['detector_checkpoint'])
-        detector_config = config['detector_config'] if 'detector_config' in config else checkpoint['config']
-        if 'detector_type' in config:
-            self.detector = eval(config['detector_type'])(detector_config)
+        detector_config = config['detector_config'] if 'detector_config' in config else checkpoint['config']['model']
+        if 'detector_arch' in config:
+            self.detector = eval(config['detector_arch'])(detector_config)
             self.detector.load_state_dict(checkpoint['state_dict'])
         else:
             self.detector = checkpoint['model']
         self.detector_frozen=True
 
-        self.pairer = PairingBoxNet(config['pairer_config'])
+        self.pairer = PairingBoxNet(config['pairer_config'],detector_config,self.detector.last_channels)
 
     def forward(self, image, queryMask):
         if self.detector_frozen:
@@ -26,6 +26,9 @@ class PairingBoxFull(BaseModel):
         else:
             bbPredictions, offsetPredictions, pointPreds, pixelPreds = self.detector(image)
 
-        bbPredictions, offsetPredictions, pointPreds, pixelPreds = self.pairer(image,queryMask,features, offsetPredictions)
+        bbPredictions, offsetPredictions, pointPreds, pixelPreds = self.pairer( image,
+                                                                                queryMask,
+                                                                                self.detector.final_features, 
+                                                                                offsetPredictions)
 
         return bbPredictions, offsetPredictions

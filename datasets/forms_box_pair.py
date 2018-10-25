@@ -8,9 +8,23 @@ from skimage import draw
 import os
 import math
 import cv2
+from collections import defaultdict
 from datasets.forms_box_detect import convertBBs
+from utils.crop_transform import CropBoxTransform
 SKIP=['174']
 
+def avg_y(bb):
+    points = bb['poly_points']
+    return (points[0][1]+points[1][1]+points[2][1]+points[3][1])/4.0
+def avg_x(bb):
+    points = bb['poly_points']
+    return (points[0][0]+points[1][0]+points[2][0]+points[3][0])/4.0
+def left_x(bb):
+    points = bb['poly_points']
+    return (points[0][0]+points[3][0])/2.0
+def right_x(bb):
+    points = bb['poly_points']
+    return (points[1][0]+points[2][0])/2.0
 
 def collate(batch):
 
@@ -118,7 +132,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
                     otherId=pair[1]
                 else:
                     otherId=pair[0]
-                responseBBList.append(annotations['byId'][otherId])
+                if otherId in annotations['byId']: #catch for gt error
+                    responseBBList.append(annotations['byId'][otherId])
                 #if not self.isSkipField(annotations['byId'][otherId]):
                 #    poly = np.array(annotations['byId'][otherId]['poly_points']) #self.__getResponseBB(otherId,annotations)  
                 #    responseBBList.append(poly)
@@ -140,6 +155,11 @@ class FormsBoxPair(torch.utils.data.Dataset):
         else:
             self.no_print_fields = False
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
+        self.swapCircle = config['swap_circle'] if 'swap_circle' in config else True
+        self.color = config['color'] if 'color' in config else True
+        self.rotate = config['rotation'] if 'rotation' in config else True
+        
+        self.rescale_range=config['rescale_range']
         if 'cache_resized_images' in config:
             self.cache_resized = config['cache_resized_images']
             if self.cache_resized:
@@ -148,15 +168,16 @@ class FormsBoxPair(torch.utils.data.Dataset):
                     os.mkdir(self.cache_path)
         else:
             self.cache_resized = False
-        self.fixedDetectorCheckpoint = config['detector_checkpoint'] if 'detector_checkpoint' in config else None
-        patchSize=config['patch_size'] if 'patch_size' in config else None
+        #self.fixedDetectorCheckpoint = config['detector_checkpoint'] if 'detector_checkpoint' in config else None
+        crop_params=config['crop_params'] if 'crop_params' in config else None
+        if crop_params is not None:
+            self.transform = CropBoxTransform(crop_params)
+        else:
+            self.transform = None
         if instances is not None:
             self.instances=instances
             self.cropResize = self.__cropResizeF(patchSize,0,0)
         else:
-            centerJitterFactor=config['center_jitter']
-            self.rescale_range=config['rescale_range']
-            self.cropResize = self.__cropResizeF(patchSize,centerJitterFactor,sizeJitterFactor)
             with open(os.path.join(dirPath,'train_valid_test_split.json')) as f:
                 groupsToUse = json.loads(f.read())[split]
             self.instances=[]
@@ -191,13 +212,6 @@ class FormsBoxPair(torch.utils.data.Dataset):
                             with open(os.path.join(jsonPath)) as f:
                                 annotations = json.loads(f.read())
                             #print(os.path.join(jsonPath))
-                        imH = annotations['height']
-                        imW = annotations['width']
-                        #startCount=len(self.instances)
-                        if test:
-                            aH+=imH
-                            aW+=imW
-                            aA+=imH*imW
                         annotations['byId']={}
                         for bb in annotations['textBBs']:
                             annotations['byId'][bb['id']]=bb
@@ -219,7 +233,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
                                                 'imageName': imageName[:imageName.rfind('.')],
                                                 'queryBB': bb,
                                                 'responseBBList': responseBBList,
-                                                'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
+                                                #'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
                                             })
 
                         for bb in annotations['fieldBBs']:
@@ -233,7 +247,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
                                                 'imageName': imageName[:imageName.rfind('.')],
                                                 'queryBB': bb,
                                                 'responseBBList': responseBBList,
-                                                'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
+                                                #'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
                                             })
 
                         #for i in range(startCount,len(self.instances)):
@@ -285,7 +299,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         #imageWithQuery = np.append(1-np_img/128.0,queryMask[:,:,None]),axis=2)
         #sample = self.cropResize(imageWithQuery, responseMask, xQueryC,yQueryC,reach,x0,y0,x1,y1)
         if self.transform is not None:
-           out = self.transform({
+            out = self.transform({
                 "img": np_img,
                 "bb_gt": response_bbs,
                 "query_bb":query_bb,
@@ -301,7 +315,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
 
         t_response_bbs = convertBBs(response_bbs,self.rotate,2)
 
-        np_img = np.moveaxis(np_img,2,0)[None,....] #swap channel dim and add batch dim
+        np_img = np.moveaxis(np_img,2,0)[None,...] #swap channel dim and add batch dim
         t_img = torch.from_numpy(imageWithQuery.astype(np.float32))
         t_img = 1.0 - t_img/128.0
         queryMask = queryMask[None,None,...] #add batch and channel dims
@@ -396,7 +410,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
     def fixAnnotations(self,annotations):
         annotations['pairs']+=annotations['samePairs']
         toAdd=[]
-        idsToRemove=[]
+        idsToRemove=set()
 
         #enumerations inside a row they are paired to should be removed
         #enumerations paired with the left row of a chained row need to be paired with the right
@@ -412,8 +426,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
                             otherId=pair[0]
                         otherBB=annotations['byId'][otherId]
                         if otherBB['type']=='fieldRow':
-                            if avg_x(bb)>left_x(otherBB) and avg_x<right_x(otherBB):
-                                idsToRemove.append(bb['id'])
+                            if avg_x(bb)>left_x(otherBB) and avg_x(bb)<right_x(otherBB):
+                                idsToRemove.add(bb['id'])
                             #else TODO chained row case
 
 
@@ -421,9 +435,9 @@ class FormsBoxPair(torch.utils.data.Dataset):
         #remove fields we're skipping
         #reconnect para chains we broke by removing them
         idsToFix=[]
-        for bb in annotations['fieldBBs']
+        for bb in annotations['fieldBBs']:
             if self.isSkipField(bb):
-                idsToRemove.append(bb['id'])
+                idsToRemove.add(bb['id'])
                 if bb['type']=='fieldP':
                     idsToFix.append(bb['id'])
             elif bb['type']=='fieldCircle':
@@ -441,27 +455,35 @@ class FormsBoxPair(torch.utils.data.Dataset):
             elif pair[0] in idsToRemove or pair[1] in idsToRemove:
                 pairsToRemove.append(i)
 
-        pairsToRemove.reverse()
+        pairsToRemove.sort(reverse=True)
+        last=None
         for i in pairsToRemove:
+            if i==last:#in case of duplicated
+                continue
+            #print('del pair: {}'.format(annotations['pairs'][i]))
             del annotations['pairs'][i]
-        for _,ids in parasLinkedTo.iter():
+            last=i
+        for _,ids in parasLinkedTo.items():
             if len(ids)==2:
-                #annotations['pairs'].append([ids[0],ids[1]])
-                toAdd.append([ids[0],ids[1]])
+                if ids[0] not in idsToRemove and ids[1] not in idsToRemove:
+                    #print('adding: {}'.format([ids[0],ids[1]]))
+                    #annotations['pairs'].append([ids[0],ids[1]])
+                    toAdd.append([ids[0],ids[1]])
             #else I don't know what's going on
 
 
         for id in idsToRemove:
+            #print('deleted: {}'.format(annotations['byId'][id]))
             del annotations['byId'][id]
 
 
         #skipped link between col and enumeration when enumeration is between col header and col
         for pair in annotations['pairs']:
             notNum=num=None
-            if annotations['byId'][pair[0]]['type']=='textNumber':
+            if pair[0] in annotations['byId'] and annotations['byId'][pair[0]]['type']=='textNumber':
                 num=annotations['byId'][pair[0]]
                 notNum=annotations['byId'][pair[1]]
-            elif annotations['byId'][pair[1]]['type']=='textNumber':
+            elif pair[1] in annotations['byId'] and annotations['byId'][pair[1]]['type']=='textNumber':
                 num=annotations['byId'][pair[1]]
                 notNum=annotations['byId'][pair[0]]
 
@@ -472,7 +494,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
                             otherId=pair2[1]
                         else:
                             otherId=pair2[0]
-                        if annotations['byId'][otherId]['type']=='fieldCol' and avg_y(annotations['byId'][otherId])>avg_y(annotations['byId'][num['id']):
+                        if annotations['byId'][otherId]['type']=='fieldCol' and avg_y(annotations['byId'][otherId])>avg_y(annotations['byId'][num['id']]):
                             toAdd.append([num['id'],otherId])
 
         #heirarchy labels.
@@ -523,7 +545,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         #                    toAddSame.append([text,otherId])
 
         for pair in toAdd:
-            if pair not in annotations['pairs'] and [pair[1],pair[0]] not in anntotations['pairs']:
+            if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
                  annotations['pairs'].append(pair)
         #annotations['pairs']+=toAdd
 

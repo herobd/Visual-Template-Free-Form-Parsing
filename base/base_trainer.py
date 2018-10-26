@@ -212,7 +212,7 @@ class BaseTrainer:
         self.start_iteration = checkpoint['iteration'] + 1
         self.monitor_best = checkpoint['monitor_best']
         #print(checkpoint['state_dict'].keys())
-        if 'save_mode' not in self.config or self.config['save_mode']=='state_dict':
+        if ('save_mode' not in self.config or self.config['save_mode']=='state_dict') and 'state_dict' in checkpoint:
             self.model.load_state_dict(checkpoint['state_dict'])
         else:
             self.model = checkpoint['model']

@@ -142,7 +142,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     data = data.cpu().data.numpy()
     maxConf = outputBBs[:,:,0].max().item()
-    threshConf = max(maxConf*0.8,0.5)
+    threshConf = max(maxConf*0.92,0.5)
     #print("threshConf:{}".format(threshConf))
     outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
     aps_3=[]

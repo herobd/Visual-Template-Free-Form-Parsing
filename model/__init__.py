@@ -4,4 +4,6 @@ from model.unet_dilated import UNetDilated
 from model.sol_eol_finder import SOL_EOL_Finder
 from model.detector import Detector
 from model.yolo_box_detector import YoloBoxDetector
+from model.pairing_box_full import PairingBoxFull
+from model.pairing_box_net import PairingBoxNet
 from model.line_follower import LineFollower

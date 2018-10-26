@@ -1,11 +1,11 @@
 {
-    "name": "forms11_iouVGG_dil3",
+    "name": "Forms11_pair_iouVGG_dil3",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
-        "data_set_name": "FormsBoxDetect",
+        "data_set_name": "FormsBoxPair",
         "data_dir": "/home/ubuntu/brian/data/forms",
         "batch_size": 2,
         "shuffle": true,
@@ -20,9 +20,6 @@
         "swap_circle":true,
         "no_graphics":true,
         "cache_resized_images": true,
-        "only_types": {
-            "boxes":true
-        },
         "rotation": false
 
 
@@ -32,9 +29,6 @@
         "crop_to_page":false,
         "color":false,
         "rescale_range": [0.52,0.52],
-        "only_types": {
-            "boxes":true
-        },
         "no_blanks": true,
         "swap_circle":true,
         "no_graphics":true,
@@ -50,41 +44,35 @@
         "lr": 0.01,
         "weight_decay": 0
     },
-    "loss": {
-        "box":"YoloLoss"
-    },
-    "loss_params": {
-        "box": {
+    "loss": "YoloLoss",
+    "loss_params": 
+        {
             "ignore_thresh": 0.5
-        }
-    },
+        },
     "loss_weights":{"box":1.0},
     "metrics": [],
     "trainer": {
-        "class": "BoxDetectTrainer",
-        "iterations": 200000,
+        "class": "BoxPairTrainer",
+        "iterations": 100000,
         "save_dir": "saved/",
-        "val_step": 5000,
-        "save_step": 10000,
+        "val_step": 4000,
+        "save_step": 4000,
         "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
-        "warmup_steps": 3000,
-        "thresh_conf":0.88,
-        "thresh_intersect":0.4
+        "warmup_steps": 3000
     },
-    "arch": "YoloBoxDetector", 
+    "arch": "PairingBoxFull", 
     "model": {
-        "color":false,
-        "number_of_box_types": 2,
-        "number_of_point_types": 0,
-        "number_of_pixel_types": 0,
-        "norm_type": "group_norm",
-        "dilation": 3,
-        "down_layers_cfg": [1,64, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024", 1024, 1024],
-        "up_layers_cfg":[],
-        "anchors_file": "anchors_noRot_12.json",
-        "rotation":false
+        "detector_checkpoint": "saved/forms11_iouVGG_dil3/checkpoint-iteration170020.pth.tar",
+        "pairer_config": {
+            "norm_type": "group_norm",
+            "up_sample_ch": 128,
+            "Xdown_layers_cfg": [128, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024"],
+            "down1_layers_cfg": [32, "M"],
+            "down2_layers_cfg": [128, "M", 256, "M", 512, "M", "W1024"],
+            "final_layers_cfg": [1024]
+        }
     }
 }

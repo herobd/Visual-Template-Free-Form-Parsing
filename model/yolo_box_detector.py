@@ -171,6 +171,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
     def __init__(self, config): # predCount, base_0, base_1):
         #super(YoloBoxDetector, self).__init__(config)
         super(YoloBoxDetector, self).__init__()
+        self.forPairing=False
         self.config = config
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
@@ -195,6 +196,11 @@ class YoloBoxDetector(nn.Module): #BaseModel
             layers_cfg=[in_ch,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
 
         self.net_down_modules, down_last_channels = make_layers(layers_cfg, dilation,norm)
+        self.final_features=None 
+        def save_final(module,input,output):
+            self.final_features=output
+        self.net_down_modules[-1].register_forward_hook(save_final)
+        self.last_channels=down_last_channels
         self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutPoint, kernel_size=1))
         self._hack_down = nn.Sequential(*self.net_down_modules)
         self.scale=1
@@ -219,6 +225,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
     def forward(self, img):
         #import pdb; pdb.set_trace()
         y = self._hack_down(img)
+        if self.forPairing:
+            return y[:,:(self.numBBParams+self.numBBTypes)*self.numAnchors,:,:]
         #levels=[img]
         #for module in self.net_down_modules:
         #    levels.append(module(levels[-1]))

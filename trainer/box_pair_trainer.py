@@ -108,7 +108,7 @@ class BoxPairTrainer(BaseTrainer):
             The metrics in log must have the key 'metrics'.
         """
         if self.unfreeze_detector is not None and iteration>=self.unfreeze_detector:
-            self.model.detector_frozen=False
+            self.model.unfreeze()
         self.model.train()
         self.lr_schedule.step()
 
@@ -225,16 +225,14 @@ class BoxPairTrainer(BaseTrainer):
         mAP = np.zeros(self.model.numBBTypes)
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
-        last_imgName=None
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
                 print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
-                sameAsPrev = last_imgName==instance['imgName']
 
                 image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(instance)
 
-                outputBoxes,outputOffsets = self.model(image,queryMask,reuse=sameAsPrev)
+                outputBoxes,outputOffsets = self.model(image,queryMask,instance['imgName'])
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
@@ -256,7 +254,6 @@ class BoxPairTrainer(BaseTrainer):
                     mPrecision += np.array(prec_5)/len(outputBoxes)
 
                 total_val_loss += loss.item()
-                last_imgName=instance['imgName']
                 #total_val_metrics += self._eval_metrics(output, target)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),

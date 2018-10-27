@@ -55,13 +55,13 @@
         "class": "BoxPairTrainer",
         "iterations": 100000,
         "save_dir": "saved/",
-        "val_step": 4000,
-        "save_step": 4000,
-        "log_step": 500,
+        "val_step": 2000,
+        "save_step": 2000,
+        "log_step": 200,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
-        "warmup_steps": 3000
+        "warmup_steps": 500
     },
     "arch": "PairingBoxFull", 
     "model": {
@@ -71,8 +71,9 @@
             "up_sample_ch": 128,
             "Xdown_layers_cfg": [128, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024"],
             "down1_layers_cfg": [32, "M"],
-            "down2_layers_cfg": [128, "M", 256, "M", 512, "M", "W1024"],
-            "final_layers_cfg": [1024]
+            "down2_layers_cfg": [128, "M","W256", 256, "M", 512, "M", "W1024"],
+            "final_layers_cfg": [1024],
+            "dilation": 3
         }
     }
 }

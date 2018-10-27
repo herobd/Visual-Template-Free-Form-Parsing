@@ -118,9 +118,12 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         metricsO,_ = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
                         if type(metricsO) == dict:
                             for typ,typeLists in metricsO.items():
-                                for name,lst in typeLists.items():
-                                    val_metrics_list[typ][name]+=lst
-                                    val_comb_metrics[typ]+=lst
+                                if type(typeLists) == dict:
+                                    for name,lst in typeLists.items():
+                                        val_metrics_list[typ][name]+=lst
+                                        val_comb_metrics[typ]+=lst
+                                else:
+                                    val_comb_metrics[typ]+=typeLists
                         else:
                             val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                         

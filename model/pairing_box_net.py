@@ -25,7 +25,7 @@ def rotFunc(netPred):
 class PairingBoxNet(nn.Module):
     def __init__(self, config,detector_config,detect_ch,detect_scale): # predCount, base_0, base_1):
         super(PairingBoxNet, self).__init__()
-        self.rotation = detector_config['rotation'] if 'rotation' in config else True
+        self.rotation = detector_config['rotation'] if 'rotation' in detector_config else True
         self.numBBTypes = detector_config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,rot-off,h-scale,w-scale
         with open(detector_config['anchors_file']) as f:
@@ -114,10 +114,9 @@ class PairingBoxNet(nn.Module):
         at_box_res = self.net_down2(input)
         with_detections = torch.cat([at_box_res,detected_boxes],dim=1)
         pred = self.final(with_detections)
-        
-        pred+=detected_boxes
-        #pred[:,:,:,:,1:]+=detected_boxes[:,:,:,:,1:]
-        #pred[:,:,:,:,0:1]*=detected_boxes[:,:,:,:,0:1]
+ 
+        #This is done in anchor loop to exclude conf
+        #pred+=detected_boxes
 
 
 
@@ -139,6 +138,8 @@ class PairingBoxNet(nn.Module):
         for i in range(self.numAnchors):
 
             offset = i*(self.numBBParams+self.numBBTypes)
+            pred[:,1+offset:self.numBBParams+self.numBBTypes+offset,:,:] += detected_boxes[:,1+offset:self.numBBParams+self.numBBTypes+offset,:,:]
+            #pred[:,offset,:,:] *= detected_boxes[:,offset,:,:]
             if self.rotation:
                 rot_dif = (math.pi/2)*torch.tanh(pred[:,3+offset:4+offset,:,:])
             else:

@@ -9,10 +9,11 @@ import os
 import math
 import cv2
 from collections import defaultdict
+from random import shuffle
 from datasets.forms_box_detect import convertBBs
 from utils import augmentation
 from utils.crop_transform import CropBoxTransform
-SKIP=['174']
+SKIP=['121','174']
 
 def avg_y(bb):
     points = bb['poly_points']
@@ -142,6 +143,11 @@ class FormsBoxPair(torch.utils.data.Dataset):
 
 
     def __init__(self, dirPath=None, split=None, config=None, instances=None, test=False):
+        if split=='valid':
+            valid=True
+            amountPer=0.25
+        else:
+            valid=False
         self.cache_resized=False
         if 'augmentation_params' in config:
             self.augmentation_params=config['augmentation_params']
@@ -223,9 +229,10 @@ class FormsBoxPair(torch.utils.data.Dataset):
                         self.fixAnnotations(annotations)
 
                         #print(path)
+                        instancesForImage=[]
                         for id,bb in annotations['byId'].items():
                             responseBBList = self.__getResponseBBList(id,annotations)
-                            self.instances.append({
+                            instancesForImage.append({
                                                 'id': id,
                                                 'imagePath': path,
                                                 'imageName': imageName[:imageName.rfind('.')],
@@ -234,6 +241,11 @@ class FormsBoxPair(torch.utils.data.Dataset):
                                                 'rescaled':rescale,
                                                 #'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
                                             })
+                        if valid:
+                            shuffle(instancesForImage)
+                            self.instances += instancesForImage[:int(amountPer*len(instancesForImage))]
+                        else:
+                            self.instances += instancesForImage
 
         
 
@@ -281,22 +293,26 @@ class FormsBoxPair(torch.utils.data.Dataset):
         if self.transform is not None:
             out = self.transform({
                 "img": np_img,
-                "bb_gt": response_bbs,
+                "bb_gt": response_bbs.copy(),
                 "query_bb":query_bb,
                 "point_gt": None,
                 "pixel_gt": queryMask,
             })
             np_img = out['img']
-            response_bbs = out['bb_gt']
+            response_bbs_trans = out['bb_gt']
             if np_img.shape[2]==3:
                 np_img = augmentation.apply_random_color_rotation(np_img)
             np_img = augmentation.apply_tensmeyer_brightness(np_img)
             queryMask = out['pixel_gt']
             #TODO rotate?
+        else:
+            response_bbs_trans=response_bbs
 
-        t_response_bbs = convertBBs(response_bbs,self.rotate,2)
+        t_response_bbs = convertBBs(response_bbs_trans,self.rotate,2)
         if t_response_bbs is not None and (torch.isnan(t_response_bbs).any() or (float('inf')==t_response_bbs).any()):
-            import pdb; pdb.set_trace()
+            print('nan or inf on {}. response_bbs:{}. response_bbs_trans={}. responseBBList={}'.format(imageName,response_bbs,response_bbs_trans,responseBBList))
+            return self.__getitem__((index+1)%len(self.instances))
+            #import pdb; pdb.set_trace()
 
         np_img = np.moveaxis(np_img,2,0)[None,...] #swap channel dim and add batch dim
         t_img = torch.from_numpy(np_img.astype(np.float32))

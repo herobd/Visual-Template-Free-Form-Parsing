@@ -16,6 +16,9 @@ class PairingBoxFull(BaseModel):
         else:
             self.detector = checkpoint['model']
         self.detector.forPairing=True
+        for param in self.detector.parameters(): 
+            param.will_use_grad=param.requires_grad 
+            param.requires_grad=False 
         self.detector_frozen=True
 
         self.pairer = PairingBoxNet(
@@ -29,9 +32,17 @@ class PairingBoxFull(BaseModel):
         self.scale = self.pairer.scale
         self.anchors = self.pairer.anchors
         self.rotation = self.pairer.rotation
+
+        self.storedImageName=None
+
+ 
+    def unfreeze(self): 
+        for param in self.detector.parameters(): 
+            param.requires_grad=param.will_use_grad 
+        self.detector_frozen=False
         
 
-    def forward(self, image, queryMask,reuse=False):
+    def forward(self, image, queryMask,imageName=None):
         #pad so that upsampling from model features works
         padH=(self.detector.scale-(image.size(2)%self.detector.scale))%self.detector.scale
         padW=(self.detector.scale-(image.size(3)%self.detector.scale))%self.detector.scale
@@ -39,28 +50,30 @@ class PairingBoxFull(BaseModel):
             padder = torch.nn.ZeroPad2d((0,padW,0,padH))
             image = padder(image)
             queryMask = padder(queryMask)
-        if not self.training and reuse:
-            offsetPredictions=self.storedOffsetPredictions
+        if not self.training and self.storedImageName is not None and imageName==self.storedImageName:
+            offsetPredictionsD=self.storedOffsetPredictionsD
             final_features=self.storedFinal_features
         else:
             save=not self.training
-            self.storedOffsetPredictions=None
+            self.storedOffsetPredictionsD=None
             self.storedFinal_features=None
             if self.detector_frozen:
-                self.detector.eval()
-                with torch.no_grad():
-                    offsetPredictions = self.detector(image)
+                #self.detector.eval()
+                #with torch.no_grad():
+                #batch size set to one to accomidate
+                offsetPredictionsD = self.detector(image)
             else:
-                offsetPredictions = self.detector(image)
+                offsetPredictionsD = self.detector(image)
             final_features=self.detector.final_features
 
             if save:
-                self.storedOffsetPredictions=offsetPredictions
+                self.storedOffsetPredictionsD=offsetPredictionsD
                 self.storedFinal_features=final_features
+                self.storedImageName=imageName
 
         bbPredictions, offsetPredictions = self.pairer( image,
                                                         queryMask,
                                                         final_features, 
-                                                        offsetPredictions)
+                                                        offsetPredictionsD)
 
         return bbPredictions, offsetPredictions

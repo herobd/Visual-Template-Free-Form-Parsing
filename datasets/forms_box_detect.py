@@ -506,7 +506,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             pixel_gt = out['pixel_gt']
 
             ##tic=timeit.default_timer()
-            if len(np_img.shape)==3:
+            if np_img.shape[2]==3:
                 np_img = augmentation.apply_random_color_rotation(np_img)
                 np_img = augmentation.apply_tensmeyer_brightness(np_img)
             else:

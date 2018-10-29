@@ -153,6 +153,7 @@ class BoxPairTrainer(BaseTrainer):
         #for p in filter(lambda p: p.grad is not None, self.model.parameters()):
         #    minGrad = min(minGrad,p.min())
         #    maxGrad = max(maxGrad,p.max())
+        #import pdb; pdb.set_trace()
         torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
         self.optimizer.step()
 

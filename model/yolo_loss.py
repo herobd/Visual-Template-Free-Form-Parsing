@@ -87,6 +87,8 @@ class YoloLoss (nn.Module):
         conf_mask_true = mask
         conf_mask_false = conf_mask - mask
 
+        #import pdb; pdb.set_trace()
+
         # Mask outputs to ignore non-existing objects
         loss_conf = 1.25*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
         if target is not None and nGT>0:

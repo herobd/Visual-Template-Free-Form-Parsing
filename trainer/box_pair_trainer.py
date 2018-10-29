@@ -242,7 +242,6 @@ class BoxPairTrainer(BaseTrainer):
                 index=0
                 
                 loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
-                loss+=this_loss*self.loss_weight['box']
                 total_position_loss+=position_loss
                 total_conf_loss+=conf_loss
                 tota_class_loss+=class_loss

@@ -113,6 +113,9 @@ class PairingBoxNet(nn.Module):
         down1 = self.net_down1(input)
         input = torch.cat([down1,up_features],dim=1)
         at_box_res = self.net_down2(input)
+        for i in range(self.numAnchors):
+            offset = i*(self.numBBParams+self.numBBTypes)
+            detected_boxes[:,offset,:,:]=0
         with_detections = torch.cat([at_box_res,detected_boxes],dim=1)
         pred = self.final(with_detections)
  

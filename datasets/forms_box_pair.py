@@ -166,6 +166,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
         self.useDistMask = config['use_dist_mask'] if 'use_dist_mask' in config else False
+        self.useVDistMask = config['use_vdist_mask'] if 'use_vdist_mask' in config else False
+        self.useHDistMask = config['use_hdist_mask'] if 'use_hdist_mask' in config else False
         
         self.rescale_range=config['rescale_range']
         if 'cache_resized_images' in config:
@@ -286,11 +288,31 @@ class FormsBoxPair(torch.utils.data.Dataset):
         queryMask[rr,cc]=1
         #queryMask=queryMask[...,None] #add channel
         masks = [queryMask]
+        distMask=None
         if self.useDistMask:
             dist_transform = cv2.distanceTransform(1-queryMask.astype(np.uint8),cv2.DIST_L2,5)
             dist_transform = np.clip(dist_transform,None,1000)
             distMask = 2*((1000-dist_transform)/1000) - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is 1000 pixels
             masks.append(distMask)
+        if self.useHDistMask:
+            if distMask is None:
+                distMask = getDistMask(queryMask)
+            minY=query_bb[[1,3,5,7]]).min()
+            maxY=query_bb[[1,3,5,7]]).max()
+            hdistMask = distMask.copy()
+            hdistMask[:minY,:]=-1
+            hdistMask[maxY:,:]=-1
+            masks.append(hdistMask)
+        if self.useVDistMask:
+            if distMask is None:
+                distMask = getDistMask(queryMask)
+            minX=query_bb[[0,2,4,6]]).min()
+            maxX=query_bb[[0,2,4,6]]).max()
+            vdistMask = distMask.copy()
+            vdistMask[:,:minX]=-1
+            vdistMask[:,maxX:]=-1
+            masks.append(vdistMask)
+
         queryMask = np.stack(masks,axis=2)
         
         #responseMask = np.zeros([image.shape[0],image.shape[1]])

@@ -19,6 +19,10 @@ def display(data):
         img[:,:,1] *= 1-data['queryMask'][b,0,:,:]
         if data['queryMask'].shape[1]>1:
             img[:,:,2] *= (1+data['queryMask'][b,1,:,:])/2
+        if data['queryMask'].shape[1]>2:
+            img[:,:,0] *= (1+data['queryMask'][b,2,:,:])/2
+        if data['queryMask'].shape[1]>3:
+            img[:,:,1] *= (1+data['queryMask'][b,3,:,:])/2
         print(data['imgName'][b])
 
 
@@ -76,7 +80,9 @@ if __name__ == "__main__":
         "swap_circle":True,
         'no_graphics':True,
         'rotation':False,
-        'use_dist_mask':True,
+        #'use_dist_mask':True,
+        'use_hdist_mask':True,
+        #'use_vdist_mask':True,
         #"only_types": ["text_start_gt"]
 })
     dataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False, num_workers=0, collate_fn=forms_box_pair.collate)

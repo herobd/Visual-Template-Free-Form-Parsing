@@ -138,6 +138,13 @@ def make_layers(cfg, dilation=1, norm=None):
             layers += convReLU(in_channels[-1],outCh,norm,kernel=kernel_size)
             layerCodes.append(outCh)
             in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'd': #conv later with custom dilation
+            div = v.find('-')
+            dilate=int(v[1:div])
+            outCh=int(v[div+1:])
+            layers += convReLU(in_channels[-1],outCh,norm,dilate)
+            layerCodes.append(outCh)
+            in_channels.append(outCh)
         elif type(v)==str:
             print('Error reading net cfg, unknown later: '+v)
             exit(1)

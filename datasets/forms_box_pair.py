@@ -28,6 +28,12 @@ def right_x(bb):
     points = bb['poly_points']
     return (points[1][0]+points[2][0])/2.0
 
+def getDistMask(queryMask):
+    dist_transform = cv2.distanceTransform(1-queryMask.astype(np.uint8),cv2.DIST_L2,5)
+    dist_transform = np.clip(dist_transform,None,1000)
+    distMask = 2*((1000-dist_transform)/1000) - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is 1000 pixels
+    return distMask
+
 def collate(batch):
 
     ##tic=timeit.default_timer()
@@ -290,15 +296,13 @@ class FormsBoxPair(torch.utils.data.Dataset):
         masks = [queryMask]
         distMask=None
         if self.useDistMask:
-            dist_transform = cv2.distanceTransform(1-queryMask.astype(np.uint8),cv2.DIST_L2,5)
-            dist_transform = np.clip(dist_transform,None,1000)
-            distMask = 2*((1000-dist_transform)/1000) - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is 1000 pixels
+            distMask = getDistMask(queryMask)
             masks.append(distMask)
         if self.useHDistMask:
             if distMask is None:
                 distMask = getDistMask(queryMask)
-            minY=query_bb[[1,3,5,7]]).min()
-            maxY=query_bb[[1,3,5,7]]).max()
+            minY=math.ceil(query_bb[[1,3,5,7]].min())
+            maxY=math.floor(query_bb[[1,3,5,7]].max())
             hdistMask = distMask.copy()
             hdistMask[:minY,:]=-1
             hdistMask[maxY:,:]=-1
@@ -306,8 +310,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
         if self.useVDistMask:
             if distMask is None:
                 distMask = getDistMask(queryMask)
-            minX=query_bb[[0,2,4,6]]).min()
-            maxX=query_bb[[0,2,4,6]]).max()
+            minX=math.ceil(query_bb[[0,2,4,6]].min())
+            maxX=math.floor(query_bb[[0,2,4,6]].max())
             vdistMask = distMask.copy()
             vdistMask[:,:minX]=-1
             vdistMask[:,maxX:]=-1

@@ -2,7 +2,7 @@
     "name": "forms11_iouRes_dil3_high",
     "cuda": true,
     "gpu": 0,
-    "save_mode": "model",
+    "save_mode": "state_dict",
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
@@ -62,7 +62,7 @@
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
-        "iterations": 200000,
+        "iterations": 400000,
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 10000,

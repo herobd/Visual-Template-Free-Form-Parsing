@@ -36,7 +36,8 @@ class PairingBoxNet(nn.Module):
         #self.predPixelCount = config['number_of_pixel_types']
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
         #self.numOutPoint = self.predPointCount*3
-        im_ch = 1+( 3 if 'color' not in detector_config or detector_config['color'] else 1 ) #+1 for query mask
+        maskSize = 2 if 'use_dist_mask' in config and config['use_dist_mask'] else 1
+        im_ch = maskSize+( 3 if 'color' not in detector_config or detector_config['color'] else 1 ) #+1 for query mask
         norm = config['norm_type'] if "norm_type" in config else None
         if norm is None:
             print('Warning: PairingBoxNet has no normalization!')
@@ -47,7 +48,7 @@ class PairingBoxNet(nn.Module):
         else:
             layers_cfg_down1=[32, 'M']
 
-        if layers_cfg_down1[0]>4:
+        if type(layers_cfg_down1[0])==str or layers_cfg_down1[0]>4:
             layers_cfg_down1 = [im_ch]+layers_cfg_down1
         down1_modules, down1_last_ch = make_layers(layers_cfg_down1, dilation,norm)
         self.net_down1 = nn.Sequential(*down1_modules)
@@ -113,9 +114,9 @@ class PairingBoxNet(nn.Module):
         down1 = self.net_down1(input)
         input = torch.cat([down1,up_features],dim=1)
         at_box_res = self.net_down2(input)
-        for i in range(self.numAnchors):
-            offset = i*(self.numBBParams+self.numBBTypes)
-            detected_boxes[:,offset,:,:]=0
+        #for i in range(self.numAnchors):
+        #    offset = i*(self.numBBParams+self.numBBTypes)
+        #    detected_boxes[:,offset,:,:]=0
         with_detections = torch.cat([at_box_res,detected_boxes],dim=1)
         pred = self.final(with_detections)
  

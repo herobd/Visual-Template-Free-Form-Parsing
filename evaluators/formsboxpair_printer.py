@@ -161,10 +161,12 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             if imageB.shape[2]==1:
                 imageB = cv2.cvtColor(imageB,cv2.COLOR_GRAY2RGB)
             imageB[:,:,1] *= 1-queryMask[b,0]
+            if queryMask.shape[1]>1:
+                imageB[:,:,2] *= (1+queryMask[b,1])/2
             #if name=='text_start_gt':
 
             for j in range(targetBBsSizes[b]):
-                plotRect(imageB,(1,0.5,0),targetBBs[b,j,0:5])
+                plotRect(imageB,(0,1,0),targetBBs[b,j,0:5])
                 #if alignmentBBs[b] is not None:
                 #    aj=alignmentBBs[b][j]
                 #    xc_gt = targetBBs[b,j,0]

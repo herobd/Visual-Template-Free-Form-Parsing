@@ -165,6 +165,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         self.swapCircle = config['swap_circle'] if 'swap_circle' in config else True
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
+        self.useDistMask = config['use_dist_mask'] if 'use_dist_mask' in config else False
         
         self.rescale_range=config['rescale_range']
         if 'cache_resized_images' in config:
@@ -261,7 +262,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
         assert(queryBB['type']!='fieldCol')
         responseBBList = self.instances[index]['responseBBList']
         rescaled = self.instances[index]['rescaled']
-        #xQueryC,yQueryC,reach,x0,y0,x1,y1 = self.instances[index]['helperStats']
+        #xQueryC,yQueryC,reach,x0,y0,x1,y1 = self.instances[index]['helperStats'
+
 
         np_img = cv2.imread(imagePath, 1 if self.color else 0)
         #Rescale
@@ -282,7 +284,15 @@ class FormsBoxPair(torch.utils.data.Dataset):
         queryMask = np.zeros([np_img.shape[0],np_img.shape[1]])
         rr, cc = draw.polygon(query_bb[[1,3,5,7]], query_bb[[0,2,4,6]], queryMask.shape)
         queryMask[rr,cc]=1
-        queryMask=queryMask[...,None] #add channel
+        #queryMask=queryMask[...,None] #add channel
+        masks = [queryMask]
+        if self.useDistMask:
+            dist_transform = cv2.distanceTransform(1-queryMask.astype(np.uint8),cv2.DIST_L2,5)
+            dist_transform = np.clip(dist_transform,None,1000)
+            distMask = 2*((1000-dist_transform)/1000) - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is 1000 pixels
+            masks.append(distMask)
+        queryMask = np.stack(masks,axis=2)
+        
         #responseMask = np.zeros([image.shape[0],image.shape[1]])
         #for poly in responsePolyList:
         #    rr, cc = draw.polygon(poly[:, 1], poly[:, 0], responseMask.shape)

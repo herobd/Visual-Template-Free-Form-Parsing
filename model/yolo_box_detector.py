@@ -56,8 +56,8 @@ class ResBlock(nn.Module):
     def forward(self,x):
         return x+self.side(x)
 
-def convReLU(in_ch,out_ch,norm,dilation=1):
-    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=3, padding=dilation,dilation=dilation)
+def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3):
+    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=dilation*(kernel//2),dilation=dilation)
     #if i == len(cfg)-1:
     #    layers += [conv2d]
     #    break
@@ -131,6 +131,16 @@ def make_layers(cfg, dilation=1, norm=None):
             layers += convReLU(in_channels[-1],outCh,norm,dilation)
             layerCodes.append(outCh)
             in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'k': #conv later with custom kernel size
+            div = v.find('-')
+            kernel_size=int(v[1:div])
+            outCh=int(v[div+1:])
+            layers += convReLU(in_channels[-1],outCh,norm,kernel=kernel_size)
+            layerCodes.append(outCh)
+            in_channels.append(outCh)
+        elif type(v)==str:
+            print('Error reading net cfg, unknown later: '+v)
+            exit(1)
         else:
             layers += convReLU(in_channels[-1],v,norm)
             layerCodes.append(v)
@@ -171,6 +181,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
     def __init__(self, config): # predCount, base_0, base_1):
         #super(YoloBoxDetector, self).__init__(config)
         super(YoloBoxDetector, self).__init__()
+        self.forPairing=False
         self.config = config
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
@@ -224,6 +235,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
     def forward(self, img):
         #import pdb; pdb.set_trace()
         y = self._hack_down(img)
+        if self.forPairing:
+            return y[:,:(self.numBBParams+self.numBBTypes)*self.numAnchors,:,:]
         #levels=[img]
         #for module in self.net_down_modules:
         #    levels.append(module(levels[-1]))

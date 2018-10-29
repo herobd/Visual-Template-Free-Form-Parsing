@@ -24,15 +24,11 @@ class BoxPairTrainer(BaseTrainer):
             self.loss_params=config['loss_params']
         else:
             self.loss_params={}
-        self.loss['box'] = self.loss['box'](**self.loss_params['box'], 
+        self.loss = self.loss(**self.loss_params, 
                 num_classes=model.numBBTypes, 
                 rotation=model.rotation, 
                 scale=model.scale,
                 anchors=model.anchors)
-        if 'loss_weights' in config:
-            self.loss_weight=config['loss_weights']
-        else:
-            self.loss_weight={'box':0.7, 'point':0.5, 'pixel':10}
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
         self.data_loader_iter = iter(data_loader)
@@ -78,7 +74,6 @@ class BoxPairTrainer(BaseTrainer):
             queryMask = queryMask.to(self.gpu)
             if targetBoxes is not None:
                 targetBoxes=targetBoxes.to(self.gpu)
-            targetPoints=sendToGPU(targetPoints)
         return data, queryMask, targetBoxes, targetBoxes_sizes
 
     def _eval_metrics(self, typ,name,output, target):
@@ -113,7 +108,7 @@ class BoxPairTrainer(BaseTrainer):
             The metrics in log must have the key 'metrics'.
         """
         if self.unfreeze_detector is not None and iteration>=self.unfreeze_detector:
-            self.model.detector_frozen=False
+            self.model.unfreeze()
         self.model.train()
         self.lr_schedule.step()
 
@@ -137,16 +132,16 @@ class BoxPairTrainer(BaseTrainer):
         index=0
         losses={}
         ##tic=timeit.default_timer()
-        #predictions = util.pt_xyrs_2_xyxy(outputBoxes)
-        if self.iteration % self.save_step == 0:
-            targetPoints={}
-            targetPixels=None
-            _,lossC=FormsBoxPair_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
-            loss, position_loss, conf_loss, class_loss, recall, precision = lossC
-        else:
-            image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(thisInstance)
-            outputBoxes, outputOffsets = self.model(image,queryMask)
-            loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
+
+        #if self.iteration % self.save_step == 0:
+        #    targetPoints={}
+        #    targetPixels=None
+        #    _,lossC=FormsBoxPair_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
+        #    loss, position_loss, conf_loss, class_loss, recall, precision = lossC
+        #else:
+        image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(thisInstance)
+        outputBoxes, outputOffsets = self.model(image,queryMask)
+        loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
 
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
@@ -158,6 +153,7 @@ class BoxPairTrainer(BaseTrainer):
         #for p in filter(lambda p: p.grad is not None, self.model.parameters()):
         #    minGrad = min(minGrad,p.min())
         #    maxGrad = max(maxGrad,p.max())
+        #import pdb; pdb.set_trace()
         torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
         self.optimizer.step()
 
@@ -229,21 +225,23 @@ class BoxPairTrainer(BaseTrainer):
         total_conf_loss =0
         tota_class_loss =0
         total_val_metrics = np.zeros(len(self.metrics))
-        losses={}
+
         mAP = np.zeros(self.model.numBBTypes)
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
-                data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
+                print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
 
-                outputBoxes,outputOffsets, outputPoints, outputPixels = self.model(data)
+                image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(instance)
+
+                outputBoxes,outputOffsets = self.model(image,queryMask,instance['imgName'])
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
                 
-                this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+                loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
                 loss+=this_loss*self.loss_weight['box']
                 total_position_loss+=position_loss
                 total_conf_loss+=conf_loss
@@ -251,7 +249,8 @@ class BoxPairTrainer(BaseTrainer):
                 
                 threshConf = self.thresh_conf*outputBoxes[:,:,0].max()
                 outputBoxes = non_max_sup_iou(outputBoxes.cpu(),self.thresh_conf,self.thresh_intersect)
-                targetBoxes = targetBoxes.cpu()
+                if targetBoxes is not None:
+                    targetBoxes = targetBoxes.cpu()
                 for b in range(len(outputBoxes)):
                     if targetBoxes is not None:
                         target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
@@ -261,22 +260,9 @@ class BoxPairTrainer(BaseTrainer):
                     mAP += np.array(ap_5)/len(outputBoxes)
                     mRecall += np.array(recall_5)/len(outputBoxes)
                     mPrecision += np.array(prec_5)/len(outputBoxes)
-                index=0
-                for name, target in targetPoints.items():
-                    predictions = outputPoints[index]
-                    this_loss = self.loss['point'](predictions,target,targetPoints_sizes[name], **self.loss_params['point'])
-                    loss+=this_loss*self.loss_weight['point']
-                    losses['val_'+name+'_loss']+=this_loss.item()
-                    index+=1
-                if targetPixels is not None:
-                    this_loss = self.loss['pixel'](outputPixels,targetPixels, **self.loss_params['pixel'])
-                    loss+=this_loss*self.loss_weight['pixel']
-                    losses['val_pixel_loss']+=this_loss.item()
 
                 total_val_loss += loss.item()
                 #total_val_metrics += self._eval_metrics(output, target)
-        for name in losses:
-            losses[name]/=len(self.valid_data_loader)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
@@ -286,5 +272,4 @@ class BoxPairTrainer(BaseTrainer):
             'val_position_loss':total_position_loss / len(self.valid_data_loader),
             'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
             'val_class_loss':tota_class_loss / len(self.valid_data_loader),
-            **losses
         }

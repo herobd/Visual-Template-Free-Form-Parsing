@@ -463,6 +463,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 fx=partial_rescale,
                 fy=partial_rescale,
                 interpolation = cv2.INTER_CUBIC)
+        if not self.color:
+            np_img=np_img[...,None] #add 'color' channel
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
         ##tic=timeit.default_timer()
@@ -504,14 +506,12 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             pixel_gt = out['pixel_gt']
 
             ##tic=timeit.default_timer()
-            if len(np_img.shape)==3:
+            if np_img.shape[2]==3:
                 np_img = augmentation.apply_random_color_rotation(np_img)
                 np_img = augmentation.apply_tensmeyer_brightness(np_img)
             else:
-                np_img = augmentation.apply_tensmeyer_brightness(np_img[:,:,None])
+                np_img = augmentation.apply_tensmeyer_brightness(np_img)
             ##print('augmentation: {}'.format(timeit.default_timer()-tic))
-        elif len(np_img.shape)==2:
-            np_img=np_img[:,:,None]
         ##print('transfrm: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
 
         #if len(np_img.shape)==2:

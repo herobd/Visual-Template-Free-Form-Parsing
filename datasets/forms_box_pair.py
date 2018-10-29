@@ -9,9 +9,11 @@ import os
 import math
 import cv2
 from collections import defaultdict
+from random import shuffle
 from datasets.forms_box_detect import convertBBs
+from utils import augmentation
 from utils.crop_transform import CropBoxTransform
-SKIP=['174']
+SKIP=['121','174']
 
 def avg_y(bb):
     points = bb['poly_points']
@@ -95,7 +97,7 @@ def collate(batch):
     else:
         bbs=None
     for i, b in enumerate(batch):
-        gt = b['bb_gt']
+        gt = b['responseBBs']
         if bb_sizes[i] == 0:
             continue
         bbs[i, :bb_sizes[i]] = gt
@@ -113,7 +115,7 @@ def collate(batch):
     return {
         'img': imgs,
         'responseBBs': bbs,
-        "reponseBB_sizes": bb_sizes,
+        "responseBB_sizes": bb_sizes,
         'queryMask': queryMask,
         "imgName": imageNames,
         "scale": scales
@@ -141,6 +143,11 @@ class FormsBoxPair(torch.utils.data.Dataset):
 
 
     def __init__(self, dirPath=None, split=None, config=None, instances=None, test=False):
+        if split=='valid':
+            valid=True
+            amountPer=0.25
+        else:
+            valid=False
         self.cache_resized=False
         if 'augmentation_params' in config:
             self.augmentation_params=config['augmentation_params']
@@ -158,6 +165,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         self.swapCircle = config['swap_circle'] if 'swap_circle' in config else True
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
+        self.useDistMask = config['use_dist_mask'] if 'use_dist_mask' in config else False
         
         self.rescale_range=config['rescale_range']
         if 'cache_resized_images' in config:
@@ -222,42 +230,24 @@ class FormsBoxPair(torch.utils.data.Dataset):
                         self.fixAnnotations(annotations)
 
                         #print(path)
-                        for bb in annotations['textBBs']:
-                            #bbPoints = np.array(bb['poly_points'])
-                            responseBBList = self.__getResponseBBList(bb['id'],annotations)
-                            #print(bb['id'])
-                            #print(responseBBList)
-                            self.instances.append({
-                                                'id': bb['id'],
+                        instancesForImage=[]
+                        for id,bb in annotations['byId'].items():
+                            responseBBList = self.__getResponseBBList(id,annotations)
+                            instancesForImage.append({
+                                                'id': id,
                                                 'imagePath': path,
                                                 'imageName': imageName[:imageName.rfind('.')],
                                                 'queryBB': bb,
                                                 'responseBBList': responseBBList,
+                                                'rescaled':rescale,
                                                 #'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
                                             })
+                        if valid:
+                            shuffle(instancesForImage)
+                            self.instances += instancesForImage[:int(amountPer*len(instancesForImage))]
+                        else:
+                            self.instances += instancesForImage
 
-                        for bb in annotations['fieldBBs']:
-                            #if self.isSkipField(b): now in fixAnnotations
-                            #     continue
-                            #bbPoints = np.array(bb['poly_points'])
-                            responseBBList = self.__getResponseBBList(bb['id'],annotations)
-                            self.instances.append({
-                                                'id': bb['id'],
-                                                'imagePath': path,
-                                                'imageName': imageName[:imageName.rfind('.')],
-                                                'queryBB': bb,
-                                                'responseBBList': responseBBList,
-                                                #'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
-                                            })
-
-                        #for i in range(startCount,len(self.instances)):
-                            #    try:
-                                #        #self.helperStats.append((0,0,0,0,0,0,0))
-                        #    except ValueError as err:
-                                #        print('error on image '+image+', id '+self.ids[i])
-                        #        print(os.path.join(dirPath,'annotationsMod',image+'.json'))
-                        #        print(err)
-                        #        exit(2)
         
 
 
@@ -269,8 +259,11 @@ class FormsBoxPair(torch.utils.data.Dataset):
         imagePath = self.instances[index]['imagePath']
         imageName = self.instances[index]['imageName']
         queryBB = self.instances[index]['queryBB']
+        assert(queryBB['type']!='fieldCol')
         responseBBList = self.instances[index]['responseBBList']
-        xQueryC,yQueryC,reach,x0,y0,x1,y1 = self.instances[index]['helperStats']
+        rescaled = self.instances[index]['rescaled']
+        #xQueryC,yQueryC,reach,x0,y0,x1,y1 = self.instances[index]['helperStats'
+
 
         np_img = cv2.imread(imagePath, 1 if self.color else 0)
         #Rescale
@@ -285,12 +278,21 @@ class FormsBoxPair(torch.utils.data.Dataset):
         if not self.color:
             np_img = np_img[:,:,None]
 
-        respose_bbs = self.getBBGT(responseBBList,scale)
+        response_bbs = self.getBBGT(responseBBList,scale)
         query_bb = self.getBBGT([queryBB],scale)[0,0]
 
         queryMask = np.zeros([np_img.shape[0],np_img.shape[1]])
-        rr, cc = draw.polygon(query_bb[1,3,5,7], query_bb[0,2,4,6], queryMask.shape)
+        rr, cc = draw.polygon(query_bb[[1,3,5,7]], query_bb[[0,2,4,6]], queryMask.shape)
         queryMask[rr,cc]=1
+        #queryMask=queryMask[...,None] #add channel
+        masks = [queryMask]
+        if self.useDistMask:
+            dist_transform = cv2.distanceTransform(1-queryMask.astype(np.uint8),cv2.DIST_L2,5)
+            dist_transform = np.clip(dist_transform,None,1000)
+            distMask = 2*((1000-dist_transform)/1000) - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is 1000 pixels
+            masks.append(distMask)
+        queryMask = np.stack(masks,axis=2)
+        
         #responseMask = np.zeros([image.shape[0],image.shape[1]])
         #for poly in responsePolyList:
         #    rr, cc = draw.polygon(poly[:, 1], poly[:, 0], responseMask.shape)
@@ -301,25 +303,32 @@ class FormsBoxPair(torch.utils.data.Dataset):
         if self.transform is not None:
             out = self.transform({
                 "img": np_img,
-                "bb_gt": response_bbs,
+                "bb_gt": response_bbs.copy(),
                 "query_bb":query_bb,
                 "point_gt": None,
                 "pixel_gt": queryMask,
             })
             np_img = out['img']
-            response_bbs = out['bb_gt']
-            if len(np_img.shape[2])==3:
+            response_bbs_trans = out['bb_gt']
+            if np_img.shape[2]==3:
                 np_img = augmentation.apply_random_color_rotation(np_img)
             np_img = augmentation.apply_tensmeyer_brightness(np_img)
+            queryMask = out['pixel_gt']
             #TODO rotate?
+        else:
+            response_bbs_trans=response_bbs
 
-        t_response_bbs = convertBBs(response_bbs,self.rotate,2)
+        t_response_bbs = convertBBs(response_bbs_trans,self.rotate,2)
+        if t_response_bbs is not None and (torch.isnan(t_response_bbs).any() or (float('inf')==t_response_bbs).any()):
+            print('nan or inf on {}. response_bbs:{}. response_bbs_trans={}. responseBBList={}'.format(imageName,response_bbs,response_bbs_trans,responseBBList))
+            return self.__getitem__((index+1)%len(self.instances))
+            #import pdb; pdb.set_trace()
 
         np_img = np.moveaxis(np_img,2,0)[None,...] #swap channel dim and add batch dim
-        t_img = torch.from_numpy(imageWithQuery.astype(np.float32))
+        t_img = torch.from_numpy(np_img.astype(np.float32))
         t_img = 1.0 - t_img/128.0
-        queryMask = queryMask[None,None,...] #add batch and channel dims
-        t_queryMask = torch.from_numpy(queryMask)
+        queryMask = np.moveaxis(queryMask,2,0)[None,...] #swap channel dim and add batch dim
+        t_queryMask = torch.from_numpy(queryMask.astype(np.float32))
         return {
                 'img':t_img,
                 'imgName':imageName,
@@ -367,45 +376,6 @@ class FormsBoxPair(torch.utils.data.Dataset):
             j+=1
         return bbs
 
-    def __getHelperStats(self, queryPoly, polyList, imH, imW):
-        """
-        This returns stats used when putting a batch together, croping and resizeing windows.
-        It returns
-            the centerpoint of the query mask,
-            the furthest response mask point from the center (minimum set by query mask size in case no response)
-            the bounding rectangle containing all masks
-        """
-        x0 = minXQuery = np.amin(queryPoly[:,0])
-        x1 = maxXQuery = np.amax(queryPoly[:,0])
-        y0 = minYQuery = np.amin(queryPoly[:,1])
-        y1 = maxYQuery = np.amax(queryPoly[:,1])
-        queryCenterX = (maxXQuery+minXQuery)/2
-        queryCenterY = (maxYQuery+minYQuery)/2
-
-        if x1>=imW or y1>=imH:
-            raise ValueError('query point outside image ('+str(imH)+', '+str(imW)+'): y='+str(y1)+' x='+str(x1)+'   '+str(queryPoly))
-
-        def dist(x,y):
-            return math.sqrt((queryCenterX-x)**2 + (queryCenterY-y)**2)
-
-        maxDistFromCenter = maxXQuery-minXQuery+maxYQuery-minYQuery
-        for poly in polyList:
-            minX = np.amin(poly[:,0])
-            maxX = np.amax(poly[:,0])
-            minY = np.amin(poly[:,1])
-            maxY = np.amax(poly[:,1])
-            if maxX>=imW or maxY>=imH:
-                raise ValueError('resp point outside image ('+str(imH)+', '+str(imW)+'): y='+str(maxY)+' x='+str(maxX))
-            maxDistFromCenter = max(maxDistFromCenter, dist(minX,minY), dist(minX,maxY), dist(maxX,minY), dist(maxX,maxY))
-            x0 = min(x0,minX)
-            x1 = max(x1,maxX)
-            y0 = min(y0,minY)
-            y1 = max(y1,maxY)
-        ###
-        #if (imH==183 and imW==183):
-        #    print(( queryCenterX, queryCenterY, maxDistFromCenter, int(x0),int(y0),int(x1),int(y1)))
-        return ( queryCenterX, queryCenterY, maxDistFromCenter, int(x0),int(y0),int(x1),int(y1))
-
 
     def fixAnnotations(self,annotations):
         annotations['pairs']+=annotations['samePairs']
@@ -434,14 +404,17 @@ class FormsBoxPair(torch.utils.data.Dataset):
 
         #remove fields we're skipping
         #reconnect para chains we broke by removing them
+        #print('removing fields')
         idsToFix=[]
         for bb in annotations['fieldBBs']:
+            id=bb['id']
             if self.isSkipField(bb):
-                idsToRemove.add(bb['id'])
+                #print('remove {}'.format(id))
+                idsToRemove.add(id)
                 if bb['type']=='fieldP':
-                    idsToFix.append(bb['id'])
-            elif bb['type']=='fieldCircle':
-                annotations['byId'][bb['id']]['type']='textCircle'
+                    idsToFix.append(id)
+            elif self.swapCircle and bb['type']=='fieldCircle':
+                annotations['byId'][id]['type']='textCircle'
         
         parasLinkedTo=defaultdict(list)
         pairsToRemove=[]

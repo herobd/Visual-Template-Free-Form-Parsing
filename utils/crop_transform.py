@@ -6,6 +6,8 @@ def perform_crop(img, gt, crop):
     cs = crop['crop_size']
     cropped_gt_img = img[crop['dim0'][0]:crop['dim0'][1], crop['dim1'][0]:crop['dim1'][1]]
     scaled_gt_img = cv2.resize(cropped_gt_img, (cs, cs), interpolation = cv2.INTER_CUBIC)
+    if len(scaled_gt_img.shape)==2:
+        scaled_gt_img = scaled_gt_img[...,None]
     scaled_gt = None
     if gt is not None:
         cropped_gt = gt[crop['dim0'][0]:crop['dim0'][1], crop['dim1'][0]:crop['dim1'][1]]
@@ -27,10 +29,20 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
             dim0 = np.random.randint(0,img.shape[0]-cs)
             dim1 = np.random.randint(0,img.shape[1]-cs)
         else:
-            dim0 = np.random.randint(max(0,query_bb[9]-cs,query_bb[11]-cs,query_bb[13]-cs,query_bb[15]-cs),
-                                     min(img.shape[0]-cs,query_bb[9],query_bb[11],query_bb[13],query_bb[15]))
-            dim1 = np.random.randint(max(0,query_bb[8]-cs,query_bb[10]-cs,query_bb[12]-cs,query_bb[14]-cs),
-                                     min(img.shape[1]-cs,query_bb[8],query_bb[10],query_bb[12],query_bb[14]))
+            #force the random crop to fully contain the query, if it can
+            # otherwise contain part of it
+            minY=int(max(0,query_bb[9]-cs,query_bb[11]-cs,query_bb[13]-cs,query_bb[15]-cs))
+            maxY=int(min(img.shape[0]-cs,query_bb[9]+1,query_bb[11]+1,query_bb[13]+1,query_bb[15]+1))
+            if minY>=maxY:
+                minY=int(max(0,min(query_bb[9],query_bb[11],query_bb[13],query_bb[15])))
+                maxY=int(min(img.shape[0]-cs,1+max(query_bb[9]-cs,query_bb[11]-cs,query_bb[13]-cs,query_bb[15]-cs)))
+            minX=int(max(0,query_bb[8]-cs,query_bb[10]-cs,query_bb[12]-cs,query_bb[14]-cs))
+            maxX=int(min(img.shape[1]-cs,query_bb[8]+1,query_bb[10]+1,query_bb[12]+1,query_bb[14]+1))
+            if minX>=maxX:
+                minX=int(max(0,min(query_bb[8],query_bb[10],query_bb[12],query_bb[14])))
+                maxX=int(min(img.shape[1]-cs,1+max(query_bb[8]-cs,query_bb[10]-cs,query_bb[12]-cs,query_bb[14]-cs)))
+            dim0 = np.random.randint(minY,maxY)
+            dim1 = np.random.randint(minX,maxX)
 
         crop = {
             "dim0": [dim0, dim0+cs],
@@ -63,18 +75,6 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
         else:
             line_gt_match=None
 
-        if query_bb is not None:
-            got_query= (
-                    query_bb[8]>=dim1 and query_bb[8]<dim1+cs and
-                    query_bb[9]>=dim0 and query_bb[9]<dim0+cs and
-                    query_bb[10]>=dim1 and query_bb[10]<dim1+cs and
-                    query_bb[11]>=dim0 and query_bb[11]<dim0+cs and
-                    query_bb[12]>=dim1 and query_bb[12]<dim1+cs and
-                    query_bb[13]>=dim0 and query_bb[13]<dim0+cs and
-                    query_bb[14]>=dim1 and query_bb[14]<dim1+cs and
-                    query_bb[15]>=dim0 and query_bb[15]<dim0+cs
-                    )
-            assert(got_query)
 
 
         got_all=True
@@ -129,68 +129,29 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
             
             
 
-            #we're going to edit bb_gt to make boxes partially in crop to be fully in crop 
-            #bring in left side
-            #needs_left = np.logical_and(bb_gt_candidate,1-has_left)[:,:,None]#, [1,1,2]) # things that are candidates where the left point is out-of-bounds
-            v_r = bb_gt[...,10:12]-bb_gt[...,8:10] #vector to opposite point
-            #what do we need to bring in?
-            dist1_l = (1-left_inside_l)*(dim1-bb_gt[...,8])/v_r[...,0] #distance along vector till intersecting left boundary
-            dist1_r = (1-left_inside_r)*(dim1+cs-bb_gt[...,8])/v_r[...,0] # " right boundary
-            dist0_t = (1-left_inside_t)*(dim0-bb_gt[...,9])/v_r[...,1] # " top boudary
-            dist0_b = (1-left_inside_b)*(dim0+cs-bb_gt[...,9])/v_r[...,1] # " bottom boundarya
-            np.nan_to_num(dist1_l,False)
-            np.nan_to_num(dist1_r,False)
-            np.nan_to_num(dist0_t,False)
-            np.nan_to_num(dist0_b,False)
-            # #Take the closest boundary intersection and get the vector that corresponds
-            # #mv_left = v_r*(np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)[:,:,None])
-            #Take the largest of the boundaries we need (others are zeroed out)
-            mv_left = v_r*(np.maximum.reduce([dist1_l,dist1_r,dist0_t,dist0_b])[:,:,None])
-            #Now add that vector to the two corner points to bring them in
-            #bb_gt[...,0:2] = np.where( needs_left , bb_gt[...,0:2]+mv_left, bb_gt[...,0:2])
-            #bb_gt[...,6:8] = np.where( needs_left , bb_gt[...,6:8]+mv_left, bb_gt[...,6:8])
-            bb_gt[...,0:2] += mv_left
-            bb_gt[...,6:8] += mv_left
-
-            #bring in right side
-            #same process as left side
-            #needs_right = np.logical_and(bb_gt_candidate,1-has_right)[:,:,None]#, [1,1,2])
-            v_l = -bb_gt[...,10:12]+bb_gt[...,8:10]
-            dist1_l = (1-right_inside_l)*(dim1-bb_gt[...,10])/v_l[...,0]
-            dist1_r = (1-right_inside_r)*(dim1+cs-bb_gt[...,10])/v_l[...,0]
-            dist0_t = (1-right_inside_t)*(dim0-bb_gt[...,11])/v_l[...,1]
-            dist0_b = (1-right_inside_b)*(dim0+cs-bb_gt[...,11])/v_l[...,1]
-            np.nan_to_num(dist1_l,False)
-            np.nan_to_num(dist1_r,False)
-            np.nan_to_num(dist0_t,False)
-            np.nan_to_num(dist0_b,False)
-            #mv_right = v_l*(np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)[:,:,None])
-            mv_right = v_l*(np.maximum.reduce([dist1_l,dist1_r,dist0_t,dist0_b])[:,:,None])
-            #bb_gt[...,2:4] = np.where( needs_right, bb_gt[...,2:4]+mv_right, bb_gt[...,2:4])
-            #bb_gt[...,4:6] = np.where( needs_right, bb_gt[...,4:6]+mv_right, bb_gt[...,4:6])
-            bb_gt[...,2:4] += mv_right
-            bb_gt[...,4:6] += mv_right
-            if bb_gt_match.sum() > 0:
+            if bb_gt_candidate.sum() > 0:
                 hit=True
         else:
+            got_all = True
             bb_gt_match= None
 
         point_gt_match={}
-        for name, gt in point_gts.items():
-            if gt is not None:
-                ##tic=timeit.default_timer()
-                point_gt_match[name] = np.zeros_like(gt)
-                point_gt_match[name][...,0][gt[...,0] < dim1] = 1
-                point_gt_match[name][...,0][gt[...,0] > dim1+cs] = 1
+        if point_gts is not None:
+            for name, gt in point_gts.items():
+                if gt is not None:
+                    ##tic=timeit.default_timer()
+                    point_gt_match[name] = np.zeros_like(gt)
+                    point_gt_match[name][...,0][gt[...,0] < dim1] = 1
+                    point_gt_match[name][...,0][gt[...,0] > dim1+cs] = 1
 
-                point_gt_match[name][...,1][gt[...,1] < dim0] = 1
-                point_gt_match[name][...,1][gt[...,1] > dim0+cs] = 1
+                    point_gt_match[name][...,1][gt[...,1] < dim0] = 1
+                    point_gt_match[name][...,1][gt[...,1] > dim0+cs] = 1
 
-                point_gt_match[name] = 1-point_gt_match[name]
-                point_gt_match[name] = np.logical_and(point_gt_match[name][...,0], point_gt_match[name][...,1])
-                if point_gt_match[name].sum() > 0:
-                    hit=True
-                ##print('match: {}'.format(timeit.default_timer()-##tic))
+                    point_gt_match[name] = 1-point_gt_match[name]
+                    point_gt_match[name] = np.logical_and(point_gt_match[name][...,0], point_gt_match[name][...,1])
+                    if point_gt_match[name].sum() > 0:
+                        hit=True
+                    ##print('match: {}'.format(timeit.default_timer()-##tic))
         
         if (
             (
@@ -213,6 +174,56 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                         line_gt_match[name] = np.where(line_gt_match[name]!=0)
                 if bb_gt is not None:
                     bb_gt = bb_gt[np.where(bb_gt_candidate)]
+                    left_inside_l = left_inside_l[np.where(bb_gt_candidate)] 
+                    left_inside_r = left_inside_r[np.where(bb_gt_candidate)] 
+                    left_inside_t = left_inside_t[np.where(bb_gt_candidate)] 
+                    left_inside_b = left_inside_b[np.where(bb_gt_candidate)] 
+                    right_inside_l = right_inside_l[np.where(bb_gt_candidate)]
+                    right_inside_r = right_inside_r[np.where(bb_gt_candidate)]
+                    right_inside_t = right_inside_t[np.where(bb_gt_candidate)]
+                    right_inside_b = right_inside_b[np.where(bb_gt_candidate)]
+                    #we're going to edit bb_gt to make boxes partially in crop to be fully in crop 
+                    #bring in left side
+                    #needs_left = np.logical_and(bb_gt_candidate,1-has_left)[:,:,None]#, [1,1,2]) # things that are candidates where the left point is out-of-bounds
+                    v_r = bb_gt[...,10:12]-bb_gt[...,8:10] #vector to opposite point
+                    #what do we need to bring in?
+                    dist1_l = (1-left_inside_l)*(dim1-bb_gt[...,8])/v_r[...,0] #distance along vector till intersecting left boundary
+                    dist1_r = (1-left_inside_r)*(dim1+cs-bb_gt[...,8])/v_r[...,0] # " right boundary
+                    dist0_t = (1-left_inside_t)*(dim0-bb_gt[...,9])/v_r[...,1] # " top boudary
+                    dist0_b = (1-left_inside_b)*(dim0+cs-bb_gt[...,9])/v_r[...,1] # " bottom boundarya
+                    np.nan_to_num(dist1_l,False)
+                    np.nan_to_num(dist1_r,False)
+                    np.nan_to_num(dist0_t,False)
+                    np.nan_to_num(dist0_b,False)
+                    # #Take the closest boundary intersection and get the vector that corresponds
+                    # #mv_left = v_r*(np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)[:,:,None])
+                    #Take the largest of the boundaries we need (others are zeroed out)
+                    mv_left = v_r*(np.maximum.reduce([dist1_l,dist1_r,dist0_t,dist0_b])[...,None])
+                    #Now add that vector to the two corner points to bring them in
+                    #bb_gt[...,0:2] = np.where( needs_left , bb_gt[...,0:2]+mv_left, bb_gt[...,0:2])
+                    #bb_gt[...,6:8] = np.where( needs_left , bb_gt[...,6:8]+mv_left, bb_gt[...,6:8])
+                    bb_gt[...,0:2] += mv_left
+                    bb_gt[...,6:8] += mv_left
+
+                    #bring in right side
+                    #same process as left side
+                    #needs_right = np.logical_and(bb_gt_candidate,1-has_right)[:,:,None]#, [1,1,2])
+                    v_l = -bb_gt[...,10:12]+bb_gt[...,8:10]
+                    dist1_l = (1-right_inside_l)*(dim1-bb_gt[...,10])/v_l[...,0]
+                    dist1_r = (1-right_inside_r)*(dim1+cs-bb_gt[...,10])/v_l[...,0]
+                    dist0_t = (1-right_inside_t)*(dim0-bb_gt[...,11])/v_l[...,1]
+                    dist0_b = (1-right_inside_b)*(dim0+cs-bb_gt[...,11])/v_l[...,1]
+                    np.nan_to_num(dist1_l,False)
+                    np.nan_to_num(dist1_r,False)
+                    np.nan_to_num(dist0_t,False)
+                    np.nan_to_num(dist0_b,False)
+                    #mv_right = v_l*(np.maximum(np.minimum.reduce([dist1_l,dist1_r,dist0_t,dist0_b]),0)[:,:,None])
+                    mv_right = v_l*(np.maximum.reduce([dist1_l,dist1_r,dist0_t,dist0_b])[...,None])
+                    #bb_gt[...,2:4] = np.where( needs_right, bb_gt[...,2:4]+mv_right, bb_gt[...,2:4])
+                    #bb_gt[...,4:6] = np.where( needs_right, bb_gt[...,4:6]+mv_right, bb_gt[...,4:6])
+                    bb_gt[...,2:4] += mv_right
+                    bb_gt[...,4:6] += mv_right
+                    #bb_gt = bb_gt[np.where(bb_gt_candidate)]
                 for name in point_gt_match:
                     point_gt_match[name] = np.where(point_gt_match[name]!=0)
                 return crop, cropped_gt_img, cropped_pixel_gt, line_gt_match, point_gt_match, bb_gt
@@ -311,10 +322,10 @@ class CropBoxTransform(object):
         #pad out to allow random samples to take space off of the page
         ##tic=timeit.default_timer()
         #org_img = np.pad(org_img, self.pad_params, 'mean')
-        if len(org_img.shape)==3:
-            org_img = np.pad(org_img, self.pad_params, 'constant', constant_values=[255,255,255])
+        if org_img.shape[2]==3:
+            org_img = np.pad(org_img, self.pad_params, 'constant', constant_values=255)
         else:
-            org_img = np.pad(org_img, self.pad_params[:2], 'constant', constant_values=255)
+            org_img = np.pad(org_img, self.pad_params, 'constant', constant_values=255)
         if pixel_gt is not None:
             pixel_gt = np.pad(pixel_gt, self.pad_params, 'constant')
         ##print('pad: {}'.format(timeit.default_timer()-##tic))
@@ -351,11 +362,12 @@ class CropBoxTransform(object):
             query_bb[15] = query_bb[15] + self.pad_params[1][0]
 
 
+        if point_gts is not None:
+            for name, gt in point_gts.items():
+                if gt is not None:
+                    gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
+                    gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 
-        for name, gt in point_gts.items():
-            if gt is not None:
-                gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
-                gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 
         crop_params, org_img, pixel_gt, _, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, None, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
         #print(crop_params)
@@ -374,12 +386,13 @@ class CropBoxTransform(object):
         new_bb_gt[...,7 ] = new_bb_gt[...,7 ] - crop_params['dim0'][0]
         #the cross/edge points are invalid now
         new_point_gts={}
-        for name, gt in point_gts.items():
-            if gt is not None:
-                gt = gt[point_gt_match[name]][None,...] #add batch dim (?)
-                gt[...,0] = gt[...,0] - crop_params['dim1'][0]
-                gt[...,1] = gt[...,1] - crop_params['dim0'][0]
-                new_point_gts[name]=gt
+        if point_gts is not None:
+            for name, gt in point_gts.items():
+                if gt is not None:
+                    gt = gt[point_gt_match[name]][None,...] #add batch dim (?)
+                    gt[...,0] = gt[...,0] - crop_params['dim1'][0]
+                    gt[...,1] = gt[...,1] - crop_params['dim0'][0]
+                    new_point_gts[name]=gt
         ##print('pad-minus: {}'.format(timeit.default_timer()-##tic))
 
             #if 'start' in name:

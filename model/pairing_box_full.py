@@ -15,8 +15,16 @@ class PairingBoxFull(BaseModel):
         else:
             self.detector = checkpoint['model']
         self.detector_frozen=True
+        for param in self.detector.parameters():
+            param.will_use_grad=param.requires_grad
+            param.requires_grad=False
 
         self.pairer = PairingBoxNet(config['pairer_config'],detector_config,self.detector.last_channels)
+
+    def unfreeze(self):
+        for param in self.detector.parameters():
+            param.requires_grad=param.will_use_grad
+        self.detector_frozen=False
 
     def forward(self, image, queryMask):
         if self.detector_frozen:

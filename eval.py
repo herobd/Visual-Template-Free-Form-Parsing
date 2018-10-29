@@ -71,7 +71,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
     step=5
 
     #numberOfImages = numberOfImages//config['data_loader']['batch_size']
-    print(len(data_loader))
+    #print(len(data_loader))
     train_iter = iter(data_loader)
     valid_iter = iter(valid_data_loader)
 
@@ -108,7 +108,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                     if validIndex/vBatchSize < len(valid_data_loader):
                         print('valid batch index: {}/{}'.format(validIndex/vBatchSize,len(valid_data_loader)),end='\r')
                         #data, target = valid_iter.next() #valid_data_loader[validIndex]
-                        curVI+=0
+                        curVI+=1
                         #dataT  = _to_tensor(gpu,data)
                         #output = model(dataT)
                         #data = data.cpu().data.numpy()
@@ -118,9 +118,12 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         metricsO,_ = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
                         if type(metricsO) == dict:
                             for typ,typeLists in metricsO.items():
-                                for name,lst in typeLists.items():
-                                    val_metrics_list[typ][name]+=lst
-                                    val_comb_metrics[typ]+=lst
+                                if type(typeLists) == dict:
+                                    for name,lst in typeLists.items():
+                                        val_metrics_list[typ][name]+=lst
+                                        val_comb_metrics[typ]+=lst
+                                else:
+                                    val_comb_metrics[typ]+=typeLists
                         else:
                             val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                         

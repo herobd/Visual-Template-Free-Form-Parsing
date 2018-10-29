@@ -225,6 +225,9 @@ class BoxPairTrainer(BaseTrainer):
         """
         self.model.eval()
         total_val_loss = 0
+        total_position_loss =0
+        total_conf_loss =0
+        tota_class_loss =0
         total_val_metrics = np.zeros(len(self.metrics))
         losses={}
         mAP = np.zeros(self.model.numBBTypes)
@@ -242,7 +245,9 @@ class BoxPairTrainer(BaseTrainer):
                 
                 this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
                 loss+=this_loss*self.loss_weight['box']
-                losses['val_box_loss']+=this_loss.item()
+                total_position_loss+=position_loss
+                total_conf_loss+=conf_loss
+                tota_class_loss+=class_loss
                 
                 threshConf = self.thresh_conf*outputBoxes[:,:,0].max()
                 outputBoxes = non_max_sup_iou(outputBoxes.cpu(),self.thresh_conf,self.thresh_intersect)
@@ -278,8 +283,8 @@ class BoxPairTrainer(BaseTrainer):
             'val_recall':(mRecall/len(self.valid_data_loader)).tolist(),
             'val_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
             'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
-            'val_position_loss':position_loss,
-            'val_conf_loss':conf_loss,
-            'val_class_loss':class_loss,
+            'val_position_loss':total_position_loss / len(self.valid_data_loader),
+            'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
+            'val_class_loss':tota_class_loss / len(self.valid_data_loader),
             **losses
         }

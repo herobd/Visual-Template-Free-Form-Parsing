@@ -1,12 +1,12 @@
 {
     "name": "Forms11_pair_iouVGG_dil3_dist2",
     "cuda": true,
-    "gpu": 0,
+    "gpu": 1,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxPair",
-        "data_dir": "/home/ubuntu/brian/data/forms",
+        "data_dir": "/home/brian/data/forms",
         "batch_size": 2,
         "shuffle": true,
         "num_workers": 2,
@@ -68,9 +68,6 @@
     "model": {
         "detector_checkpoint": "saved/forms11_iouVGG_dil3/checkpoint-iteration170020.pth.tar",
         "pairer_config": {
-            "use_dist_mask": true,
-            "use_vdist_mask": true,
-            "use_hdist_mask": true,
             "norm_type": "group_norm",
             "up_sample_ch": 128,
             "down1_layers_cfg": ["k7-32", "M"],

@@ -34,6 +34,152 @@ def getDistMask(queryMask):
     distMask = 2*((1000-dist_transform)/1000) - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is 1000 pixels
     return distMask
 
+def fixAnnotations(this,annotations):
+    annotations['pairs']+=annotations['samePairs']
+    toAdd=[]
+    idsToRemove=set()
+
+    #enumerations inside a row they are paired to should be removed
+    #enumerations paired with the left row of a chained row need to be paired with the right
+    pairsToRemove=[]
+    pairsToAdd=[]
+    for bb in annotations['textBBs']:
+        if bb['type']=='textNumber':
+            for pair in annotations['pairs']:
+                if bb['id'] in pair:
+                    if pair[0]==bb['id']:
+                        otherId=pair[1]
+                    else:
+                        otherId=pair[0]
+                    otherBB=annotations['byId'][otherId]
+                    if otherBB['type']=='fieldRow':
+                        if avg_x(bb)>left_x(otherBB) and avg_x(bb)<right_x(otherBB):
+                            idsToRemove.add(bb['id'])
+                        #else TODO chained row case
+
+
+
+    #remove fields we're skipping
+    #reconnect para chains we broke by removing them
+    #print('removing fields')
+    idsToFix=[]
+    for bb in annotations['fieldBBs']:
+        id=bb['id']
+        if this.isSkipField(bb):
+            #print('remove {}'.format(id))
+            idsToRemove.add(id)
+            if bb['type']=='fieldP':
+                idsToFix.append(id)
+        elif this.swapCircle and bb['type']=='fieldCircle':
+            annotations['byId'][id]['type']='textCircle'
+    
+    parasLinkedTo=defaultdict(list)
+    pairsToRemove=[]
+    for i,pair in enumerate(annotations['pairs']):
+        if pair[0] in idsToFix and annotations['byId'][pair[1]]['type'][-1]=='P':
+            parasLinkedTo[pair[0]].append(pair[1])
+            pairsToRemove.append(i)
+        elif pair[1] in idsToFix and annotations['byId'][pair[0]]['type'][-1]=='P':
+            parasLinkedTo[pair[1]].append(pair[0])
+            pairsToRemove.append(i)
+        elif pair[0] in idsToRemove or pair[1] in idsToRemove:
+            pairsToRemove.append(i)
+
+    pairsToRemove.sort(reverse=True)
+    last=None
+    for i in pairsToRemove:
+        if i==last:#in case of duplicated
+            continue
+        #print('del pair: {}'.format(annotations['pairs'][i]))
+        del annotations['pairs'][i]
+        last=i
+    for _,ids in parasLinkedTo.items():
+        if len(ids)==2:
+            if ids[0] not in idsToRemove and ids[1] not in idsToRemove:
+                #print('adding: {}'.format([ids[0],ids[1]]))
+                #annotations['pairs'].append([ids[0],ids[1]])
+                toAdd.append([ids[0],ids[1]])
+        #else I don't know what's going on
+
+
+    for id in idsToRemove:
+        #print('deleted: {}'.format(annotations['byId'][id]))
+        del annotations['byId'][id]
+
+
+    #skipped link between col and enumeration when enumeration is between col header and col
+    for pair in annotations['pairs']:
+        notNum=num=None
+        if pair[0] in annotations['byId'] and annotations['byId'][pair[0]]['type']=='textNumber':
+            num=annotations['byId'][pair[0]]
+            notNum=annotations['byId'][pair[1]]
+        elif pair[1] in annotations['byId'] and annotations['byId'][pair[1]]['type']=='textNumber':
+            num=annotations['byId'][pair[1]]
+            notNum=annotations['byId'][pair[0]]
+
+        if notNum is not None and notNum['type']!='textNumber':
+            for pair2 in annotations['pairs']:
+                if notNum['id'] in pair2:
+                    if notNum['id'] == pair2[0]:
+                        otherId=pair2[1]
+                    else:
+                        otherId=pair2[0]
+                    if annotations['byId'][otherId]['type']=='fieldCol' and avg_y(annotations['byId'][otherId])>avg_y(annotations['byId'][num['id']]):
+                        toAdd.append([num['id'],otherId])
+
+    #heirarchy labels.
+    #for pair in annotations['samePairs']:
+    #    text=textMinor=None
+    #    if annotations['byId'][pair[0]]['type']=='text':
+    #        text=pair[0]
+    #        if annotations['byId'][pair[1]]['type']=='textMinor':
+    #            textMinor=pair[1]
+    #    elif annotations['byId'][pair[1]]['type']=='text':
+    #        text=pair[1]
+    #        if annotations['byId'][pair[0]]['type']=='textMinor':
+    #            textMinor=pair[0]
+    #    else:#catch case of minor-minor-field
+    #        if annotations['byId'][pair[1]]['type']=='textMinor' and annotations['byId'][pair[0]]['type']=='textMinor':
+    #            a=pair[0]
+    #            b=pair[1]
+    #            for pair2 in annotations['pairs']:
+    #                if a in pair2:
+    #                    if pair2[0]==a:
+    #                        otherId=pair2[1]
+    #                    else:
+    #                        otherId=pair2[0]
+    #                    toAdd.append([b,otherId])
+    #                if b in pair2:
+    #                    if pair2[0]==b:
+    #                        otherId=pair2[1]
+    #                    else:
+    #                        otherId=pair2[0]
+    #                    toAdd.append([a,otherId])
+
+    #    
+    #    if text is not None and textMinor is not None:
+    #        for pair2 in annotations['pairs']:
+    #            if textMinor in pair2:
+    #                if pair2[0]==textMinor:
+    #                    otherId=pair2[1]
+    #                else:
+    #                    otherId=pair2[0]
+    #                toAdd.append([text,otherId])
+    #        for pair2 in annotations['samePairs']:
+    #            if textMinor in pair2:
+    #                if pair2[0]==textMinor:
+    #                    otherId=pair2[1]
+    #                else:
+    #                    otherId=pair2[0]
+    #                if annotations['byId'][otherId]['type']=='textMinor':
+    #                    toAddSame.append([text,otherId])
+
+    for pair in toAdd:
+        if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
+             annotations['pairs'].append(pair)
+    #annotations['pairs']+=toAdd
+
+
 def collate(batch):
 
     ##tic=timeit.default_timer()
@@ -192,7 +338,6 @@ class FormsBoxPair(torch.utils.data.Dataset):
             self.transform = None
         if instances is not None:
             self.instances=instances
-            self.cropResize = self.__cropResizeF(patchSize,0,0)
         else:
             with open(os.path.join(dirPath,'train_valid_test_split.json')) as f:
                 groupsToUse = json.loads(f.read())[split]
@@ -235,7 +380,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
                             annotations['byId'][bb['id']]=bb
 
                         #fix assumptions made in GTing
-                        self.fixAnnotations(annotations)
+                        fixAnnotations(self,annotations)
 
                         #print(path)
                         instancesForImage=[]
@@ -329,22 +474,20 @@ class FormsBoxPair(torch.utils.data.Dataset):
         if self.transform is not None:
             out = self.transform({
                 "img": np_img,
-                "bb_gt": response_bbs.copy(),
+                "bb_gt": response_bbs,
                 "query_bb":query_bb,
                 "point_gt": None,
                 "pixel_gt": queryMask,
             })
             np_img = out['img']
-            response_bbs_trans = out['bb_gt']
+            response_bbs = out['bb_gt']
             if np_img.shape[2]==3:
                 np_img = augmentation.apply_random_color_rotation(np_img)
             np_img = augmentation.apply_tensmeyer_brightness(np_img)
             queryMask = out['pixel_gt']
             #TODO rotate?
-        else:
-            response_bbs_trans=response_bbs
 
-        t_response_bbs = convertBBs(response_bbs_trans,self.rotate,2)
+        t_response_bbs = convertBBs(response_bbs,self.rotate,2)
         if t_response_bbs is not None and (torch.isnan(t_response_bbs).any() or (float('inf')==t_response_bbs).any()):
             print('nan or inf on {}. response_bbs:{}. response_bbs_trans={}. responseBBList={}'.format(imageName,response_bbs,response_bbs_trans,responseBBList))
             return self.__getitem__((index+1)%len(self.instances))
@@ -402,151 +545,6 @@ class FormsBoxPair(torch.utils.data.Dataset):
             j+=1
         return bbs
 
-
-    def fixAnnotations(self,annotations):
-        annotations['pairs']+=annotations['samePairs']
-        toAdd=[]
-        idsToRemove=set()
-
-        #enumerations inside a row they are paired to should be removed
-        #enumerations paired with the left row of a chained row need to be paired with the right
-        pairsToRemove=[]
-        pairsToAdd=[]
-        for bb in annotations['textBBs']:
-            if bb['type']=='textNumber':
-                for pair in annotations['pairs']:
-                    if bb['id'] in pair:
-                        if pair[0]==bb['id']:
-                            otherId=pair[1]
-                        else:
-                            otherId=pair[0]
-                        otherBB=annotations['byId'][otherId]
-                        if otherBB['type']=='fieldRow':
-                            if avg_x(bb)>left_x(otherBB) and avg_x(bb)<right_x(otherBB):
-                                idsToRemove.add(bb['id'])
-                            #else TODO chained row case
-
-
-
-        #remove fields we're skipping
-        #reconnect para chains we broke by removing them
-        #print('removing fields')
-        idsToFix=[]
-        for bb in annotations['fieldBBs']:
-            id=bb['id']
-            if self.isSkipField(bb):
-                #print('remove {}'.format(id))
-                idsToRemove.add(id)
-                if bb['type']=='fieldP':
-                    idsToFix.append(id)
-            elif self.swapCircle and bb['type']=='fieldCircle':
-                annotations['byId'][id]['type']='textCircle'
-        
-        parasLinkedTo=defaultdict(list)
-        pairsToRemove=[]
-        for i,pair in enumerate(annotations['pairs']):
-            if pair[0] in idsToFix and annotations['byId'][pair[1]]['type'][-1]=='P':
-                parasLinkedTo[pair[0]].append(pair[1])
-                pairsToRemove.append(i)
-            elif pair[1] in idsToFix and annotations['byId'][pair[0]]['type'][-1]=='P':
-                parasLinkedTo[pair[1]].append(pair[0])
-                pairsToRemove.append(i)
-            elif pair[0] in idsToRemove or pair[1] in idsToRemove:
-                pairsToRemove.append(i)
-
-        pairsToRemove.sort(reverse=True)
-        last=None
-        for i in pairsToRemove:
-            if i==last:#in case of duplicated
-                continue
-            #print('del pair: {}'.format(annotations['pairs'][i]))
-            del annotations['pairs'][i]
-            last=i
-        for _,ids in parasLinkedTo.items():
-            if len(ids)==2:
-                if ids[0] not in idsToRemove and ids[1] not in idsToRemove:
-                    #print('adding: {}'.format([ids[0],ids[1]]))
-                    #annotations['pairs'].append([ids[0],ids[1]])
-                    toAdd.append([ids[0],ids[1]])
-            #else I don't know what's going on
-
-
-        for id in idsToRemove:
-            #print('deleted: {}'.format(annotations['byId'][id]))
-            del annotations['byId'][id]
-
-
-        #skipped link between col and enumeration when enumeration is between col header and col
-        for pair in annotations['pairs']:
-            notNum=num=None
-            if pair[0] in annotations['byId'] and annotations['byId'][pair[0]]['type']=='textNumber':
-                num=annotations['byId'][pair[0]]
-                notNum=annotations['byId'][pair[1]]
-            elif pair[1] in annotations['byId'] and annotations['byId'][pair[1]]['type']=='textNumber':
-                num=annotations['byId'][pair[1]]
-                notNum=annotations['byId'][pair[0]]
-
-            if notNum is not None and notNum['type']!='textNumber':
-                for pair2 in annotations['pairs']:
-                    if notNum['id'] in pair2:
-                        if notNum['id'] == pair2[0]:
-                            otherId=pair2[1]
-                        else:
-                            otherId=pair2[0]
-                        if annotations['byId'][otherId]['type']=='fieldCol' and avg_y(annotations['byId'][otherId])>avg_y(annotations['byId'][num['id']]):
-                            toAdd.append([num['id'],otherId])
-
-        #heirarchy labels.
-        #for pair in annotations['samePairs']:
-        #    text=textMinor=None
-        #    if annotations['byId'][pair[0]]['type']=='text':
-        #        text=pair[0]
-        #        if annotations['byId'][pair[1]]['type']=='textMinor':
-        #            textMinor=pair[1]
-        #    elif annotations['byId'][pair[1]]['type']=='text':
-        #        text=pair[1]
-        #        if annotations['byId'][pair[0]]['type']=='textMinor':
-        #            textMinor=pair[0]
-        #    else:#catch case of minor-minor-field
-        #        if annotations['byId'][pair[1]]['type']=='textMinor' and annotations['byId'][pair[0]]['type']=='textMinor':
-        #            a=pair[0]
-        #            b=pair[1]
-        #            for pair2 in annotations['pairs']:
-        #                if a in pair2:
-        #                    if pair2[0]==a:
-        #                        otherId=pair2[1]
-        #                    else:
-        #                        otherId=pair2[0]
-        #                    toAdd.append([b,otherId])
-        #                if b in pair2:
-        #                    if pair2[0]==b:
-        #                        otherId=pair2[1]
-        #                    else:
-        #                        otherId=pair2[0]
-        #                    toAdd.append([a,otherId])
-
-        #    
-        #    if text is not None and textMinor is not None:
-        #        for pair2 in annotations['pairs']:
-        #            if textMinor in pair2:
-        #                if pair2[0]==textMinor:
-        #                    otherId=pair2[1]
-        #                else:
-        #                    otherId=pair2[0]
-        #                toAdd.append([text,otherId])
-        #        for pair2 in annotations['samePairs']:
-        #            if textMinor in pair2:
-        #                if pair2[0]==textMinor:
-        #                    otherId=pair2[1]
-        #                else:
-        #                    otherId=pair2[0]
-        #                if annotations['byId'][otherId]['type']=='textMinor':
-        #                    toAddSame.append([text,otherId])
-
-        for pair in toAdd:
-            if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
-                 annotations['pairs'].append(pair)
-        #annotations['pairs']+=toAdd
 
     def isSkipField(self,bb):
         return (    (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or

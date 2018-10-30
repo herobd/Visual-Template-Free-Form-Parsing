@@ -20,9 +20,6 @@ class PairingBoxFull(BaseModel):
             param.will_use_grad=param.requires_grad 
             param.requires_grad=False 
         self.detector_frozen=True
-        for param in self.detector.parameters():
-            param.will_use_grad=param.requires_grad
-            param.requires_grad=False
 
         self.pairer = PairingBoxNet(
                 config['pairer_config'],

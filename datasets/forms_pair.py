@@ -8,82 +8,12 @@ from skimage import draw
 import os
 import math
 import cv2
+from utils import augmentation
+from utils.crop_transform import CropBoxTransform
+from datasets.forms_box_pair import fixAnnotations
 
-IAIN_CATCH=['193','194','197','200']
+SKIP=['121','174']
 
-def fixAssumptions(annotations):
-    #print('TODO')
-    toAdd=[]
-    toAddSame=[]
-
-    for pair in annotations['samePairs']:
-        notNum=num=None
-        if annotations['byId'][pair[0]]['type']=='textNumber':
-            num=annotations['byId'][pair[0]]
-            notNum=annotations['byId'][pair[1]]
-        elif annotations['byId'][pair[1]]['type']=='textNumber':
-            num=annotations['byId'][pair[1]]
-            notNum=annotations['byId'][pair[0]]
-
-        if notNum is not None and notNum['type']!='textNumber':
-            for pair2 in annotations['pairs']:
-                if notNum['id'] in pair2:
-                    if notNum['id'] == pair2[0]:
-                        otherId=pair2[1]
-                    else:
-                        otherId=pair2[0]
-                    if annotations[otherId]['type']=='fieldCol' or annotations[otherId]['type']=='fieldRow':
-                        toAdd.append([num['id'],otherId])
-
-    #heirarchy labels.
-    #for pair in annotations['samePairs']:
-    #    text=textMinor=None
-    #    if annotations['byId'][pair[0]]['type']=='text':
-    #        text=pair[0]
-    #        if annotations['byId'][pair[1]]['type']=='textMinor':
-    #            textMinor=pair[1]
-    #    elif annotations['byId'][pair[1]]['type']=='text':
-    #        text=pair[1]
-    #        if annotations['byId'][pair[0]]['type']=='textMinor':
-    #            textMinor=pair[0]
-    #    else:#catch case of minor-minor-field
-    #        if annotations['byId'][pair[1]]['type']=='textMinor' and annotations['byId'][pair[0]]['type']=='textMinor':
-    #            a=pair[0]
-    #            b=pair[1]
-    #            for pair2 in annotations['pairs']:
-    #                if a in pair2:
-    #                    if pair2[0]==a:
-    #                        otherId=pair2[1]
-    #                    else:
-    #                        otherId=pair2[0]
-    #                    toAdd.append([b,otherId])
-    #                if b in pair2:
-    #                    if pair2[0]==b:
-    #                        otherId=pair2[1]
-    #                    else:
-    #                        otherId=pair2[0]
-    #                    toAdd.append([a,otherId])
-
-    #    
-    #    if text is not None and textMinor is not None:
-    #        for pair2 in annotations['pairs']:
-    #            if textMinor in pair2:
-    #                if pair2[0]==textMinor:
-    #                    otherId=pair2[1]
-    #                else:
-    #                    otherId=pair2[0]
-    #                toAdd.append([text,otherId])
-    #        for pair2 in annotations['samePairs']:
-    #            if textMinor in pair2:
-    #                if pair2[0]==textMinor:
-    #                    otherId=pair2[1]
-    #                else:
-    #                    otherId=pair2[0]
-    #                if annotations['byId'][otherId]['type']=='textMinor':
-    #                    toAddSame.append([text,otherId])
-
-    annotations['samePairs']+=toAddSame
-    annotations['pairs']+=toAdd
 
 
 class FormsPair(torch.utils.data.Dataset):
@@ -93,14 +23,15 @@ class FormsPair(torch.utils.data.Dataset):
 
     def __getResponseBBList(self,queryId,annotations):
         responseBBList=[]
-        for pair in annotations['pairs']+annotations['samePairs']:
+        for pair in annotations['pairs']: #+annotations['samePairs']: added by fixAnnotations
             if queryId in pair:
                 if pair[0]==queryId:
                     otherId=pair[1]
                 else:
                     otherId=pair[0]
-                poly = np.array(annotations['byId'][otherId]['poly_points']) #self.__getResponseBB(otherId,annotations)  
-                responseBBList.append(poly)
+                if otherId in annotations['byId']: #catch for gt error
+                    poly = np.array(annotations['byId'][otherId]['poly_points']) #self.__getResponseBB(otherId,annotations)  
+                    responseBBList.append(poly)
         return responseBBList
 
 
@@ -118,10 +49,24 @@ class FormsPair(torch.utils.data.Dataset):
             self.no_print_fields = config['no_print_fields']
         else:
             self.no_print_fields = False
-        patchSize=config['patch_size']
+        self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
+        self.swapCircle = config['swap_circle'] if 'swap_circle' in config else True
+        self.color = config['color'] if 'color' in config else True
+        self.bbCrop = config['use_bb_crop'] if 'use_bb_crop' in config else True
+        #self.rotate = config['rotation'] if 'rotation' in config else True
+        self.useDistMask = config['use_dist_mask'] if 'use_dist_mask' in config else False
+        self.useVDistMask = config['use_vdist_mask'] if 'use_vdist_mask' in config else False
+        self.useHDistMask = config['use_hdist_mask'] if 'use_hdist_mask' in config else False
+        patchSize=config['patch_size'] if 'patch_size' in config else None
+        self.halfResponse = config['half_response'] if 'half_response' in config else False
+        if pathSize is not None:
+            self.transform = CropBoxTransform({"crop_size":patchSize})
+        else:
+            self.transform = None
         if instances is not None:
             self.instances=instances
             self.cropResize = self.__cropResizeF(patchSize,0,0)
+            self.transform = None
         else:
             centerJitterFactor=config['center_jitter']
             sizeJitterFactor=config['size_jitter']
@@ -134,8 +79,8 @@ class FormsPair(torch.utils.data.Dataset):
                 aW=0
                 aA=0
             for groupName, imageNames in groupsToUse.items():
-                if groupName in IAIN_CATCH:
-                    print('Skipped group {} as Iain has incomplete GT here'.format(groupName))
+                if groupName in SKIP:
+                    print('Skipped group {}'.format(groupName))
                     continue
                 for imageName in imageNames:
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
@@ -148,31 +93,22 @@ class FormsPair(torch.utils.data.Dataset):
                     annotations=None
                     if os.path.exists(jsonPath):
                         rescale=1.0
-                        if self.cache_resized and not os.path.exists(path):
-                            org_img = cv2.imread(org_path)
-                            target_dim1 = self.rescale_range[1]
-                            target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
-                            resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
-                            cv2.imwrite(path,resized)
-                            rescale = target_dim1/float(org_img.shape[1])
-                        elif self.cache_resized:
-                            with open(os.path.join(jsonPath)) as f:
-                                annotations = json.loads(f.read())
-                            imW = annotations['width']
-                                    
-                            target_dim1 = self.rescale_range[1]
-                            rescale = target_dim1/float(imW)
+                        if self.cache_resized:
+                            rescale = self.rescale_range[1]
+                            if not os.path.exists(path):
+                                org_img = cv2.imread(org_path)
+                                if org_img is None:
+                                    print('WARNING, could not read {}'.format(org_img))
+                                    continue
+                                resized = cv2.resize(org_img,(0,0),
+                                        fx=self.rescale_range[1],
+                                        fy=self.rescale_range[1],
+                                        interpolation = cv2.INTER_CUBIC)
+                                cv2.imwrite(path,resized)
                         if annotations is None:
                             with open(os.path.join(jsonPath)) as f:
                                 annotations = json.loads(f.read())
                             #print(os.path.join(jsonPath))
-                        imH = annotations['height']
-                        imW = annotations['width']
-                        #startCount=len(self.instances)
-                        if test:
-                            aH+=imH
-                            aW+=imW
-                            aA+=imH*imW
                         annotations['byId']={}
                         for bb in annotations['textBBs']:
                             annotations['byId'][bb['id']]=bb
@@ -180,31 +116,18 @@ class FormsPair(torch.utils.data.Dataset):
                             annotations['byId'][bb['id']]=bb
 
                         #fix assumptions made in GTing
-                        #fixAssumptions(annotations)
+                        fixAnnotations(self,annotations)
 
                         #print(path)
-                        for bb in annotations['textBBs']:
+                        for id,bb in annotations['byId']:
                             bbPoints = np.array(bb['poly_points'])
-                            responseBBList = self.__getResponseBBList(bb['id'],annotations)
-                            #print(bb['id'])
+                            responseBBList = self.__getResponseBBList(id,annotations)
+                            #print(id)
                             #print(responseBBList)
                             self.instances.append({
-                                                'id': bb['id'],
+                                                'id': id,
                                                 'imagePath': path,
-                                                'queryPoly': bbPoints,
-                                                'responsePolyList': responseBBList,
-                                                'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
-                                            })
-
-                        for bb in annotations['fieldBBs']:
-                            if ( (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
-                                 (self.no_print_fields and (bb['isBlank']=='print' or bb['isBlank']==2)) ):
-                                 continue
-                            bbPoints = np.array(bb['poly_points'])
-                            responseBBList = self.__getResponseBBList(bb['id'],annotations)
-                            self.instances.append({
-                                                'id': bb['id'],
-                                                'imagePath': path,
+                                                'imageName': imageName,
                                                 'queryPoly': bbPoints,
                                                 'responsePolyList': responseBBList,
                                                 'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
@@ -240,29 +163,134 @@ class FormsPair(torch.utils.data.Dataset):
     def __getitem__(self,index):
         id = self.instances[index]['id']
         imagePath = self.instances[index]['imagePath']
+        imageName = self.instances[index]['imageName']
         queryPoly = self.instances[index]['queryPoly']
         responsePolyList = self.instances[index]['responsePolyList']
         xQueryC,yQueryC,reach,x0,y0,x1,y1 = self.instances[index]['helperStats']
         #print(index)
         #print(self.imagePath)
         #print(self.ids[index])
-        image = 1.0 - cv2.imread(imagePath)/128.0
-        #TODO color jitter, rotation?, skew?
-        queryMask = np.zeros([image.shape[0],image.shape[1]])
-        rr, cc = draw.polygon(queryPoly[:, 1], queryPoly[:, 0], queryMask.shape)
-        queryMask[rr,cc]=1
-        responseMask = np.zeros([image.shape[0],image.shape[1]])
-        for poly in responsePolyList:
-            rr, cc = draw.polygon(poly[:, 1], poly[:, 0], responseMask.shape)
-            responseMask[rr,cc]=1
-
-        imageWithQuery = np.append(image,queryMask.reshape(queryMask.shape+(1,)),axis=2)
-        imageWithQuery = np.moveaxis(imageWithQuery,2,0)
-        sample = self.cropResize(imageWithQuery, responseMask, xQueryC,yQueryC,reach,x0,y0,x1,y1)
-        #sample = (imageWithQuery, responseMask,) + helperStats + (imagePath+' '+id,)
-        if self.augmentation_params is not None:
-            sample = self.augment(sample)
+        image = 1.0 - cv2.imread(imagePath, 1 if self.color else 0)/128.0
+        
+        if self.bbCrop:
+            #resize
+            rescaled=self.instances[index]['rescaled']
+            scale = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
+            partial_rescale = scale/rescaled
+            image = cv2.resize(image,(0,0),
+                    fx=partial_rescale,
+                    fy=partial_rescale,
+                    interpolation = cv2.INTER_CUBIC)
+            if not self.color:
+                image=image[:,:,None]
+            response_bbs = self.getBBGT(responsePolyList,scale)
+            query_bb = self.getBBGT([queryPoly],scale)[0]
+            queryMask = self.makeQueryMask(image,query_bb[[1,3,5,7]], query_bb[[0,2,4,6]])
+            if self.transform is not None:
+                out = self.transform({
+                    "img": image,
+                    "bb_gt": response_bbs[None,...],#expects batch dim
+                    "query_bb":query_bb,
+                    "point_gt": None,
+                    "pixel_gt": queryMask,
+                })
+                image = out['img']
+                response_bbs = out['bb_gt'][0]
+                if image.shape[2]==3:
+                    image = augmentation.apply_random_color_rotation(image)
+                image = augmentation.apply_tensmeyer_brightness(image)
+                queryMask = out['pixel_gt']
+                #TODO rotate?
+            responseMask = np.zeros([image.shape[0],image.shape[1]])
+            for i in response_bbs.shape[0]:
+                rr, cc = draw.polygon(response_bbs[i,[1,3,5,7]], response_bbs[i,[0,2,4,6]], responseMask.shape)
+                responseMask[rr,cc]=1
+            if self.halfResponse:
+                responseMask = cv2.resize(  responseMask,
+                                            (responseMask.shape[0]//2,responseMask[1]//2),
+                                            interpolation = cv2.INTER_CUBIC)
+            return (imageWithQuery, imageName,reponseMask)
+        else:
+            if not self.color:
+                image=image[:,:,None]
+            queryMask = self.makeQueryMask(image,queryPoly[:, 1], queryPoly[:, 0])
+            responseMask = np.zeros([image.shape[0],image.shape[1]])
+            for poly in responsePolyList:
+                rr, cc = draw.polygon(poly[:, 1], poly[:, 0], responseMask.shape)
+                responseMask[rr,cc]=1
+            imageWithQuery = np.append(image,queryMask,axis=2)
+            imageWithQuery = np.moveaxis(imageWithQuery,2,0)
+            sample = self.cropResize(imageWithQuery, responseMask, xQueryC,yQueryC,reach,x0,y0,x1,y1)
+            #sample = (imageWithQuery, responseMask,) + helperStats + (imagePath+' '+id,)
+            if self.augmentation_params is not None:
+                sample = self.augment(sample)
         return sample #+ (imagePath+' '+id,)
+
+    def makeQueryMask(self,image,ys,xs):
+        queryMask = np.zeros([image.shape[0],image.shape[1]])
+        rr, cc = draw.polygon(ys, xs, queryMask.shape)
+        queryMask[rr,cc]=1
+        masks = [queryMask]
+        distMask=None
+        if self.useDistMask:
+            distMask = getDistMask(queryMask)
+            masks.append(distMask)
+        if self.useHDistMask:
+            if distMask is None:
+                distMask = getDistMask(queryMask)
+            minY=math.ceil(ys.min())
+            maxY=math.floor(ys.max())
+            hdistMask = distMask.copy()
+            hdistMask[:minY,:]=-1
+            hdistMask[maxY:,:]=-1
+            masks.append(hdistMask)
+        if self.useVDistMask:
+            if distMask is None:
+                distMask = getDistMask(queryMask)
+            minX=math.ceil(xs.min())
+            maxX=math.floor(xs.max())
+            vdistMask = distMask.copy()
+            vdistMask[:,:minX]=-1
+            vdistMask[:,maxX:]=-1
+            masks.append(vdistMask)
+
+        return np.stack(masks,axis=2)
+
+    def getBBGT(self,usePolys,s):
+
+
+        bbs = np.empty((len(usePolys), 8+8), dtype=np.float32) #2x4 corners, 2x4 cross-points
+        j=0
+        for poly in usePolys:
+            tlX = poly[0][0]
+            tlY = poly[0][1]
+            trX = poly[1][0]
+            trY = poly[1][1]
+            brX = poly[2][0]
+            brY = poly[2][1]
+            blX = poly[3][0]
+            blY = poly[3][1]
+
+
+            bbs[j,0]=tlX*s
+            bbs[j,1]=tlY*s
+            bbs[j,2]=trX*s
+            bbs[j,3]=trY*s
+            bbs[j,4]=brX*s
+            bbs[j,5]=brY*s
+            bbs[j,6]=blX*s
+            bbs[j,7]=blY*s
+            #we add these for conveince to crop BBs within window
+            bbs[j,8]=s*(tlX+blX)/2
+            bbs[j,9]=s*(tlY+blY)/2
+            bbs[j,10]=s*(trX+brX)/2
+            bbs[j,11]=s*(trY+brY)/2
+            bbs[j,12]=s*(tlX+trX)/2
+            bbs[j,13]=s*(tlY+trY)/2
+            bbs[j,14]=s*(brX+blX)/2
+            bbs[j,15]=s*(brY+blY)/2
+            j+=1
+        return bbs
 
     def __getHelperStats(self, queryPoly, polyList, imH, imW):
         """

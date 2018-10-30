@@ -121,6 +121,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
     aps_7=[]
     recalls_5=[]
     precs_5=[]
+    bestBBIdx=[]
     for b in range(batchSize):
         if targetBBs is not None:
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
@@ -137,6 +138,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         precs_5.append(prec_5)
         #for b in range(len(outputBBs)):
         outputBBs[b] = outputBBs[b].data.numpy()
+        bestBBIdx.append( np.argmax(outputBBs[b][:,0]) )
 
     
     dists=defaultdict(list)
@@ -195,11 +197,11 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             #    #pred_points.append(
             #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
             #import pdb; pdb.set_trace()
-            bbs = outputBBs[b]
-            for j in range(bbs.shape[0]):
-                #circle aligned predictions
-                conf = bbs[j,0]
-                if outDir is not None:
+            if outDir is not None:
+                bbs = outputBBs[b]
+                for j in range(bbs.shape[0]):
+                    #circle aligned predictions
+                    conf = bbs[j,0]
                     shade = 0.0+(conf-threshConf)/(maxConf-threshConf)
                     #print(shade)
                     #if name=='text_start_gt' or name=='field_end_gt':
@@ -208,11 +210,19 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
                     #    cv2.bb(bbImage[:,:,2],p1,p2,shade,2)
                     #elif name=='field_end_gt' or name=='field_start_gt':
                     #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
-                    if bbs[j,6] > bbs[j,7]:
-                        color=(0,0,shade) #text
+                    if j==bestBBIdx[b]:
+                        if bbs[j,6] > bbs[j,7]:
+                            color=(0,shade,shade) #text
+                        else:
+                            color=(shade,0,shade) #field
                     else:
-                        color=(shade,0,0) #field
+                        if bbs[j,6] > bbs[j,7]:
+                            color=(0,0,shade) #text
+                        else:
+                            color=(shade,0,0) #field
                     plotRect(imageB,color,bbs[j,1:6])
+                #conf = outputBBs[b][bestBBIdx[b],0]
+                #shade = 0.0+(conf-threshConf)/(maxConf-threshConf)
 
             #for j in alignmentBBsTarg[name][b]:
             #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])

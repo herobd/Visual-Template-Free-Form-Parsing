@@ -113,12 +113,12 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
 
     image = image.cpu().data.numpy()
     maxConf = outputBBs[:,:,0].max().item()
-    threshConf = max(maxConf*0.92,0.5)
-    #print("threshConf:{}".format(threshConf))
+    threshConf = max(maxConf*0.99,0.5)
+    #print("maxConf:{}, threshConf:{}".format(maxConf,threshConf))
     outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
-    aps_3=[]
+    #aps_3=[]
     aps_5=[]
-    aps_7=[]
+    #aps_7=[]
     recalls_5=[]
     precs_5=[]
     bestBBIdx=[]
@@ -127,13 +127,13 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
             target_for_b = torch.empty(0)
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,model.numBBTypes)
-        ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
-        ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=True)
+        #ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
+        #ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
 
         aps_5.append(ap_5 )
-        aps_3.append(ap_3 )
-        aps_7.append(ap_7 )
+        #aps_3.append(ap_3 )
+        #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
         precs_5.append(prec_5)
         #for b in range(len(outputBBs)):
@@ -233,7 +233,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             #    #print(rad)
             #    cv2.circle(imageB,mid,rad,(1,0,1),1)
 
-            saveName = '{:06}_boxes_0.3_t:{:.2f}_f:{:.2f}_0.5_t:{:.2f}_f:{:.2f}_0.7_t:{:.2f}_f:{:.2f}'.format(startIndex+b,aps_3[b][0],aps_3[b][1],aps_5[b][0],aps_5[b][1],aps_7[b][0],aps_7[b][1])
+            saveName = '{}_pairing_prec:{:.2f}_recall:{:.2f}'.format(imageName,precs_5[b][0],recalls_5[b][0])
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'
@@ -249,8 +249,8 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
              #  'prec':np.array(precs_5).sum(axis=0),
              #}, 
              { 'ap_5':aps_5,
-               'ap_3':aps_3,
-               'ap_7':aps_7,
+               #'ap_3':aps_3,
+               #'ap_7':aps_7,
                'recall':recalls_5,
                'prec':precs_5,
              }, 

@@ -36,11 +36,11 @@ class YoloLoss (nn.Module):
         pred_conf = prediction[..., 0]  # Conf 
         pred_cls = prediction[..., 6:]  # Cls pred.
 
-        grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor)
-        grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor)
+        grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor).to(prediction.device)
+        grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor).to(prediction.device)
         scaled_anchors = FloatTensor([(a['width'] / stride, a['height']/ stride) for a in self.anchors])
-        anchor_w = scaled_anchors[:, 0:1].view((1, nA, 1, 1))
-        anchor_h = scaled_anchors[:, 1:2].view((1, nA, 1, 1))
+        anchor_w = scaled_anchors[:, 0:1].view((1, nA, 1, 1)).to(prediction.device)
+        anchor_h = scaled_anchors[:, 1:2].view((1, nA, 1, 1)).to(prediction.device)
 
         # Add offset and scale with anchors
         pred_boxes = FloatTensor(prediction[..., :4].shape)
@@ -76,12 +76,12 @@ class YoloLoss (nn.Module):
         conf_mask = (conf_mask.type(ByteTensor))
 
         # Handle target variables
-        tx = tx.type(FloatTensor)
-        ty = ty.type(FloatTensor)
-        tw = tw.type(FloatTensor)
-        th = th.type(FloatTensor)
-        tconf = tconf.type(FloatTensor)
-        tcls = tcls.type(LongTensor)
+        tx = tx.type(FloatTensor).to(prediction.device)
+        ty = ty.type(FloatTensor).to(prediction.device)
+        tw = tw.type(FloatTensor).to(prediction.device)
+        th = th.type(FloatTensor).to(prediction.device)
+        tconf = tconf.type(FloatTensor).to(prediction.device)
+        tcls = tcls.type(LongTensor).to(prediction.device)
 
         # Get conf mask where gt and where there is no gt
         conf_mask_true = mask

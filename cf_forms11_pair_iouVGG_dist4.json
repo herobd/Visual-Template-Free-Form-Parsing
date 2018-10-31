@@ -1,5 +1,5 @@
 {
-    "name": "Forms11_pair_iouVGG_dil3_dist2",
+    "name": "Forms11_pair_iouVGG_dil3_dist4",
     "cuda": true,
     "gpu": 1,
     "save_mode": "state_dict",
@@ -21,7 +21,9 @@
         "no_graphics":true,
         "cache_resized_images": true,
         "rotation": false,
-        "use_dist_mask": true
+	"use_dist_mask": true,
+	"use_vdist_mask": true,
+	"use_hdist_mask": true
 
 
     },
@@ -35,7 +37,9 @@
         "no_graphics":true,
         "batch_size": 1,
         "rotation": false,
-        "use_dist_mask": true
+	"use_dist_mask": true,
+	"use_vdist_mask": true,
+	"use_hdist_mask": true
     },
 
     
@@ -54,11 +58,11 @@
     "metrics": [],
     "trainer": {
         "class": "BoxPairTrainer",
-        "iterations": 100000,
+        "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 2000,
-        "save_step": 2000,
-        "log_step": 200,
+        "val_step": 5000,
+        "save_step": 10000,
+        "log_step": 250,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
@@ -68,10 +72,11 @@
     "model": {
         "detector_checkpoint": "saved/forms11_iouVGG_dil3/checkpoint-iteration170020.pth.tar",
         "pairer_config": {
+	    "num_dist_masks": 3,
             "norm_type": "group_norm",
             "up_sample_ch": 128,
-            "down1_layers_cfg": ["k7-32", "M"],
-            "down2_layers_cfg": ["k5-128", "M","d5-256", 256, "M", "d5-512", 512, "M", "d3-1024"],
+            "down1_layers_cfg": ["k9-32", "M"],
+            "down2_layers_cfg": ["d9-128", 128, "M","d7-256", "d3-256", "M", "d5-512", 512, "M", "d3-1024"],
             "final_layers_cfg": [1024, 1024]
         }
     }

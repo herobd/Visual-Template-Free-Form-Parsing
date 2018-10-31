@@ -10,7 +10,9 @@ import math
 import cv2
 from utils import augmentation
 from utils.crop_transform import CropBoxTransform
-from datasets.forms_box_pair import fixAnnotations
+from datasets.forms_box_pair import fixAnnotations, getDistMask
+import random
+from random import shuffle
 
 SKIP=['121','174']
 
@@ -21,6 +23,14 @@ class FormsPair(torch.utils.data.Dataset):
     Class for reading AI2D dataset and creating query/result masks from bounding polygons
     """
 
+    def isSkipField(self,bb):
+        return (    (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
+                    (self.no_print_fields and (bb['isBlank']=='print' or bb['isBlank']==2)) or
+                    #TODO no graphics
+                    bb['type'] == 'fieldRow' or
+                    bb['type'] == 'fieldCol' or
+                    bb['type'] == 'fieldRegion'
+                )
     def __getResponseBBList(self,queryId,annotations):
         responseBBList=[]
         for pair in annotations['pairs']: #+annotations['samePairs']: added by fixAnnotations
@@ -36,6 +46,11 @@ class FormsPair(torch.utils.data.Dataset):
 
 
     def __init__(self, dirPath=None, split=None, config=None, instances=None, test=False):
+        if split=='valid':
+            valid=True
+            amountPer=0.25
+        else:
+            valid=False
         self.cache_resized=False
         if 'augmentation_params' in config:
             self.augmentation_params=config['augmentation_params']
@@ -58,8 +73,14 @@ class FormsPair(torch.utils.data.Dataset):
         self.useVDistMask = config['use_vdist_mask'] if 'use_vdist_mask' in config else False
         self.useHDistMask = config['use_hdist_mask'] if 'use_hdist_mask' in config else False
         patchSize=config['patch_size'] if 'patch_size' in config else None
+        self.rescale_range = config['rescale_range']
         self.halfResponse = config['half_response'] if 'half_response' in config else False
-        if pathSize is not None:
+        self.cache_resized = config['cache_resized_images'] if 'cache_resized_images' in config else False
+        if self.cache_resized:
+            self.cache_path = os.path.join(dirPath,'cache_'+str(self.rescale_range[1]))
+            if not os.path.exists(self.cache_path):
+                os.mkdir(self.cache_path)
+        if patchSize is not None:
             self.transform = CropBoxTransform({"crop_size":patchSize})
         else:
             self.transform = None
@@ -68,9 +89,10 @@ class FormsPair(torch.utils.data.Dataset):
             self.cropResize = self.__cropResizeF(patchSize,0,0)
             self.transform = None
         else:
-            centerJitterFactor=config['center_jitter']
-            sizeJitterFactor=config['size_jitter']
-            self.cropResize = self.__cropResizeF(patchSize,centerJitterFactor,sizeJitterFactor)
+            if not self.bbCrop:
+                centerJitterFactor=config['center_jitter']
+                sizeJitterFactor=config['size_jitter']
+                self.cropResize = self.__cropResizeF(patchSize,centerJitterFactor,sizeJitterFactor)
             with open(os.path.join(dirPath,'train_valid_test_split.json')) as f:
                 groupsToUse = json.loads(f.read())[split]
             self.instances=[]
@@ -110,6 +132,8 @@ class FormsPair(torch.utils.data.Dataset):
                                 annotations = json.loads(f.read())
                             #print(os.path.join(jsonPath))
                         annotations['byId']={}
+                        imH = annotations['height']
+                        imW = annotations['width']
                         for bb in annotations['textBBs']:
                             annotations['byId'][bb['id']]=bb
                         for bb in annotations['fieldBBs']:
@@ -119,19 +143,27 @@ class FormsPair(torch.utils.data.Dataset):
                         fixAnnotations(self,annotations)
 
                         #print(path)
-                        for id,bb in annotations['byId']:
+                        instancesForImage=[]
+                        for id,bb in annotations['byId'].items():
                             bbPoints = np.array(bb['poly_points'])
                             responseBBList = self.__getResponseBBList(id,annotations)
                             #print(id)
                             #print(responseBBList)
-                            self.instances.append({
+                            instancesForImage.append({
                                                 'id': id,
                                                 'imagePath': path,
                                                 'imageName': imageName,
+                                                'rescaled': rescale,
                                                 'queryPoly': bbPoints,
                                                 'responsePolyList': responseBBList,
                                                 'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
                                             })
+                        if valid:
+                            random.seed(123)
+                            shuffle(instancesForImage)
+                            self.instances += instancesForImage[:int(amountPer*len(instancesForImage))]
+                        else:
+                            self.instances += instancesForImage
 
                         #for i in range(startCount,len(self.instances)):
                             #    try:
@@ -170,7 +202,7 @@ class FormsPair(torch.utils.data.Dataset):
         #print(index)
         #print(self.imagePath)
         #print(self.ids[index])
-        image = 1.0 - cv2.imread(imagePath, 1 if self.color else 0)/128.0
+        image = cv2.imread(imagePath, 1 if self.color else 0)
         
         if self.bbCrop:
             #resize
@@ -201,16 +233,20 @@ class FormsPair(torch.utils.data.Dataset):
                 image = augmentation.apply_tensmeyer_brightness(image)
                 queryMask = out['pixel_gt']
                 #TODO rotate?
+            image = 1-image/128.0
+            imageWithQuery = np.append(image,queryMask,axis=2)
+            imageWithQuery = np.moveaxis(imageWithQuery,2,0)
             responseMask = np.zeros([image.shape[0],image.shape[1]])
-            for i in response_bbs.shape[0]:
+            for i in range(response_bbs.shape[0]):
                 rr, cc = draw.polygon(response_bbs[i,[1,3,5,7]], response_bbs[i,[0,2,4,6]], responseMask.shape)
                 responseMask[rr,cc]=1
             if self.halfResponse:
                 responseMask = cv2.resize(  responseMask,
-                                            (responseMask.shape[0]//2,responseMask[1]//2),
+                                            (responseMask.shape[1]//2,responseMask.shape[0]//2),
                                             interpolation = cv2.INTER_CUBIC)
-            return (imageWithQuery, imageName,reponseMask)
+            return (imageWithQuery, imageName,responseMask)
         else:
+            image = 1-image/128.0
             if not self.color:
                 image=image[:,:,None]
             queryMask = self.makeQueryMask(image,queryPoly[:, 1], queryPoly[:, 0])
@@ -307,8 +343,8 @@ class FormsPair(torch.utils.data.Dataset):
         queryCenterX = (maxXQuery+minXQuery)/2
         queryCenterY = (maxYQuery+minYQuery)/2
 
-        if x1>=imW or y1>=imH:
-            raise ValueError('query point outside image ('+str(imH)+', '+str(imW)+'): y='+str(y1)+' x='+str(x1)+'   '+str(queryPoly))
+        #if x1>=imW or y1>=imH:
+        #    raise ValueError('query point outside image ('+str(imH)+', '+str(imW)+'): y='+str(y1)+' x='+str(x1)+'   '+str(queryPoly))
 
         def dist(x,y):
             return math.sqrt((queryCenterX-x)**2 + (queryCenterY-y)**2)
@@ -319,8 +355,8 @@ class FormsPair(torch.utils.data.Dataset):
             maxX = np.amax(poly[:,0])
             minY = np.amin(poly[:,1])
             maxY = np.amax(poly[:,1])
-            if maxX>=imW or maxY>=imH:
-                raise ValueError('resp point outside image ('+str(imH)+', '+str(imW)+'): y='+str(maxY)+' x='+str(maxX))
+            #if maxX>=imW or maxY>=imH:
+            #    raise ValueError('resp point outside image ('+str(imH)+', '+str(imW)+'): y='+str(maxY)+' x='+str(maxX))
             maxDistFromCenter = max(maxDistFromCenter, dist(minX,minY), dist(minX,maxY), dist(maxX,minY), dist(maxX,maxY))
             x0 = min(x0,minX)
             x1 = max(x1,maxX)

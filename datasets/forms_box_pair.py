@@ -28,10 +28,14 @@ def right_x(bb):
     points = bb['poly_points']
     return (points[1][0]+points[2][0])/2.0
 
-def getDistMask(queryMask):
+def getDistMask(queryMask,thresh=1000,reverse=True, negative=True):
     dist_transform = cv2.distanceTransform(1-queryMask.astype(np.uint8),cv2.DIST_L2,5)
-    dist_transform = np.clip(dist_transform,None,1000)
-    distMask = 2*((1000-dist_transform)/1000) - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is 1000 pixels
+    dist_transform = np.clip(dist_transform,None,thresh)
+    if reverse:
+        dist_transform = thresh-dist_transform
+    distMask = dist_transform/thresh
+    if negative:
+        distMask = 2*distMask - 1 #make the mask between -1 and 1, where 1 is on the query and -1 is thresh pixels
     return distMask
 
 def fixAnnotations(this,annotations):
@@ -442,6 +446,13 @@ class FormsBoxPair(torch.utils.data.Dataset):
         distMask=None
         if self.useDistMask:
             distMask = getDistMask(queryMask)
+            revDistMask = getDistMask(1-queryMask)
+            masks.append(distMask)
+        if self.useDougnutMask:
+            distMask = getDistMask(queryMask,negative=False)
+            smallestDim = min(max(query_bb[[1,3,5,7]])-min(query_bb[[1,3,5,7]]),max(query_bb[[0,2,4,6]])-min(query_bb[[0,2,4,6]]))
+            revDistMask = -1*getDistMask(1-queryMask,thresh=smallestDim/2,negative=False)
+            distMask = np.where(queryMask,revDistMask,distMask)
             masks.append(distMask)
         if self.useHDistMask:
             if distMask is None:

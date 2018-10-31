@@ -35,8 +35,9 @@ class BaseTrainer:
             self.model = self.model.to(self.gpu)
 
         self.train_logger = train_logger
-        self.optimizer = getattr(optim, config['optimizer_type'])(model.parameters(),
-                                                                  **config['optimizer'])
+        if config['optimizer_type']!="none":
+            self.optimizer = getattr(optim, config['optimizer_type'])(model.parameters(),
+                                                                      **config['optimizer'])
         self.lr_scheduler = getattr(
             optim.lr_scheduler,
             config['lr_scheduler_type'], None)

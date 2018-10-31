@@ -9,6 +9,7 @@ import os
 import math
 import cv2
 from collections import defaultdict
+import random
 from random import shuffle
 from datasets.forms_box_detect import convertBBs
 from utils import augmentation
@@ -396,6 +397,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
                                                 #'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
                                             })
                         if valid:
+                            random.seed(123)
                             shuffle(instancesForImage)
                             self.instances += instancesForImage[:int(amountPer*len(instancesForImage))]
                         else:

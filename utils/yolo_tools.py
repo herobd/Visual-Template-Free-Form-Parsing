@@ -131,7 +131,7 @@ def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):
             clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
-        if ignoreClasses or (clsTargInd.any() and clsPredInd.any()):
+        if (ignoreClasses and pred.size(0)>0) or (clsTargInd.any() and clsPredInd.any()):
             if ignoreClasses:
                 clsTarg=target
                 clsPred=pred
@@ -179,7 +179,11 @@ def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):
 
             precisions.append( truePos/clsPred.size(0) )
             recalls.append( truePos/clsTarg.size(0) )
-
+        elif ignoreClasses:
+            #no pred
+            aps.append(0)
+            precisions.append(0)
+            recalls.append(0)
         elif clsPredInd.any() or clsTargInd.any():
             aps.append(0)
             if clsPredInd.any():

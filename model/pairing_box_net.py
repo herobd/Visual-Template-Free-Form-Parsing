@@ -36,7 +36,7 @@ class PairingBoxNet(nn.Module):
         #self.predPixelCount = config['number_of_pixel_types']
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
         #self.numOutPoint = self.predPointCount*3
-        maskSize = 2 if 'use_dist_mask' in config and config['use_dist_mask'] else 1
+        maskSize = 1+(config['num_dist_masks'] if 'num_dist_masks' in config else 0)
         im_ch = maskSize+( 3 if 'color' not in detector_config or detector_config['color'] else 1 ) #+1 for query mask
         norm = config['norm_type'] if "norm_type" in config else None
         if norm is None:
@@ -126,13 +126,13 @@ class PairingBoxNet(nn.Module):
 
 
         #priors_0 = Variable(torch.arange(0,y.size(2)).type_as(img.data), requires_grad=False)[None,:,None]
-        priors_0 = torch.arange(0,pred.size(2)).type_as(img.data)[None,:,None]
+        priors_0 = torch.arange(0,pred.size(2)).type_as(img.data)[None,:,None].to(img.device)
         priors_0 = (priors_0 + 0.5) * self.scale #self.base_0
         priors_0 = priors_0.expand(pred.size(0), priors_0.size(1), pred.size(3))
         priors_0 = priors_0[:,None,:,:]
 
         #priors_1 = Variable(torch.arange(0,y.size(3)).type_as(img.data), requires_grad=False)[None,None,:]
-        priors_1 = torch.arange(0,pred.size(3)).type_as(img.data)[None,None,:]
+        priors_1 = torch.arange(0,pred.size(3)).type_as(img.data)[None,None,:].to(img.device)
         priors_1 = (priors_1 + 0.5) * self.scale #elf.base_1
         priors_1 = priors_1.expand(pred.size(0), pred.size(2), priors_1.size(2))
         priors_1 = priors_1[:,None,:,:]

@@ -114,7 +114,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
     image = image.cpu().data.numpy()
     maxConf = outputBBs[:,:,0].max().item()
     threshConf = max(maxConf*0.99,0.5)
-    print("maxConf:{}, threshConf:{}".format(maxConf,threshConf))
+    #print("maxConf:{}, threshConf:{}".format(maxConf,threshConf))
     outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
     aps_3=[]
     aps_5=[]

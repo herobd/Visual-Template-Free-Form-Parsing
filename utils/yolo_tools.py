@@ -89,30 +89,39 @@ def allIOU(boxes1,boxes2):
     return iou
  
 #input is tensors of shape [instance,(conf,x,y,rot,h,w)]
-def AP_iou(target,pred,iou_thresh,numClasses=2):
+def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):
     #mAP=0.0
     aps=[]
     precisions=[]
     recalls=[]
 
     #how many classes are there?
+    if ignoreClasses:
+        numClasses=1
     if len(target.size())>1:
         numClasses=target.size(1)-13
     elif len(pred.size())>1:
         #if there are no targets, we shouldn't be pred anything
-        numClasses=pred.size(1)-6
-        for cls in range(numClasses):
-            if (torch.argmax(pred[:,cls+6:],dim=1)==cls).any():
-                aps.append(0) #but we did for this class :(
-                precisions.append(0)
-            else:
-                aps.append(1) #we didn't for this class :)
-                precisions.append(1)
+        if ignoreClasses:
+            aps.append(0)
+            precisions.append(0)
             recalls.append(1)
+        else:
+            numClasses=pred.size(1)-6
+            for cls in range(numClasses):
+                if (torch.argmax(pred[:,cls+6:],dim=1)==cls).any():
+                    aps.append(0) #but we did for this class :(
+                    precisions.append(0)
+                else:
+                    aps.append(1) #we didn't for this class :)
+                    precisions.append(1)
+                recalls.append(1)
         return aps, precisions, recalls
     else:
         return [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
+    if ignoreClasses:
+        numClasses=1
     #by class
     #import pdb; pdb.set_trace()
     for cls in range(numClasses):
@@ -122,9 +131,13 @@ def AP_iou(target,pred,iou_thresh,numClasses=2):
             clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
-        if clsTargInd.any() and clsPredInd.any():
-            clsTarg = target[clsTargInd]
-            clsPred = pred[clsPredInd]
+        if ignoreClasses or (clsTargInd.any() and clsPredInd.any()):
+            if ignoreClasses:
+                clsTarg=target
+                clsPred=pred
+            else:
+                clsTarg = target[clsTargInd]
+                clsPred = pred[clsPredInd]
             clsIOUs = allIOU(clsTarg[:,0:],clsPred[:,1:])
             hits = clsIOUs>iou_thresh
 

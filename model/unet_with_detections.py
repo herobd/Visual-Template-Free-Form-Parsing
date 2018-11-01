@@ -8,35 +8,24 @@ from torch.nn.utils.weight_norm import weight_norm
 from .yolo_box_detector import make_layers
 
 class UNetWithDetections(BaseModel):
-    def __init__(self, config, detect_ch, detect_scale,only_features=False):
-        super(UNetDilated, self).__init__(config)
-        if config is None or 'skip_last_sigmoid' not in config:
+    def __init__(self, config):
+        super(UNetWithDetections, self).__init__(config)
+
+        #def build(self,detect_ch, detect_scale,only_features=False):
+        detect_ch = config['detect_ch']
+        detect_scale = config['detect_scale']
+        self.only_features=False#only_features
+        if self.config is None or 'skip_last_sigmoid' not in self.config:
             skip_last_sigmoid=True
         else:
-            skip_last_sigmoid=config['skip_last_sigmoid']
-        if config is None or 'norm_type' not in config:
+            skip_last_sigmoid=self.config['skip_last_sigmoid']
+        if self.config is None or 'norm_type' not in self.config:
             norm_type=None
             print('No norm set for UNetWithDetections')
         else:
-            norm_type=config['norm_type']
+            norm_type=self.config['norm_type']
 
-        #    checkpoint = torch.load(config['detector_checkpoint'])
-        #    detector_config = config['detector_config'] if 'detector_config' in config else checkpoint['config']['model']
-        #    if 'state_dict' in checkpoint:
-        #        self.detector = eval(checkpoint['config']['arch'])(detector_config)
-        #        self.detector.load_state_dict(checkpoint['state_dict'])
-        #    else:
-        #        self.detector = checkpoint['model']
-        #    self.detector.forPairing=True
-        #    for param in self.detector.parameters():
-        #        param.will_use_grad=param.requires_grad
-        #        param.requires_grad=False 
-        #    self.detector_frozen=True
-        #    self.storedImageName=None       
-        detect_ch_after_up = config['up_sample_ch'] if 'up_sample_ch' in config else 128
-
-    def build(self,detect_ch, detect_scale,only_features=False):
-        self.only_features=only_features
+        detect_ch_after_up = self.config['up_sample_ch'] if 'up_sample_ch' in self.config else 128
         if 'up_sample_relu' not in self.config or self.config['up_sample_relu']:
             self.up_sample = nn.Sequential(
                     nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=detect_scale//2,stride=detect_scale//2),
@@ -52,11 +41,12 @@ class UNetWithDetections(BaseModel):
         down4_cfg = self.config['down4_cfg'] if 'down4_cfg' in self.config else [512,512]
 
         self.inc, inc_ch = make_layers([self.config['n_channels']]+inc_cfg,  norm=norm_type)
+        self.inc=nn.Sequential(*self.inc)
         self.down1 = down(inc_ch+detect_ch_after_up, down1_cfg,  norm_type)
         self.down2 = down(self.down1.outSize, down2_cfg,  norm_type)
         self.down3 = down(self.down2.outSize, down3_cfg,  norm_type)
         self.down4 = down(self.down3.outSize, down4_cfg,  norm_type)
-        if not only_features:
+        if not self.only_features:
             up1_cfg = self.config['up1_cfg'] if 'up1_cfg' in self.config else [256,256]
             up2_cfg = self.config['up2_cfg'] if 'up2_cfg' in self.config else [128,128]
             up3_cfg = self.config['up3_cfg'] if 'up3_cfg' in self.config else [64,64]
@@ -101,16 +91,21 @@ class UNetWithDetections(BaseModel):
         #        self.storedFinal_features=final_features
         #        self.storedImageName=imageName
         up_features = self.up_sample(detection_features)
-        x1 = self.inc(x)
+        x = self.inc(x)
         #x1 = torch.cat([x1,up_features],dim=1)
-        x2 = self.down1(x1,up_features)
+        x2 = self.down1(x,up_features)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4)
         if self.only_features:
             return x5
         x = self.up1(x5, x4)
+        x5=None
+        x4=None
+        torch.cuda.empty_cache()
         x = self.up2(x, x3)
+        x3=None
+        torch.cuda.empty_cache()
         x = self.up3(x, x2)
         #x = self.up3(x, x1)
         x = self.outc(x)
@@ -123,6 +118,7 @@ class down(nn.Module):
     def __init__(self, in_ch, cfg, normType):
         super(down, self).__init__()
         self.conv, self.outSize = make_layers([in_ch]+cfg,norm=normType)
+        self.conv=nn.Sequential(*self.conv)
         self.pool = nn.MaxPool2d(2)
 
     def forward(self, x,append=None):
@@ -146,6 +142,7 @@ class up(nn.Module):
             self.up = nn.ConvTranspose2d(in_ch//2, in_ch//2, 2, stride=2)
 
         self.conv, self.outSize = make_layers([in_ch]+cfg,norm=normType)
+        self.conv=nn.Sequential(*self.conv)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)

@@ -32,7 +32,9 @@ class Trainer(BaseTrainer):
             ret+=(self._to_tensor_individual(datas[i]),)
         return ret
     def _to_tensor_individual(self, data):
-        if type(data)==list:
+        if type(data)==str:
+            return data
+        if type(data)==list or type(data)==tuple:
             return [self._to_tensor_individual(d) for d in data]
         if (len(data.size())==1 and data.size(0)==1):
             return data[0]

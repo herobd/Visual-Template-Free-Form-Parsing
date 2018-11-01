@@ -1,7 +1,7 @@
 {
     "name": "Forms11_PixPair",
     "cuda": true,
-    "gpu": 1,
+    "gpu": 0,
     "override": true,
     "data_loader": {
         "data_set_name": "FormsPair",
@@ -21,16 +21,16 @@
         "rotation": false,
         "use_dist_mask": true,
         "use_hdist_mask": true,
-        "use_vdist_mask": true
+        "use_vdist_mask": true,
+        "half_response": true
     },
     "validation": {
         "batch_size": 1,
         "shuffle": false,
-        "patch_size": 1024,
         "use_bb_crop": true,
         "crop_to_page":false,
         "color":false,
-        "rescale_range": [0.4,0.65],
+        "rescale_range": [0.52,0.52],
         "no_blanks": true,
         "swap_circle":true,
         "no_graphics":true,
@@ -38,7 +38,8 @@
         "rotation": false,
         "use_dist_mask": true,
         "use_hdist_mask": true,
-        "use_vdist_mask": true
+        "use_vdist_mask": true,
+        "half_response": true
     },
 
     
@@ -66,8 +67,10 @@
     "arch": "UNetWithDetections", 
     "model": {
         "skip_last_sigmoid": true,
-        "n_channels": 4,
+        "n_channels": 5,
         "norm_type": "groupNorm",
-        "up_sample_ch": 128
+        "up_sample_ch": 128,
+        "detect_ch": 1024,
+        "detect_scale": 16
     }
 }

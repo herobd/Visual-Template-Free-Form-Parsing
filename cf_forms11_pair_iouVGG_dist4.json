@@ -1,12 +1,12 @@
 {
     "name": "Forms11_pair_iouVGG_dil3_dist4",
     "cuda": true,
-    "gpu": 1,
+    "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxPair",
-        "data_dir": "/home/brian/data/forms",
+        "data_dir": "../data/forms",
         "batch_size": 2,
         "shuffle": true,
         "num_workers": 2,

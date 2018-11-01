@@ -9,6 +9,7 @@ import os
 import math
 import cv2
 from collections import defaultdict
+import random
 from random import shuffle
 from datasets.forms_box_detect import convertBBs
 from utils import augmentation
@@ -322,6 +323,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
         self.useDistMask = config['use_dist_mask'] if 'use_dist_mask' in config else False
+        self.useDoughnutMask = config['use_doughnut_mask'] if 'use_doughnut_mask' in config else False
         self.useVDistMask = config['use_vdist_mask'] if 'use_vdist_mask' in config else False
         self.useHDistMask = config['use_hdist_mask'] if 'use_hdist_mask' in config else False
         
@@ -400,6 +402,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
                                                 #'helperStats': self.__getHelperStats(bbPoints, responseBBList, imH, imW)
                                             })
                         if valid:
+                            random.seed(123)
                             shuffle(instancesForImage)
                             self.instances += instancesForImage[:int(amountPer*len(instancesForImage))]
                         else:

@@ -138,7 +138,8 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         precs_5.append(prec_5)
         #for b in range(len(outputBBs)):
         outputBBs[b] = outputBBs[b].data.numpy()
-        bestBBIdx.append( np.argmax(outputBBs[b][:,0]) )
+        if outputBBs[b].shape[0]>0:
+            bestBBIdx.append( np.argmax(outputBBs[b][:,0]) )
 
     
     dists=defaultdict(list)
@@ -233,7 +234,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             #    #print(rad)
             #    cv2.circle(imageB,mid,rad,(1,0,1),1)
 
-            saveName = '{}_pairing_prec:{:.2f}_recall:{:.2f}'.format(imageName,precs_5[b][0],recalls_5[b][0])
+            saveName = '{}_pairing_prec:{:.2f}_recall:{:.2f}'.format(imageName[b],precs_5[b][0],recalls_5[b][0])
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

@@ -16,14 +16,20 @@ from datasets import forms_detect
 logging.basicConfig(level=logging.INFO, format='')
 
 
-def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None):
+def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None):
     np.random.seed(1234)
-    checkpoint = torch.load(resume)
-    config = checkpoint['config']
-    config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
+    #if gpu is None:
+    #    loc = 
+    checkpoint = torch.load(resume, map_location=lambda storage, location: storage)
+    if config is None:
+        config = checkpoint['config']
+    else:
+        config = json.load(open(config))
+        
+    #config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
     
     config['data_loader']['shuffle']=shuffle
-    config['data_loader']['rot']=False
+    #config['data_loader']['rot']=False
     config['validation']['shuffle']=shuffle
     #config['validation']
 
@@ -197,6 +203,8 @@ if __name__ == '__main__':
                         help='gpu number (default: cpu only)')
     parser.add_argument('-s', '--shuffle', default=False, type=bool,
                         help='shuffle data')
+    parser.add_argument('-f', '--config', default=None, type=str,
+                        help='config override')
 
     args = parser.parse_args()
 
@@ -205,4 +213,4 @@ if __name__ == '__main__':
         print('Must provide checkpoint (with -c) and save dir (with -d)')
         exit()
 
-    main(args.checkpoint, args.savedir, args.number, args.index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize)
+    main(args.checkpoint, args.savedir, args.number, args.index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)

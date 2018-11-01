@@ -918,6 +918,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         return intersectionPointsM, pixelMap
 
     def cluster(self,k,sample_count,outPath):
+        def makePointsAndRects(h,w):
+            return np.array([-w/2.0,0,w/2.0,0,0,-h/2.0,0,h/2.0, 0,0, 0, h,w])
+        meanH=62.42
+        stdH=87.31
+        meanW=393.03
+        stdW=533.53
+        ratios=[4.0,7.18,11.0,15.0,19.0,27.0]
         pointsAndRects=[]
         for inst in self.images:
             annotationPath = inst['annotationPath']
@@ -933,7 +940,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 text_bbs = self.getBBGT(annotations['textBBs'],s)
                 field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
                 bbs = np.concatenate([text_bbs,field_bbs],axis=1)
-                bbs = self.convertBBs(bbs).numpy()[0]
+                bbs = convertBBs(bbs,self.rotate,2).numpy()[0]
                 cos_rot = np.cos(bbs[:,2])
                 sin_rot = np.sin(bbs[:,2])
                 p_left_x = -cos_rot*bbs[:,4]
@@ -952,9 +959,33 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #all_widths = pointsAndRects[:,12]
         
         bestDistsFromMean=None
-        for attempt in range(20):
-            randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
-            means=pointsAndRects[randomIndexes]
+        for attempt in range(20 if k>0 else 1):
+            if k>0:
+                randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
+                means=pointsAndRects[randomIndexes]
+            else:
+                minH=5
+                minW=5
+                ratios
+                means=[]
+
+                #smaller than mean
+                for step in range(5):
+                    height = minH + (meanH-minH)*(step/5.0)
+                    width = minW + (meanW-minW)*(step/5.0)
+                    for ratio in ratios:
+                        means.append(makePointsAndRects(height,ratio*height))
+                        means.append(makePointsAndRects(width/ratio,width))
+                for stddev in range(0,5):
+                    for step in range(5-stddev):
+                        height = meanH + stddev*stdH + stdH*(step/(5.0-stddev))
+                        width = meanW + stddev*stdW + stdW*(step/(5.0-stddev))
+                        for ratio in ratios:
+                            means.append(makePointsAndRects(height,ratio*height))
+                            means.append(makePointsAndRects(width/ratio,width))
+                k=len(means)
+                print('K: {}'.format(k))
+                means = np.stack(means,axis=0)
             #pointsAndRects [0:p_left_x, 1:p_left_y,2:p_right_x,3:p_right_y,4:p_top_x,5:p_top_y,6:p_bot_x,7:p_bot_y, 8:xc, 9:yc, 10:rot, 11:h, 12:w
             prevDistsFromMean=None
             for iteration in range(1000000): #intended to break out
@@ -1012,7 +1043,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             if bestDistsFromMean is None or distsFromMean<bestDistsFromMean:
                 bestDistsFromMean = distsFromMean
                 cluster_centers=means
-        cluster_centers=means
+        #cluster_centers=means
         draw = np.zeros([600,600,3],dtype=np.float)
         toWrite = []
         for ki in range(k):
@@ -1022,7 +1053,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             h=cluster_centers[ki,11]
             w=cluster_centers[ki,12]
             rot=cluster_centers[ki,10]
-            toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item()})
+            toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item(),'popularity':(groups==ki).sum().item()})
             tr = ( int(math.cos(rot)*w-math.sin(rot)*h)+300,   int(math.sin(rot)*w+math.cos(rot)*h)+300 )
             tl = ( int(math.cos(rot)*-w-math.sin(rot)*h)+300,  int(math.sin(rot)*-w+math.cos(rot)*h)+300 )
             br = ( int(math.cos(rot)*w-math.sin(rot)*-h)+300,  int(math.sin(rot)*w+math.cos(rot)*-h)+300 )

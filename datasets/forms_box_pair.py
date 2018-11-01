@@ -323,6 +323,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
         self.useDistMask = config['use_dist_mask'] if 'use_dist_mask' in config else False
+        self.useDoughnutMask = config['use_doughnut_mask'] if 'use_doughnut_mask' in config else False
         self.useVDistMask = config['use_vdist_mask'] if 'use_vdist_mask' in config else False
         self.useHDistMask = config['use_hdist_mask'] if 'use_hdist_mask' in config else False
         
@@ -450,7 +451,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
             distMask = getDistMask(queryMask)
             revDistMask = getDistMask(1-queryMask)
             masks.append(distMask)
-        if self.useDougnutMask:
+        if self.useDoughnutMask:
             distMask = getDistMask(queryMask,negative=False)
             smallestDim = min(max(query_bb[[1,3,5,7]])-min(query_bb[[1,3,5,7]]),max(query_bb[[0,2,4,6]])-min(query_bb[[0,2,4,6]]))
             revDistMask = -1*getDistMask(1-queryMask,thresh=smallestDim/2,negative=False)

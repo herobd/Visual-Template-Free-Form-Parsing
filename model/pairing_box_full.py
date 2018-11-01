@@ -57,20 +57,15 @@ class PairingBoxFull(BaseModel):
             save=not self.training
             self.storedOffsetPredictionsD=None
             self.storedFinal_features=None
-            if self.detector_frozen:
-                #self.detector.eval()
-                #with torch.no_grad():
-                #batch size set to one to accomidate
-                offsetPredictionsD = self.detector(image)
-            else:
-                offsetPredictionsD = self.detector(image)
+            offsetPredictionsD = self.detector(image)
             final_features=self.detector.final_features
 
             if save:
                 self.storedOffsetPredictionsD=offsetPredictionsD
                 self.storedFinal_features=final_features
                 self.storedImageName=imageName
-
+        if final_features is None:
+            import pdb;pdb.set_trace()
         bbPredictions, offsetPredictions = self.pairer( image,
                                                         queryMask,
                                                         final_features, 

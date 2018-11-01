@@ -234,7 +234,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             #    #print(rad)
             #    cv2.circle(imageB,mid,rad,(1,0,1),1)
 
-            saveName = '{}_pairing_prec:{:.2f}_recall:{:.2f}'.format(imageName[b],precs_5[b][0],recalls_5[b][0])
+            saveName = '{:06}_{}_pairing_prec:{:.2f}_recall:{:.2f}'.format(startIndex+b,imageName[b],precs_5[b][0],recalls_5[b][0])
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

@@ -37,7 +37,7 @@ def AI2D_printer(config, instance, model, gpu, metrics, outDir=None, startIndex=
     target = target.data.numpy()
     metricsOut = __eval_metrics(output,target)
     if outDir is None:
-        return metricsOut
+        return {'map':metricsOut[0]}, 0
 
     batchSize = data.shape[0]
     for i in range(batchSize):
@@ -59,4 +59,4 @@ def AI2D_printer(config, instance, model, gpu, metrics, outDir=None, startIndex=
         saveName+='.png'
         io.imsave(os.path.join(outDir,saveName),highlightIm)
         
-    return metricsOut
+    return {'map':metricsOut[0]}, 0

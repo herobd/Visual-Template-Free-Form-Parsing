@@ -8,7 +8,7 @@ from evaluators.formsdetect_printer import FormsDetect_printer
 from evaluators.formsboxdetect_printer import FormsBoxDetect_printer
 from evaluators.formsboxpair_printer import FormsBoxPair_printer
 from evaluators.formslf_printer import FormsLF_printer
-from evaluators.formspair_printer import FormsPair_printer
+#from evaluators.formspair_printer import FormsPair_printer
 from evaluators.ai2d_printer import AI2D_printer
 
 

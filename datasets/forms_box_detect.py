@@ -313,7 +313,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     os.mkdir(self.cache_path)
         else:
             self.cache_resized = False
-        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 220000000
+        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 10000000
         if 'only_types' in config:
             self.only_types = config['only_types']
         else:
@@ -407,7 +407,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         else:
             self.no_print_fields = False
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
-        
+        self.errors=[]
 
 
 
@@ -439,6 +439,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         ##print('       channels : {}'.format(len(np_img.shape)))
         if self.cropToPage:
+            print('Not implemented')
+            assert(False)
             pageCorners = annotations['page_corners']
             xl = max(0,int(rescaled*min(pageCorners['tl'],pageCorners['bl'])))
             xr = min(np_img.shape[1]-1,int(rescaled*max(pageCorners['tr'],pageCorners['br'])))
@@ -448,13 +450,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
         s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
         partial_rescale = s/rescaled
-        #if self.transform is None: #we're doing the whole image
-        #    #this is a check to be sure we don't send too big images through
-        #    pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
-        #    if pixel_count > self.pixel_count_thresh:
-        #        partial_rescale = self.pixel_count_thresh/pixel_count
-        #        s = rescaled*partial_rescale
-        #        print('{} exceed thresh: {}, new scale {}'.format(imageName,pixel_count,s))
+        if self.transform is None: #we're doing the whole image
+            #this is a check to be sure we don't send too big images through
+            pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
+            if pixel_count > self.pixel_count_thresh:
+                partial_rescale = math.sqrt(partial_rescale*partial_rescale*self.pixel_count_thresh/pixel_count)
+                print('{} exceed thresh: {}: {}, new {}: {}'.format(imageName,s,pixel_count,rescaled*partial_rescale,partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]))
+                s = rescaled*partial_rescale
         
         
         ##tic=timeit.default_timer()
@@ -479,10 +481,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     np_img.shape[1],
                     annotations['samePairs'])
         except Exception as inst:
-            table_points=None
-            table_pixels=None
-            print(inst)
-            print('Table error on: '+annotationPath)
+            if imageName not in self.errors:
+                table_points=None
+                table_pixels=None
+                print(inst)
+                print('Table error on: '+imageName)
+                self.errors.append(imageName)
+
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
         pixel_gt = table_pixels

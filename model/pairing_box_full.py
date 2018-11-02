@@ -43,6 +43,7 @@ class PairingBoxFull(BaseModel):
         
 
     def forward(self, image, queryMask,imageName=None):
+        #print(image.size())
         #pad so that upsampling from model features works
         padH=(self.detector.scale-(image.size(2)%self.detector.scale))%self.detector.scale
         padW=(self.detector.scale-(image.size(3)%self.detector.scale))%self.detector.scale
@@ -57,6 +58,7 @@ class PairingBoxFull(BaseModel):
             save=not self.training
             self.storedOffsetPredictionsD=None
             self.storedFinal_features=None
+            self.storedImageName=None
             offsetPredictionsD = self.detector(image)
             final_features=self.detector.final_features
 
@@ -64,6 +66,7 @@ class PairingBoxFull(BaseModel):
                 self.storedOffsetPredictionsD=offsetPredictionsD
                 self.storedFinal_features=final_features
                 self.storedImageName=imageName
+                #print('size {}'.format(image.size()))
         if final_features is None:
             import pdb;pdb.set_trace()
         bbPredictions, offsetPredictions = self.pairer( image,

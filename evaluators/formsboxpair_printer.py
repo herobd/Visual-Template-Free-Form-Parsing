@@ -140,7 +140,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         outputBBs[b] = outputBBs[b].data.numpy()
         if outputBBs[b].shape[0]>0:
             bestBBIdx.append( np.argmax(outputBBs[b][:,0]) )
-
+        #import pdb; pdb.set_trace()
     
     dists=defaultdict(list)
     dists_x=defaultdict(list)

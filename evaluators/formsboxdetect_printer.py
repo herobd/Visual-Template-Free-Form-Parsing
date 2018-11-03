@@ -166,7 +166,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         precs_5.append(prec_5)
         #for b in range(len(outputBBs)):
         outputBBs[b] = outputBBs[b].data.numpy()
-
+    
     outputPointsOld = outputPoints
     targetPointsOld = targetPoints
     outputPoints={}

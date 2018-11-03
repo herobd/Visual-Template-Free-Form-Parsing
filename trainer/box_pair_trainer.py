@@ -186,6 +186,7 @@ class BoxPairTrainer(BaseTrainer):
             'position_loss':position_loss,
             'conf_loss':conf_loss,
             'class_loss':class_loss,
+            'conf_score': outputBoxes[:,0].mean(),
             #'minGrad':minGrad,
             #'maxGrad':maxGrad,
             #'cor_conf_loss':cor_conf_loss,
@@ -197,6 +198,9 @@ class BoxPairTrainer(BaseTrainer):
             **metrics,
             **losses
         }
+
+        if iteration%10==0:
+            torch.cuda.empty_cache()
 
 
         return log#

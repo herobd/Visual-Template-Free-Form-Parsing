@@ -1,5 +1,5 @@
 import torch
-from model.yolo_loss import bbox_iou
+#from model.yolo_loss import bbox_iou
 import math
 
 def non_max_sup_iou(pred_boxes,thresh_conf=0.5, thresh_inter=0.5):
@@ -58,9 +58,9 @@ def max_intersection(query_box, candidate_boxes):
 
     return inter_area/min_area
 
-def allIOU(boxes1,boxes2):
-    b1_x1, b1_x2 = boxes1[:,0]-boxes1[:,4], boxes1[:,0]+boxes1[:,4]
-    b1_y1, b1_y2 = boxes1[:,1]-boxes1[:,3], boxes1[:,1]+boxes1[:,3]
+def allIOU(boxes1,boxes2, boxes1XYWH=[0,1,4,3]):
+    b1_x1, b1_x2 = boxes1[:,boxes1XYWH[0]]-boxes1[:,boxes1XYWH[2]], boxes1[:,boxes1XYWH[0]]+boxes1[:,boxes1XYWH[2]]
+    b1_y1, b1_y2 = boxes1[:,boxes1XYWH[1]]-boxes1[:,boxes1XYWH[3]], boxes1[:,boxes1XYWH[1]]+boxes1[:,boxes1XYWH[3]]
     b2_x1, b2_x2 = boxes2[:,0]-boxes2[:,4], boxes2[:,0]+boxes2[:,4]
     b2_y1, b2_y2 = boxes2[:,1]-boxes2[:,3], boxes2[:,1]+boxes2[:,3]
 
@@ -87,6 +87,22 @@ def allIOU(boxes1,boxes2):
     b2_area = (b2_x2 - b2_x1 + 1) * (b2_y2 - b2_y1 + 1)
     iou = inter_area / (b1_area + b2_area - inter_area + 1e-16)
     return iou
+
+def allDist(boxes1,boxes2):
+    b1_x = boxes1[:,0]
+    b1_y = boxes1[:,1]
+    b2_x = boxes2[:,0]
+    b2_y = boxes2[:,1]
+
+    #expand to make two dimensional, allowing every instance of boxes1
+    #to be compared with every intsance of boxes2
+    b1_x = b1_x[:,None].expand(boxes1.size(0), boxes2.size(0))
+    b1_y = b1_y[:,None].expand(boxes1.size(0), boxes2.size(0))
+    b2_x = b2_x[None,:].expand(boxes1.size(0), boxes2.size(0))
+    b2_y = b2_y[None,:].expand(boxes1.size(0), boxes2.size(0))
+
+    return torch.sqrt( torch.pow(b1_x-b2_x,2) + torch.pow(b1_y-b2_y,2) )
+
  
 #input is tensors of shape [instance,(conf,x,y,rot,h,w)]
 def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):

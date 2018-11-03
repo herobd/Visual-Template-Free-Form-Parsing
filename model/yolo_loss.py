@@ -1,15 +1,18 @@
 import torch.nn as nn
+import torch.nn.functional as F
 import torch
 import numpy as np
 import math
+from utils.yolo_tools import allIOU, allDist
 
 class YoloLoss (nn.Module):
-    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5):
+    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,useSpecialLoss=False):
         super(YoloLoss, self).__init__()
         self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.rotation=rotation
         self.scale=scale
+        self.useSpecialLoss=useSpecialLoss
         self.anchors=anchors
         self.num_anchors=len(anchors)
         self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
@@ -49,7 +52,10 @@ class YoloLoss (nn.Module):
         pred_boxes[..., 2] = torch.exp(w.data) * anchor_w
         pred_boxes[..., 3] = torch.exp(h.data) * anchor_h
 
-        nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls = build_targets(
+        if target is not None:
+            target[:,:,[0,1,3,4]] /= self.scale
+
+        nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, distances, ious = build_targets(
             pred_boxes=pred_boxes.cpu().data,
             pred_conf=pred_conf.cpu().data,
             pred_cls=pred_cls.cpu().data,
@@ -61,7 +67,8 @@ class YoloLoss (nn.Module):
             grid_sizeH=nH,
             grid_sizeW=nW,
             ignore_thres=self.ignore_thresh,
-            scale=self.scale
+            scale=self.scale,
+            calcIOUAndDist=self.useSpecialLoss
         )
 
         nProposals = int((pred_conf > 0).sum().item())
@@ -90,7 +97,12 @@ class YoloLoss (nn.Module):
         #import pdb; pdb.set_trace()
 
         # Mask outputs to ignore non-existing objects
-        loss_conf = 1.25*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+        if self.useSpecialLoss:
+            loss_conf = 1.5*weighted_bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false],distances[conf_mask_false],ious[conf_mask_false],nB)
+            distances=None
+            ious=None
+        else:
+            loss_conf = 1.25*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
         if target is not None and nGT>0:
             loss_x = self.mse_loss(x[mask], tx[mask])
             loss_y = self.mse_loss(y[mask], ty[mask])
@@ -111,13 +123,32 @@ class YoloLoss (nn.Module):
             return (
                 loss_conf,
                 0,
-                loss_conf,
+                loss_conf.item(),
                 0,
                 recall,
                 precision,
             )
 
-
+def weighted_bce_loss(pred,gt,distances,ious,batch_size):
+    #remove any good predictions
+    keep = ious<0.6
+    #pred=pred[keep]
+    #gt=gt[keep]
+    distances=distances[keep]
+    epsilon = 1
+    if batch_size>1:
+        max_per_batch = distances.view(batch_size,-1).max(dim=1)[0][:,None,None,None]
+        sum_per_batch = distances.view(batch_size,-1).sum(dim=1)[0][:,None,None,None]
+    else:
+        max_per_batch = distances.max()
+        sum_per_batch = distances.sum()
+    distance_weights = (max_per_batch-distances+epsilon)/(sum_per_batch+epsilon)
+    lossByBatch= distance_weights.to(pred.device)*F.binary_cross_entropy_with_logits(pred[keep],gt[keep])
+    if batch_size>1:
+        lossByBatch=lossByBatch.sum(dim=1)
+    #lossByBatch= (-distance_weights*(gt*torch.log(pred) + (1-gt)*torch.log(1-pred))).sum(dim=1)
+    distance_weights=None
+    return lossByBatch.mean()
 
 def bbox_iou(box1, box2, x1y1x2y2=True):
     """
@@ -160,7 +191,7 @@ def inv_tanh(y):
     return 0.5*(math.log((1+y)/(1-y)))
 
 def build_targets(
-    pred_boxes, pred_conf, pred_cls, target, target_sizes, anchors, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale
+    pred_boxes, pred_conf, pred_cls, target, target_sizes, anchors, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale, calcIOUAndDist=False
 ):
     nB = pred_boxes.size(0)
     nA = num_anchors
@@ -175,19 +206,35 @@ def build_targets(
     th = torch.zeros(nB, nA, nH, nW)
     tconf = torch.ByteTensor(nB, nA, nH, nW).fill_(0)
     tcls = torch.ByteTensor(nB, nA, nH, nW, nC).fill_(0)
+    if calcIOUAndDist:
+        distances = torch.ones(nB,nA, nH, nW) #distance to closest target
+        ious = torch.zeros(nB,nA, nH, nW) #max iou to target
+    else:
+        distances=None
+        ious=None
 
     nGT = 0
     nCorrect = 0
     #import pdb; pdb.set_trace()
     for b in range(nB):
+        if calcIOUAndDist and target_sizes[b]>0:
+            flat_pred = pred_boxes[b].view(-1,pred_boxes.size(-1))
+            #flat_target = target[b,:target_sizes[b]].view(-1,target.size(-1))
+            iousB = allIOU(flat_pred,target[b,:target_sizes[b]], boxes1XYWH=[0,1,2,3])
+            iousB = iousB.view(nA, nH, nW,-1)
+            ious[b] = iousB.max(dim=-1)[0]
+            distancesB = allDist(flat_pred,target[b,:target_sizes[b]])
+            distances[b] = distancesB.min(dim=-1)[0].view(nA, nH, nW)
+            #import pdb;pdb.set_trace()
+        
         for t in range(target_sizes[b]): #range(target.shape[1]):
             #if target[b, t].sum() == 0:
             #    continue
             # Convert to position relative to box
-            gx = target[b, t, 0] / scale
-            gy = target[b, t, 1] / scale
-            gw = target[b, t, 4] / scale
-            gh = target[b, t, 3] / scale
+            gx = target[b, t, 0] #/ scale
+            gy = target[b, t, 1] #/ scale
+            gw = target[b, t, 4] #/ scale
+            gh = target[b, t, 3] #/ scale
         
             if gw==0 or gh==0:
                 continue
@@ -224,14 +271,18 @@ def build_targets(
             tconf[b, best_n, gj, gi] = 1
 
             # Calculate iou between ground truth and best matching prediction
-            iou = bbox_iou(gt_box, pred_box, x1y1x2y2=False)
+            if calcIOUAndDist:
+                #iou = ious[best_n*(nH*nW) + gj*(nW) + gi,t]
+                iou = iousB[best_n, gj, gi, t]
+            else:
+                iou = bbox_iou(gt_box, pred_box, x1y1x2y2=False)
             pred_label = torch.argmax(pred_cls[b, best_n, gj, gi])
             score = pred_conf[b, best_n, gj, gi]
             #import pdb; pdb.set_trace()
             if iou > 0.5 and pred_label == torch.argmax(target[b,t,13:]) and score > 0:
                 nCorrect += 1
 
-    return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls
+    return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, distances, ious
 
 
 

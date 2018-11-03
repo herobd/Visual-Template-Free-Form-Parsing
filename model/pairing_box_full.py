@@ -61,6 +61,7 @@ class PairingBoxFull(BaseModel):
             self.storedImageName=None
             offsetPredictionsD = self.detector(image)
             final_features=self.detector.final_features
+            self.detector.final_features=None
 
             if save:
                 self.storedOffsetPredictionsD=offsetPredictionsD

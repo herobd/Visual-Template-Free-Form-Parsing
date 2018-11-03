@@ -212,6 +212,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
                     #elif name=='field_end_gt' or name=='field_start_gt':
                     #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
                     if j==bestBBIdx[b]:
+                        bestConf=conf
                         if bbs[j,6] > bbs[j,7]:
                             color=(0,shade,shade) #text
                         else:
@@ -234,7 +235,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             #    #print(rad)
             #    cv2.circle(imageB,mid,rad,(1,0,1),1)
 
-            saveName = '{}_pairing_prec:{:.2f}_recall:{:.2f}'.format(imageName[b],precs_5[b][0],recalls_5[b][0])
+            saveName = '{}_pairing_AP:{:.2f}_prec:{:.2f}_recall:{:.2f}_bestConf:{:.3f}_thresh:{:.3f}'.format(imageName[b],aps_5[b],precs_5[b][0],recalls_5[b][0],bestConf,threshConf)
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

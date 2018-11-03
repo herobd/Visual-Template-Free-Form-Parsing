@@ -318,6 +318,7 @@ class CropBoxTransform(object):
         point_gts = sample['point_gt']
         pixel_gt = sample['pixel_gt']
         query_bb = sample['query_bb'] if 'query_bb' in sample else None
+        #page_boundaries =
 
         #pad out to allow random samples to take space off of the page
         ##tic=timeit.default_timer()

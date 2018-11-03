@@ -313,7 +313,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     os.mkdir(self.cache_path)
         else:
             self.cache_resized = False
-        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 220000000
+        self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 10000000
         if 'only_types' in config:
             self.only_types = config['only_types']
         else:
@@ -407,7 +407,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         else:
             self.no_print_fields = False
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
-        
+        self.errors=[]
 
 
 
@@ -439,6 +439,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         ##print('       channels : {}'.format(len(np_img.shape)))
         if self.cropToPage:
+            print('Not implemented')
+            assert(False)
             pageCorners = annotations['page_corners']
             xl = max(0,int(rescaled*min(pageCorners['tl'],pageCorners['bl'])))
             xr = min(np_img.shape[1]-1,int(rescaled*max(pageCorners['tr'],pageCorners['br'])))
@@ -448,13 +450,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
         s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
         partial_rescale = s/rescaled
-        #if self.transform is None: #we're doing the whole image
-        #    #this is a check to be sure we don't send too big images through
-        #    pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
-        #    if pixel_count > self.pixel_count_thresh:
-        #        partial_rescale = self.pixel_count_thresh/pixel_count
-        #        s = rescaled*partial_rescale
-        #        print('{} exceed thresh: {}, new scale {}'.format(imageName,pixel_count,s))
+        if self.transform is None: #we're doing the whole image
+            #this is a check to be sure we don't send too big images through
+            pixel_count = partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]
+            if pixel_count > self.pixel_count_thresh:
+                partial_rescale = math.sqrt(partial_rescale*partial_rescale*self.pixel_count_thresh/pixel_count)
+                print('{} exceed thresh: {}: {}, new {}: {}'.format(imageName,s,pixel_count,rescaled*partial_rescale,partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]))
+                s = rescaled*partial_rescale
         
         
         ##tic=timeit.default_timer()
@@ -479,10 +481,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     np_img.shape[1],
                     annotations['samePairs'])
         except Exception as inst:
-            table_points=None
-            table_pixels=None
-            print(inst)
-            print('Table error on: '+annotationPath)
+            if imageName not in self.errors:
+                table_points=None
+                table_pixels=None
+                print(inst)
+                print('Table error on: '+imageName)
+                self.errors.append(imageName)
+
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
 
         pixel_gt = table_pixels
@@ -918,6 +923,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         return intersectionPointsM, pixelMap
 
     def cluster(self,k,sample_count,outPath):
+        def makePointsAndRects(h,w):
+            return np.array([-w/2.0,0,w/2.0,0,0,-h/2.0,0,h/2.0, 0,0, 0, h,w])
+        meanH=62.42
+        stdH=87.31
+        meanW=393.03
+        stdW=533.53
+        ratios=[4.0,7.18,11.0,15.0,19.0,27.0]
         pointsAndRects=[]
         for inst in self.images:
             annotationPath = inst['annotationPath']
@@ -933,7 +945,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 text_bbs = self.getBBGT(annotations['textBBs'],s)
                 field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
                 bbs = np.concatenate([text_bbs,field_bbs],axis=1)
-                bbs = self.convertBBs(bbs).numpy()[0]
+                bbs = convertBBs(bbs,self.rotate,2).numpy()[0]
                 cos_rot = np.cos(bbs[:,2])
                 sin_rot = np.sin(bbs[:,2])
                 p_left_x = -cos_rot*bbs[:,4]
@@ -952,9 +964,33 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #all_widths = pointsAndRects[:,12]
         
         bestDistsFromMean=None
-        for attempt in range(20):
-            randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
-            means=pointsAndRects[randomIndexes]
+        for attempt in range(20 if k>0 else 1):
+            if k>0:
+                randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
+                means=pointsAndRects[randomIndexes]
+            else:
+                minH=5
+                minW=5
+                ratios
+                means=[]
+
+                #smaller than mean
+                for step in range(5):
+                    height = minH + (meanH-minH)*(step/5.0)
+                    width = minW + (meanW-minW)*(step/5.0)
+                    for ratio in ratios:
+                        means.append(makePointsAndRects(height,ratio*height))
+                        means.append(makePointsAndRects(width/ratio,width))
+                for stddev in range(0,5):
+                    for step in range(5-stddev):
+                        height = meanH + stddev*stdH + stdH*(step/(5.0-stddev))
+                        width = meanW + stddev*stdW + stdW*(step/(5.0-stddev))
+                        for ratio in ratios:
+                            means.append(makePointsAndRects(height,ratio*height))
+                            means.append(makePointsAndRects(width/ratio,width))
+                k=len(means)
+                print('K: {}'.format(k))
+                means = np.stack(means,axis=0)
             #pointsAndRects [0:p_left_x, 1:p_left_y,2:p_right_x,3:p_right_y,4:p_top_x,5:p_top_y,6:p_bot_x,7:p_bot_y, 8:xc, 9:yc, 10:rot, 11:h, 12:w
             prevDistsFromMean=None
             for iteration in range(1000000): #intended to break out
@@ -1012,7 +1048,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             if bestDistsFromMean is None or distsFromMean<bestDistsFromMean:
                 bestDistsFromMean = distsFromMean
                 cluster_centers=means
-        cluster_centers=means
+        #cluster_centers=means
         draw = np.zeros([600,600,3],dtype=np.float)
         toWrite = []
         for ki in range(k):
@@ -1022,7 +1058,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             h=cluster_centers[ki,11]
             w=cluster_centers[ki,12]
             rot=cluster_centers[ki,10]
-            toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item()})
+            toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item(),'popularity':(groups==ki).sum().item()})
             tr = ( int(math.cos(rot)*w-math.sin(rot)*h)+300,   int(math.sin(rot)*w+math.cos(rot)*h)+300 )
             tl = ( int(math.cos(rot)*-w-math.sin(rot)*h)+300,  int(math.sin(rot)*-w+math.cos(rot)*h)+300 )
             br = ( int(math.cos(rot)*w-math.sin(rot)*-h)+300,  int(math.sin(rot)*w+math.cos(rot)*-h)+300 )

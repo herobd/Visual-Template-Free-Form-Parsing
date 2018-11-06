@@ -135,15 +135,18 @@ def weighted_bce_loss(pred,gt,distances,ious,batch_size):
     #pred=pred[keep]
     #gt=gt[keep]
     distances=distances[keep]
-    epsilon = 1
     if batch_size>1:
         max_per_batch = distances.view(batch_size,-1).max(dim=1)[0][:,None,None,None]
         sum_per_batch = distances.view(batch_size,-1).sum(dim=1)[0][:,None,None,None]
+        epsilon = distances.mean(dim=1)
+        count_per = keep.sum(dim=1)
     else:
         max_per_batch = distances.max()
         sum_per_batch = distances.sum()
-    distance_weights = (max_per_batch-distances+epsilon)/(sum_per_batch+epsilon)
-    lossByBatch= distance_weights.to(pred.device)*F.binary_cross_entropy_with_logits(pred[keep],gt[keep])
+        epsilon = distances.mean()
+        count_per = keep.sum()
+    distance_weights = (max_per_batch-distances+epsilon)/(sum_per_batch+count_per.float()*epsilon)
+    lossByBatch= distance_weights.to(pred.device)*F.binary_cross_entropy_with_logits(pred[keep],gt[keep],reduction='none')
     if batch_size>1:
         lossByBatch=lossByBatch.sum(dim=1)
     #lossByBatch= (-distance_weights*(gt*torch.log(pred) + (1-gt)*torch.log(1-pred))).sum(dim=1)

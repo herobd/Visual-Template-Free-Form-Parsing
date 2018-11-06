@@ -1,0 +1,92 @@
+{
+    "name": "Forms12_iouVGG_dilV_bb16",
+    "cuda": true,
+    "gpu": 0,
+    "save_mode": "state_dict",
+    "override": true,
+    "data_loader": {
+        "data_set_name": "FormsBoxDetect",
+        "data_dir": "/home/ubuntu/brian/data/forms",
+        "batch_size": 2,
+        "shuffle": true,
+        "num_workers": 2,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.4,0.65],
+        "crop_params": {
+            "crop_size":1024
+        },
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "cache_resized_images": true,
+        "only_types": {
+            "boxes":true
+        },
+        "rotation": false
+
+
+    },
+    "validation": {
+        "shuffle": false,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.52,0.52],
+        "only_types": {
+            "boxes":true
+        },
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "batch_size": 1,
+        "rotation": false,
+        "pixel_count_thresh":10000000,
+        "max_dim_thresh": 27000
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.01,
+        "weight_decay": 0
+    },
+    "loss": {
+        "box":"YoloLoss"
+    },
+    "loss_params": {
+        "box": {
+            "ignore_thresh": 0.5
+        }
+    },
+    "loss_weights":{"box":1.0},
+    "metrics": [],
+    "trainer": {
+        "class": "BoxDetectTrainer",
+        "iterations": 200000,
+        "save_dir": "saved/",
+        "val_step": 5000,
+        "save_step": 10000,
+        "log_step": 500,
+        "verbosity": 1,
+        "monitor": "loss",
+        "monitor_mode": "none",
+        "warmup_steps": 3000,
+        "thresh_conf":0.88,
+        "thresh_intersect":0.4
+    },
+    "arch": "YoloBoxDetector", 
+    "model": {
+        "color":false,
+        "number_of_box_types": 2,
+        "number_of_point_types": 0,
+        "number_of_pixel_types": 0,
+        "norm_type": "group_norm",
+        "dilation": 5,
+        "down_layers_cfg": [1,"k5-64", "M", "d5-128", 128, "M", "d4-256", 256, "M", "d3-512", 512, "M", "d2-1024", 1024, 1024],
+        "up_layers_cfg":[],
+        "anchors_file": "anchors_noRot_stats_16.json",
+        "rotation":false
+    }
+}

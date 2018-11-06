@@ -124,6 +124,11 @@ class down(nn.Module):
     def forward(self, x,append=None):
         x = self.pool(x)
         if append is not None:
+            #padH = x.size(-2)-append.size(-2)
+            #padW = x.size(-1)-append.size(-1)
+            #if padH!=0 or padW!=0:
+            #    padder = torch.nn.ZeroPad2d((0,padW,0,padH))
+            #    append = padder(append)
             x = torch.cat([x,append],dim=1)
         x = self.conv(x)
         return x

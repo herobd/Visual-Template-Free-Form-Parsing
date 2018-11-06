@@ -214,7 +214,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
                     if j==bestBBIdx[b]:
                         bestConf=conf
                         if bbs[j,6] > bbs[j,7]:
-                            color=(0,shade,shade) #text
+                            color=(0,shade,shade) #textF
                         else:
                             color=(shade,0,shade) #field
                     else:

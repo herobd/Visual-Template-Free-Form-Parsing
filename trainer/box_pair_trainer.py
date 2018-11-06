@@ -140,7 +140,6 @@ class BoxPairTrainer(BaseTrainer):
         #    loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         #else:
         image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(thisInstance)
-        print(image.size())
         outputBoxes, outputOffsets = self.model(image,queryMask)
         loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
 

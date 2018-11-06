@@ -13,9 +13,15 @@ from trainer import *
 from logger import Logger
 
 logging.basicConfig(level=logging.INFO, format='')
-
+def set_procname(newname):
+        from ctypes import cdll, byref, create_string_buffer
+        libc = cdll.LoadLibrary('libc.so.6')    #Loading a 3rd party library C
+        buff = create_string_buffer(len(newname)+1) #Note: One larger than the name (man prctl says that)
+        buff.value = newname                 #Null terminated string as it should be
+        libc.prctl(15, byref(buff), 0, 0, 0) #Refer to "#define" of "/usr/include/linux/prctl.h" for the misterious value 16 & arg[3..5] are zero as the man page says.
 
 def main(config, resume):
+    #set_procname(config['name'])
     #np.random.seed(1234) I don't have a way of restarting the DataLoader at the same place, so this makes it totaly random
     train_logger = Logger()
 

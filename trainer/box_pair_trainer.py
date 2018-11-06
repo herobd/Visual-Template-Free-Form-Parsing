@@ -140,6 +140,7 @@ class BoxPairTrainer(BaseTrainer):
         #    loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         #else:
         image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(thisInstance)
+        print(image.size())
         outputBoxes, outputOffsets = self.model(image,queryMask)
         loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
 
@@ -186,7 +187,7 @@ class BoxPairTrainer(BaseTrainer):
             'position_loss':position_loss,
             'conf_loss':conf_loss,
             'class_loss':class_loss,
-            'conf_score': outputBoxes[:,0].mean(),
+            'conf_score': outputBoxes[:,0].mean().item(),
             #'minGrad':minGrad,
             #'maxGrad':maxGrad,
             #'cor_conf_loss':cor_conf_loss,
@@ -199,8 +200,14 @@ class BoxPairTrainer(BaseTrainer):
             **losses
         }
 
-        if iteration%10==0:
-            torch.cuda.empty_cache()
+        #if iteration%10==0:
+        #image=None
+        #queryMask=None
+        #targetBoxes=None
+        #outputBoxes=None
+        #outputOffsets=None
+        #loss=None
+        #torch.cuda.empty_cache()
 
 
         return log#

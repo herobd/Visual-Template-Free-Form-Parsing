@@ -314,6 +314,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         else:
             self.cache_resized = False
         self.pixel_count_thresh = config['pixel_count_thresh'] if 'pixel_count_thresh' in config else 10000000
+        self.max_dim_thresh = config['max_dim_thresh'] if 'max_dim_thresh' in config else 2700
         if 'only_types' in config:
             self.only_types = config['only_types']
         else:
@@ -456,6 +457,13 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             if pixel_count > self.pixel_count_thresh:
                 partial_rescale = math.sqrt(partial_rescale*partial_rescale*self.pixel_count_thresh/pixel_count)
                 print('{} exceed thresh: {}: {}, new {}: {}'.format(imageName,s,pixel_count,rescaled*partial_rescale,partial_rescale*partial_rescale*np_img.shape[0]*np_img.shape[1]))
+                s = rescaled*partial_rescale
+
+
+            max_dim = partial_rescale*max(np_img.shape[0],np_img.shape[1])
+            if max_dim > self.max_dim_thresh:
+                partial_rescale = partial_rescale*(self.max_dim_thresh/max_dim)
+                print('{} exceed thresh: {}: {}, new {}: {}'.format(imageName,s,max_dim,rescaled*partial_rescale,partial_rescale*max(np_img.shape[0],np_img.shape[1])))
                 s = rescaled*partial_rescale
         
         

@@ -9,20 +9,24 @@ from data_loader import getDataLoader
 from evaluators import *
 import math
 from collections import defaultdict
+from skimage import draw
 
 from datasets.forms_detect import FormsDetect
 from datasets import forms_detect
 
+from utils.yolo_tools import non_max_sup_iou, AP_iou
+
 logging.basicConfig(level=logging.INFO, format='')
 
 
-def save(resumeDetect, resumePixel,saveDir,gpu=None, shuffle=False,configDetect=None, configPixel=None, detector_scale=16):
+def save(resumeDetect, resumePixel,saveDir,pair_data_loader,gpu=None, shuffle=False,configDetect=None, configPixel=None, detector_scale=16):
+    configPair=None
     np.random.seed(1234)
 
     if resumeDetect is not None:
-        checkpointDetect = torch.load(resumDetect, map_location=lambda storage, location: storage)
+        checkpointDetect = torch.load(resumeDetect, map_location=lambda storage, location: storage)
         if configDetect is None:
-            configDetect = checkpoint['config']
+            configDetect = checkpointDetect['config']
         else:
             configDetect = json.load(open(configDetect))
             
@@ -34,7 +38,7 @@ def save(resumeDetect, resumePixel,saveDir,gpu=None, shuffle=False,configDetect=
             modelDetect = checkpoint['model']
         modelDetect.eval()
         modelDetect.summary()
-        modelDetect.forPairing=True
+        #modelDetect.forPairing=True
         detector_scale=modelDetect.scale
 
         if gpu is not None:
@@ -89,38 +93,44 @@ def save(resumeDetect, resumePixel,saveDir,gpu=None, shuffle=False,configDetect=
         if not os.path.isdir(resDir):
             os.mkdir(resDir)
         featDir = os.path.join(saveDir,'detect_feats')
-        if not os.path.isdir(resDir):
-            os.mkdir(resDir)
+        if not os.path.isdir(featDir):
+            os.mkdir(featDir)
 
 
         with torch.no_grad():
             for instance in valid_iter:
                 imageName = instance['imgName']
                 scale = instance['scale']
-                print('batch: {}'.format(imageName)),end='\r')
+                print('batch: {}'.format(imageName),end='\r')
                 dataT, targetBBsT, targetBBsSizes, targetPointsT, targetPointsSizes, targetPixelsT = __to_tensor(instance,gpu)
-                outputBBs, outputOffsets, outputPoints, outputPixels = modelDetector(dataT)
-                feats = modelDetector.final_features
+                padH=(detector_scale-(dataT.size(2)%detector_scale))%detector_scale
+                padW=(detector_scale-(dataT.size(3)%detector_scale))%detector_scale
+                if padH!=0 or padW!=0:
+                     padder = torch.nn.ZeroPad2d((0,padW,0,padH))
+                     dataT = padder(dataT)
+                outputBBs, outputOffsets, outputPoints, outputPixels = modelDetect(dataT)
+                feats = modelDetect.final_features
                 #data = data.cpu().data.numpy()
                 maxConf = outputBBs[:,:,0].max().item()
                 threshConf = max(maxConf*0.92,0.5)
                 outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
-                for b in len(outputBBs):
+                for b in range(len(outputBBs)):
                     out = outputBBs[b].data.numpy()
                     outfeats = feats[b].cpu().data.numpy()
                     saveFileBB = os.path.join(resDir,'{}'.format(imageName[b]))
                     saveFileFeats = os.path.join(featDir,'{}'.format(imageName[b]))
-                    out[:[1,2,4,5]] /= scale[b]
+                    out[:,[1,2,4,5]] /= scale[b]
                     np.save(saveFileBB,out)
-                    np.save(saveFilFeats,outfeats)
+                    np.save(saveFileFeats,outfeats)
 
 
-        modelDetector=None
+        modelDetect=None
 
     if resumePixel is not None:
+        featDir = os.path.join(saveDir,'detect_feats')
         checkpointPixel = torch.load(resumePixel, map_location=lambda storage, location: storage)
         if configPixel is None:
-            configPixel = checkpoint['config']
+            configPixel = checkpointPixel['config']
         else:
             configPixel = json.load(open(configPixel))
 
@@ -131,33 +141,132 @@ def save(resumeDetect, resumePixel,saveDir,gpu=None, shuffle=False,configDetect=
             modelPixel = checkpoint['model']
         modelPixel.eval()
         modelPixel.summary()
+        configPair=configPixel
 
         if gpu is not None:
             modelPixel = modelPixel.to(gpu)
-        data_loader, valid_data_loader = getDataLoader(configPixel,'train')
-        valid_iter = iter(valid_data_loader)
+        #data_loader, valid_data_loader = getDataLoader(configPixel,'train')
+        #valid_iter = iter(valid_data_loader)
         pixelDir = os.path.join(saveDir,'pixel_res')
         if not os.path.isdir(pixelDir):
             os.mkdir(pixelDir)
 
         with torch.no_grad():
-            for data, imageName, target in valid_iter:
+            #for data, imageName, target in valid_iter:
+            i=0
+            for instance in iter(pair_data_loader):
+                imageName = instance['imgName'][0]
+                print('batch: {}, {}/{}'.format(imageName,i,len(pair_data_loader)),end='\r')
+                data = torch.cat([instance['img'],instance['queryMask']],dim=1)
                 dataT=data.to(gpu)
-                saveFileFeats = os.path.join(featDir,'{}'.format(imageName[b]))
-                feats = np.load(saveFileFeats)
                 padH=(detector_scale-(dataT.size(2)%detector_scale))%detector_scale
                 padW=(detector_scale-(dataT.size(3)%detector_scale))%detector_scale
                 if padH!=0 or padW!=0:
                      padder = torch.nn.ZeroPad2d((0,padW,0,padH))
                      dataT = padder(dataT)
-                output = model(dataT,feats)
-                output = output[...,:target.size(-2),:target.size(-1)].cpu()
+                
+                saveFileFeats = os.path.join(featDir,'{}.npy'.format(imageName))
+                feats = torch.from_numpy(np.load(saveFileFeats))[None,...].to(gpu)
+                #if feats.size(-2)*detector_scale//2 < dataT.size(-2)//2:
+                dataT =  dataT[...,:feats.size(-2)*detector_scale,:feats.size(-1)*detector_scale]
+                output = modelPixel(dataT,feats)
+                #output = output[...,:target.size(-2),:target.size(-1)].cpu()
+                output = output[...,:data.size(-2)//2,:data.size(-1)//2].cpu()
 
-                for b in len(output):
-                    out = output[b].data.numpy()
-                    saveFile = os.path.join(pixelDir,'{}'.format(imageName[b]))
-                    np.save(saveFile,out)
+                #for b in len(output):
+                out = output[0].data.numpy()
+                saveFile = os.path.join(pixelDir,'{}:{}'.format(i,imageName))
+                np.save(saveFile,out)
+                i+=1
+    return configPair
 
+def evaluate(saveDir,pair_data_loader):
+    vote_thresh=0.3
+    min_votes=5
+    detectDir = os.path.join(saveDir,'detect_res')
+    pixelDir = os.path.join(saveDir,'pixel_res')
+    
+    #data_loader, valid_data_loader = getDataLoader(configBoxPair,'train')
+    aps=[]
+    recalls=[]
+    precisions=[]
+    prevImageName=None
+    i=0
+    for intange in iter(pair_data_loader):
+        imageName = instance['imgName'][0]
+        image = (1-np.moveaxis(instance['img'].numpy()[0],0,2))/2.0
+        queryMask = instance['queryMask'].numpy()[0,0]
+        bbs = instance['responseBBs'].numpy()[0]
+        bbs *= 0.5 #to account for pixel labeler predicting at half scale
+
+        if imageName != prevImageName:
+            detections = np.load(os.path.join(detectDir,'{}'.format(imageName)))
+            detections *= 0.5
+            prevImageName=imageName
+        pixels = np.load(os.path.join(pixels,'{}:{}'.format(i,imageName)))
+
+        #threshold pixels
+        pixels = pixels>0
+        total_votes= pixels.sum()
+
+        selectedIdxs=[]
+        for bbIdx in range(detections.shape[0]):
+            bb=detections[bbIdx]
+            xc = bb[1]
+            yc = bb[2]
+            rot = bb[3]
+            h = bb[4]
+            w = bb[5]
+            assert(rot==0)
+            tlX = xc-w
+            tlY = yc-h
+            trX = xc+w
+            trY = yc-h
+            blX = xc-w
+            blY = yc+h
+            brX = xc+w
+            brY = yc+h
+
+            rr,cc=draw.polygon([tlY,trY,brY,blY], [tlX,trX,brX,blX], queryMask.shape)
+            votes = pixels[rr,cc].sum()
+            if votes/float(total_votes) > vote_thresh and votes>min_votes:
+                selectedIdx.append(bbIdx)
+        final_pred = detections[selectedIdxs]
+        ap, precision, recall = AP_iou(bbs,final_pred,0.5,ignoreClasses=True)
+        ap=ap[0]
+        precision=precision[0]
+        recall=recall[0]
+        aps.append(ap)
+        precisions.append(precision)
+        recalls.append(recall)
+
+        #bbs *= 2
+        #final_preds *= 2
+        
+        if image.shape[2]==1:
+            image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
+        image[:,:,1] *= 1-queryMask
+        invPix = 1-pixels
+        invPix = cv2.resize(invPix.astype(np.float),(image.shape[1],image.shape[0]),interpolation=cv2.INTER_NEAREST)
+        image[:,:,0] *= invPix
+        for j in range(bbs.shape[0]):
+            plotRect(image,(0,1,0),bbs[j]*2)
+        maxConf,_ = final_preds[:,0].max()
+        for j in range(final_preds.shape[0]):
+            conf = final_preds[j,0]
+            shade = 0.0+(conf-maxConf/2)/(maxConf-maxConf/2)
+            if final_preds[j,6] > final_preds[j,7]:
+                color=(0,shade,shade) #textF
+            else:
+                color=(shade,0,shade) #field
+            plotRect(image,color,final_preds[j,1:6]*2)
+
+        saveName='{}:{}_p:{:.2f}}_r:{:.2f}.png'.format(i,imageName,precision,recall)
+        cv2.imwrite(os.path.join(saveDir,saveName),image)
+        i+=1
+
+    print('precision mean: {}, std: {}'.format(np.mean(precisions),np.std(precisions)))
+    print('recall mean: {}, std: {}'.format(np.mean(recalls),np.std(recalls)))
 
 if __name__ == '__main__':
     logger = logging.getLogger()
@@ -179,8 +288,54 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     config = None
-    if args.checkpoint is None or args.savedir is None:
-        print('Must provide checkpoint (with -c) and save dir (with -d)')
+    if args.outdir is None:
+        print('Must provide out dir (with -o)')
         exit()
 
-    save(args.detector_checkpoint, args.pixel_checkpoint, args.outdir, gpu=args.gpu, detector_config=args.detector_config, pixel_config=args.pixel_config)
+    #configPair=None
+    configPair={
+    "data_loader": {
+        "data_set_name": "FormsBoxPair",
+        "data_dir": "../data/forms",
+        "batch_size": 2,
+        "shuffle": False,
+        "num_workers": 2,
+        "crop_to_page":False,
+        "color":False,
+        "rescale_range": [0.4,0.65],
+        "crop_params": {
+            "crop_size":1024
+        },
+        "no_blanks": True,
+        "swap_circle":True,
+        "no_graphics":True,
+        "cache_resized_images": True,
+        "rotation": False,
+        "use_dist_mask": True,
+        "use_vdist_mask": True,
+        "use_hdist_mask": True
+
+
+    },
+    "validation": {
+        "shuffle": False,
+        "crop_to_page":False,
+        "color":False,
+        "rescale_range": [0.52,0.52],
+        "no_blanks": True,
+        "swap_circle":True,
+        "no_graphics":True,
+        "batch_size": 1,
+        "rotation": False,
+        "use_dist_mask": True,
+        "use_vdist_mask": True,
+        "use_hdist_mask": True
+    }
+    }
+    _train, pair_data_loader = getDataLoader(configPair,'train')
+
+    if args.detector_checkpoint is not None or args.pixel_checkpoint is not None:
+        configPair = save(args.detector_checkpoint, args.pixel_checkpoint, args.outdir,pair_data_loader, gpu=args.gpu, configDetect=args.detector_config, configPixel=args.pixel_config)
+    #if configPair is None:
+    #    configPair=configPair_maybe
+    evaluate(args.outdir,pair_data_loader)

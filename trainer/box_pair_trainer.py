@@ -272,6 +272,12 @@ class BoxPairTrainer(BaseTrainer):
                     mPrecision += np.array(prec_5)/len(outputBoxes)
 
                 total_val_loss += loss.item()
+                loss=None
+                image=None
+                queryMask=None
+                targetBoxes=None
+                outputBoxes=None
+                outputOffsets=None
                 #total_val_metrics += self._eval_metrics(output, target)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),

@@ -64,7 +64,7 @@
         "class": "BoxDetectTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 5,
+        "val_step": 5000,
         "save_step": 10000,
         "log_step": 500,
         "verbosity": 1,

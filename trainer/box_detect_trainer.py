@@ -262,8 +262,10 @@ class BoxDetectTrainer(BaseTrainer):
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
+                if batch_idx>10:
+                    break
                 data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
-
+                #print('data: {}'.format(data.size()))
                 outputBoxes,outputOffsets, outputPoints, outputPixels = self.model(data)
                 #loss = self.loss(output, target)
                 loss = 0
@@ -302,6 +304,15 @@ class BoxDetectTrainer(BaseTrainer):
                     losses['val_pixel_loss']+=this_loss.item()
 
                 total_val_loss += loss.item()
+                loss=None
+                this_loss=None
+                data=None
+                targetBoxes=None
+                targetPoints=None
+                outputBoxes=None
+                outputOffsets=None
+                outputPoints=None
+                outputPixels=None
                 #total_val_metrics += self._eval_metrics(output, target)
         for name in losses:
             losses[name]/=len(self.valid_data_loader)

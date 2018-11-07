@@ -10,9 +10,11 @@ from evaluators import *
 import math
 from collections import defaultdict
 from skimage import draw
+import cv2
 
 from datasets.forms_detect import FormsDetect
 from datasets import forms_detect
+from evaluators.formsboxdetect_printer import plotRect
 
 from utils.yolo_tools import non_max_sup_iou, AP_iou
 
@@ -100,6 +102,10 @@ def save(resumeDetect, resumePixel,saveDir,pair_data_loader,gpu=None, shuffle=Fa
         with torch.no_grad():
             for instance in valid_iter:
                 imageName = instance['imgName']
+                saveFileBB = os.path.join(resDir,'{}'.format(imageName[0]))
+                saveFileFeats = os.path.join(featDir,'{}'.format(imageName[0]))
+                if os.path.exists(saveFileBB) and  os.path.exists(saveFileFeats) and not redo:
+                    continue
                 scale = instance['scale']
                 print('batch: {}'.format(imageName),end='\r')
                 dataT, targetBBsT, targetBBsSizes, targetPointsT, targetPointsSizes, targetPixelsT = __to_tensor(instance,gpu)
@@ -156,6 +162,9 @@ def save(resumeDetect, resumePixel,saveDir,pair_data_loader,gpu=None, shuffle=Fa
             i=0
             for instance in iter(pair_data_loader):
                 imageName = instance['imgName'][0]
+                saveFile = os.path.join(pixelDir,'{}-{}'.format(i,imageName))
+                if os.path.exists(saveFile) and not redo:
+                    continue
                 print('batch: {}, {}/{}'.format(imageName,i,len(pair_data_loader)),end='\r')
                 data = torch.cat([instance['img'],instance['queryMask']],dim=1)
                 dataT=data.to(gpu)
@@ -175,13 +184,14 @@ def save(resumeDetect, resumePixel,saveDir,pair_data_loader,gpu=None, shuffle=Fa
 
                 #for b in len(output):
                 out = output[0].data.numpy()
-                saveFile = os.path.join(pixelDir,'{}:{}'.format(i,imageName))
                 np.save(saveFile,out)
                 i+=1
     return configPair
 
-def evaluate(saveDir,pair_data_loader):
-    vote_thresh=0.3
+def evaluate(saveDir,pair_data_loader,draw_num=100):
+    vote_thresh=0.2
+    fill_thresh=0.3
+    pix_thresh=0
     min_votes=5
     detectDir = os.path.join(saveDir,'detect_res')
     pixelDir = os.path.join(saveDir,'pixel_res')
@@ -191,78 +201,101 @@ def evaluate(saveDir,pair_data_loader):
     recalls=[]
     precisions=[]
     prevImageName=None
+    if draw_num>0:
+        draw_every = int(len(pair_data_loader)/draw_num)
+    else:
+        draw_every = None
     i=0
-    for intange in iter(pair_data_loader):
+    for instance in iter(pair_data_loader):
         imageName = instance['imgName'][0]
-        image = (1-np.moveaxis(instance['img'].numpy()[0],0,2))/2.0
-        queryMask = instance['queryMask'].numpy()[0,0]
-        bbs = instance['responseBBs'].numpy()[0]
-        bbs *= 0.5 #to account for pixel labeler predicting at half scale
+        print('batch: {}, {}/{}'.format(imageName,i,len(pair_data_loader)),end='\r')
+        bbs = instance['responseBBs']
+        if bbs is not None:
+            bbs = bbs.numpy()[0]
+            bbs *= 0.5 #to account for pixel labeler predicting at half scale
 
         if imageName != prevImageName:
-            detections = np.load(os.path.join(detectDir,'{}'.format(imageName)))
-            detections *= 0.5
+            detections = np.load(os.path.join(detectDir,'{}.npy'.format(imageName)))
+            detections *= 0.5 * instance['scale'][0]
             prevImageName=imageName
-        pixels = np.load(os.path.join(pixels,'{}:{}'.format(i,imageName)))
+        pixels = np.load(os.path.join(pixelDir,'{}-{}.npy'.format(i,imageName)))
 
         #threshold pixels
-        pixels = pixels>0
+        pixels = pixels>pix_thresh
         total_votes= pixels.sum()
 
         selectedIdxs=[]
-        for bbIdx in range(detections.shape[0]):
-            bb=detections[bbIdx]
-            xc = bb[1]
-            yc = bb[2]
-            rot = bb[3]
-            h = bb[4]
-            w = bb[5]
-            assert(rot==0)
-            tlX = xc-w
-            tlY = yc-h
-            trX = xc+w
-            trY = yc-h
-            blX = xc-w
-            blY = yc+h
-            brX = xc+w
-            brY = yc+h
+        if total_votes>min_votes:
+            for bbIdx in range(detections.shape[0]):
+                bb=detections[bbIdx]
+                xc = bb[1]
+                yc = bb[2]
+                rot = bb[3]
+                h = bb[4]
+                w = bb[5]
+                assert(rot==0)
+                area=h*w
+                tlX = xc-w
+                tlY = yc-h
+                trX = xc+w
+                trY = yc-h
+                blX = xc-w
+                blY = yc+h
+                brX = xc+w
+                brY = yc+h
 
-            rr,cc=draw.polygon([tlY,trY,brY,blY], [tlX,trX,brX,blX], queryMask.shape)
-            votes = pixels[rr,cc].sum()
-            if votes/float(total_votes) > vote_thresh and votes>min_votes:
-                selectedIdx.append(bbIdx)
+                rr,cc=draw.polygon([tlY,trY,brY,blY], [tlX,trX,brX,blX], pixels.shape)
+                votes = pixels[rr,cc].sum()
+                if (votes/float(total_votes) > vote_thresh and votes>min_votes) or votes/area>fill_thresh:
+                    selectedIdxs.append(bbIdx)
         final_pred = detections[selectedIdxs]
-        ap, precision, recall = AP_iou(bbs,final_pred,0.5,ignoreClasses=True)
-        ap=ap[0]
-        precision=precision[0]
-        recall=recall[0]
+        if bbs is not None:
+            ap, precision, recall = AP_iou(torch.from_numpy(bbs),torch.from_numpy(final_pred),0.5,ignoreClasses=True)
+            ap=ap[0]
+            precision=precision[0]
+            recall=recall[0]
+        elif final_pred.shape[0]==0:
+            ap=1
+            precision=1
+            recall=1
+        else:
+            ap=0
+            precision=0
+            recall=1
         aps.append(ap)
         precisions.append(precision)
         recalls.append(recall)
 
-        #bbs *= 2
-        #final_preds *= 2
-        
-        if image.shape[2]==1:
-            image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
-        image[:,:,1] *= 1-queryMask
-        invPix = 1-pixels
-        invPix = cv2.resize(invPix.astype(np.float),(image.shape[1],image.shape[0]),interpolation=cv2.INTER_NEAREST)
-        image[:,:,0] *= invPix
-        for j in range(bbs.shape[0]):
-            plotRect(image,(0,1,0),bbs[j]*2)
-        maxConf,_ = final_preds[:,0].max()
-        for j in range(final_preds.shape[0]):
-            conf = final_preds[j,0]
-            shade = 0.0+(conf-maxConf/2)/(maxConf-maxConf/2)
-            if final_preds[j,6] > final_preds[j,7]:
-                color=(0,shade,shade) #textF
-            else:
-                color=(shade,0,shade) #field
-            plotRect(image,color,final_preds[j,1:6]*2)
+        if  draw_every is not None and i%draw_every==0:
+            image = (1-np.moveaxis(instance['img'].numpy()[0],0,2))/2.0
+            queryMask = instance['queryMask'].numpy()[0,0]
+            #bbs *= 2
+            #final_pred *= 2
+            
+            if image.shape[2]==1:
+                image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
+            image[:,:,1] *= 1-queryMask
+            invPix = 1-pixels
+            invPix = cv2.resize(invPix.astype(np.float),(image.shape[1],image.shape[0]),interpolation=cv2.INTER_NEAREST)
+            image[:,:,0] *= invPix
+            if bbs is not None:
+                for j in range(bbs.shape[0]):
+                    plotRect(image,(0,1,0),bbs[j]*2)
+                    nothin=None
+            if final_pred.shape[0]>0:
+                maxConf = final_pred[:,0].max()
+                for j in range(final_pred.shape[0]):
+                    conf = final_pred[j,0]
+                    shade = 0.0+(conf-maxConf/2)/(maxConf-maxConf/2)
+                    if final_pred[j,6] > final_pred[j,7]:
+                        color=(0,0,shade) #textF
+                    else:
+                        color=(shade,0,0) #field
+                    plotRect(image,color,final_pred[j,1:6]*2)
 
-        saveName='{}:{}_p:{:.2f}}_r:{:.2f}.png'.format(i,imageName,precision,recall)
-        cv2.imwrite(os.path.join(saveDir,saveName),image)
+            saveName='{}-{}_p={:.2f}_r={:.2f}.png'.format(i,imageName,precision,recall)
+            cv2.imwrite(os.path.join(saveDir,saveName),image*255)
+            #print('saved '+os.path.join(saveDir,saveName))
         i+=1
 
     print('precision mean: {}, std: {}'.format(np.mean(precisions),np.std(precisions)))
@@ -284,6 +317,8 @@ if __name__ == '__main__':
                         help='detector config override')
     parser.add_argument('-P', '--pixel_config', default=None, type=str,
                         help='pixel config override')
+    parser.add_argument('-n', '--number', default=100, type=int,
+                        help='number of images to draw (default: 100)')
 
     args = parser.parse_args()
 
@@ -338,4 +373,4 @@ if __name__ == '__main__':
         configPair = save(args.detector_checkpoint, args.pixel_checkpoint, args.outdir,pair_data_loader, gpu=args.gpu, configDetect=args.detector_config, configPixel=args.pixel_config)
     #if configPair is None:
     #    configPair=configPair_maybe
-    evaluate(args.outdir,pair_data_loader)
+    evaluate(args.outdir,pair_data_loader,draw_num=args.number)

@@ -10,25 +10,25 @@ from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou
 
+def plotRect(img,color,xyrhw):
+    xc=xyrhw[0].item()
+    yc=xyrhw[1].item()
+    rot=xyrhw[2].item()
+    h=xyrhw[3].item()
+    w=xyrhw[4].item()
+    h = min(30000,h)
+    w = min(30000,w)
+    tr = ( int(w*math.cos(rot)-h*math.sin(rot) + xc),  int(w*math.sin(rot)+h*math.cos(rot) + yc) )
+    tl = ( int(-w*math.cos(rot)-h*math.sin(rot) + xc), int(-w*math.sin(rot)+h*math.cos(rot) + yc) )
+    br = ( int(w*math.cos(rot)+h*math.sin(rot) + xc),  int(w*math.sin(rot)-h*math.cos(rot) + yc) )
+    bl = ( int(-w*math.cos(rot)+h*math.sin(rot) + xc), int(-w*math.sin(rot)-h*math.cos(rot) + yc) )
+
+    cv2.line(img,tl,tr,color,1)
+    cv2.line(img,tr,br,color,1)
+    cv2.line(img,br,bl,color,1)
+    cv2.line(img,bl,tl,color,1)
 
 def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
-    def plotRect(img,color,xyrhw):
-        xc=xyrhw[0].item()
-        yc=xyrhw[1].item()
-        rot=xyrhw[2].item()
-        h=xyrhw[3].item()
-        w=xyrhw[4].item()
-        h = min(30000,h)
-        w = min(30000,w)
-        tr = ( int(w*math.cos(rot)-h*math.sin(rot) + xc),  int(w*math.sin(rot)+h*math.cos(rot) + yc) )
-        tl = ( int(-w*math.cos(rot)-h*math.sin(rot) + xc), int(-w*math.sin(rot)+h*math.cos(rot) + yc) )
-        br = ( int(w*math.cos(rot)+h*math.sin(rot) + xc),  int(w*math.sin(rot)-h*math.cos(rot) + yc) )
-        bl = ( int(-w*math.cos(rot)+h*math.sin(rot) + xc), int(-w*math.sin(rot)-h*math.cos(rot) + yc) )
-
-        cv2.line(img,tl,tr,color,1)
-        cv2.line(img,tr,br,color,1)
-        cv2.line(img,br,bl,color,1)
-        cv2.line(img,bl,tl,color,1)
     def __eval_metrics(data,target):
         acc_metrics = np.zeros((output.shape[0],len(metrics)))
         for ind in range(output.shape[0]):

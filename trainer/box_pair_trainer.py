@@ -186,7 +186,7 @@ class BoxPairTrainer(BaseTrainer):
             'position_loss':position_loss,
             'conf_loss':conf_loss,
             'class_loss':class_loss,
-            'conf_score': outputBoxes[:,0].mean(),
+            'conf_score': outputBoxes[:,0].mean().item(),
             #'minGrad':minGrad,
             #'maxGrad':maxGrad,
             #'cor_conf_loss':cor_conf_loss,
@@ -199,8 +199,14 @@ class BoxPairTrainer(BaseTrainer):
             **losses
         }
 
-        if iteration%10==0:
-            torch.cuda.empty_cache()
+        #if iteration%10==0:
+        #image=None
+        #queryMask=None
+        #targetBoxes=None
+        #outputBoxes=None
+        #outputOffsets=None
+        #loss=None
+        #torch.cuda.empty_cache()
 
 
         return log#
@@ -265,6 +271,12 @@ class BoxPairTrainer(BaseTrainer):
                     mPrecision += np.array(prec_5)/len(outputBoxes)
 
                 total_val_loss += loss.item()
+                loss=None
+                image=None
+                queryMask=None
+                targetBoxes=None
+                outputBoxes=None
+                outputOffsets=None
                 #total_val_metrics += self._eval_metrics(output, target)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),

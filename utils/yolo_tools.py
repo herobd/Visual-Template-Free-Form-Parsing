@@ -193,7 +193,9 @@ def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):
             ap/=len(rank)
             aps.append(ap)
 
-            precisions.append( truePos/clsPred.size(0) )
+            precisions.append( truePos/max(clsPred.size(0),truePos) )
+            if precisions[-1]>1:
+                import pdb;pdb.set_trace()
             recalls.append( truePos/clsTarg.size(0) )
         elif ignoreClasses:
             #no pred

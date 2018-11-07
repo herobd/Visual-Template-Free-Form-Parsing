@@ -52,7 +52,7 @@
     "loss_params":
         {
             "ignore_thresh": 0.5,
-	    "useSpecialLoss": false
+	    "useSpecialLoss": true
         },
     "metrics": [],
     "trainer": {

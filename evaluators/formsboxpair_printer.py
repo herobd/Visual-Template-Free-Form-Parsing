@@ -101,6 +101,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
     outputBBs, outputOffsets = model(imageT,queryMaskT,imageNameP)
+    
     index=0
     loss=0
     index=0
@@ -111,6 +112,15 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
     #    return 0
     lossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
 
+    bestConf=[]
+    secondConf=[]
+    for b in range(batchSize):
+        c,i = torch.max(outputBBs[b,:,0],dim=0)
+        bestConf.append( c )
+        temp = outputBBs[b,i,0]
+        outputBBs[b,i,0] = -99999
+        secondConf.append( torch.max(outputBBs[b,:,0]) )
+        outputBBs[b,i,0]=temp
     image = image.cpu().data.numpy()
     maxConf = outputBBs[:,:,0].max().item()
     threshConf = max(maxConf*0.99,0.5)
@@ -122,6 +132,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
     recalls_5=[]
     precs_5=[]
     bestBBIdx=[]
+    secondBBIdx=[]
     for b in range(batchSize):
         if targetBBs is not None:
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
@@ -140,6 +151,16 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         outputBBs[b] = outputBBs[b].data.numpy()
         if outputBBs[b].shape[0]>0:
             bestBBIdx.append( np.argmax(outputBBs[b][:,0]) )
+            if outputBBs[b].shape[0]>1:
+                temp = outputBBs[b][bestBBIdx[-1],0]
+                outputBBs[b][bestBBIdx[-1],0] = -999999
+                secondBBIdx.append( np.argmax(outputBBs[b][:,0]) )
+                outputBBs[b][bestBBIdx[-1],0] = temp
+            else:
+                secondBBIdx.append(-1)
+        else:
+            bestBBIdx.append(-1)
+            secondBBIdx.append(-1)
         #import pdb; pdb.set_trace()
     
     dists=defaultdict(list)
@@ -212,11 +233,15 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
                     #elif name=='field_end_gt' or name=='field_start_gt':
                     #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
                     if j==bestBBIdx[b]:
-                        bestConf=conf
                         if bbs[j,6] > bbs[j,7]:
                             color=(0,shade,shade) #textF
                         else:
                             color=(shade,0,shade) #field
+                    elif j==secondBBIdx[b]:
+                        if bbs[j,6] > bbs[j,7]:
+                            color=(0,0.5*shade,shade) #textF
+                        else:
+                            color=(shade,0,0.5*shade) #field
                     else:
                         if bbs[j,6] > bbs[j,7]:
                             color=(0,0,shade) #text
@@ -235,7 +260,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             #    #print(rad)
             #    cv2.circle(imageB,mid,rad,(1,0,1),1)
 
-            saveName = '{:04}_n:{}_pairing_AP:{:.2f}_prec:{:.2f}_recall:{:.2f}_bestConf:{:.3f}_thresh:{:.3f}'.format(startIndex+b,imageName[b],aps_5[b][0],precs_5[b][0],recalls_5[b][0],bestConf,threshConf)
+            saveName = '{:04}_n:{}_pairing_AP:{:.2f}_prec:{:.2f}_recall:{:.2f}_bestCnf:{:.3f}_2ndCnf:{:.3f}_thresh:{:.3f}'.format(startIndex+b,imageName[b],aps_5[b][0],precs_5[b][0],recalls_5[b][0],bestConf[b],secondConf[b],threshConf)
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

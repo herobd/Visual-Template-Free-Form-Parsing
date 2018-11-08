@@ -52,7 +52,8 @@
     "loss_params":
         {
             "ignore_thresh": 0.5,
-	    "useSpecialLoss": true
+	    "use_special_loss": false,
+            "bad_conf_weight": 10.0
         },
     "metrics": [],
     "trainer": {

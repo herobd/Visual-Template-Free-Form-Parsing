@@ -6,13 +6,14 @@ import math
 from utils.yolo_tools import allIOU, allDist
 
 class YoloLoss (nn.Module):
-    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,useSpecialLoss=False):
+    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,use_special_loss=False,bad_conf_weight=1.25):
         super(YoloLoss, self).__init__()
         self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.rotation=rotation
         self.scale=scale
-        self.useSpecialLoss=useSpecialLoss
+        self.use_special_loss=use_special_loss
+        self.bad_conf_weight=bad_conf_weight
         self.anchors=anchors
         self.num_anchors=len(anchors)
         self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
@@ -68,7 +69,7 @@ class YoloLoss (nn.Module):
             grid_sizeW=nW,
             ignore_thres=self.ignore_thresh,
             scale=self.scale,
-            calcIOUAndDist=self.useSpecialLoss
+            calcIOUAndDist=self.use_special_loss
         )
 
         nProposals = int((pred_conf > 0).sum().item())
@@ -97,12 +98,13 @@ class YoloLoss (nn.Module):
         #import pdb; pdb.set_trace()
 
         # Mask outputs to ignore non-existing objects
-        if self.useSpecialLoss:
-            loss_conf = 1.5*weighted_bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false],distances[conf_mask_false],ious[conf_mask_false],nB)
+        if self.use_special_loss:
+            loss_conf = weighted_bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false],distances[conf_mask_false],ious[conf_mask_false],nB)
             distances=None
             ious=None
         else:
-            loss_conf = 1.25*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+            loss_conf = self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+        loss_conf *= self.bad_conf_weight
         if target is not None and nGT>0:
             loss_x = self.mse_loss(x[mask], tx[mask])
             loss_y = self.mse_loss(y[mask], ty[mask])

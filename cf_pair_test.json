@@ -1,7 +1,7 @@
 {
     "name": "pair_test",
     "cuda": true,
-    "gpu": 0,
+    "gpu": 1,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {

@@ -327,10 +327,16 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
 
+        self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
+
         if images is not None:
             self.images=images
         else:
-            with open(os.path.join(dirPath,'train_valid_test_split.json')) as f:
+            if self.simple_dataset:
+                splitFile = 'simple_train_valid_test_split.json'
+            else:
+                splitFile = 'train_valid_test_split.json'
+            with open(os.path.join(dirPath,splitFile)) as f:
                 #if split=='valid' or split=='validation':
                 #    trainTest='train'
                 #else:
@@ -437,6 +443,9 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
         ##tic=timeit.default_timer()
         np_img = cv2.imread(imagePath, 1 if self.color else 0)#/255.0
+        if np_img.shape[0]==0:
+            print("ERROR, could not open "+imagePath)
+            return self.__getitem__((index+1)%self.__len__())
         ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         ##print('       channels : {}'.format(len(np_img.shape)))
         if self.cropToPage:

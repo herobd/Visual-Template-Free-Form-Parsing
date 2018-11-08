@@ -19,10 +19,11 @@ def tensmeyer_brightness(img, foreground=0, background=0):
 
     return img.astype(np.uint8)
 
-def apply_tensmeyer_brightness(img, sigma=30, **kwargs):
+def apply_tensmeyer_brightness(img, sigma=20, **kwargs):
     random_state = np.random.RandomState(kwargs.get("random_seed", None))
     foreground = random_state.normal(0,sigma)
     background = random_state.normal(0,sigma)
+    #print('fore {}, back {}'.format(foreground,background))
 
     img = tensmeyer_brightness(img, foreground, background)
 

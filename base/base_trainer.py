@@ -21,6 +21,7 @@ class BaseTrainer:
         self.loss = loss
         self.metrics = metrics
         self.name = config['name']
+        self.logged = config['super_computer'] if 'super_computer' in config else False
         self.iterations = config['trainer']['iterations']
         self.val_step = config['trainer']['val_step']
         self.save_step = config['trainer']['save_step']
@@ -66,7 +67,8 @@ class BaseTrainer:
         #    sumLog['avg_'+metric.__name__]=0
 
         for self.iteration in range(self.start_iteration, self.iterations + 1):
-            print('iteration: {}'.format(self.iteration), end='\r')
+            if not self.logged:
+                print('iteration: {}'.format(self.iteration), end='\r')
 
             t = timeit.default_timer()
             result = self._train_iteration(self.iteration)

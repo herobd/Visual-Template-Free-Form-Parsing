@@ -78,7 +78,7 @@ if __name__ == "__main__":
     else:
         repeat=1
     data=FormsBoxDetect(dirPath=dirPath,split='train',config={
-        'crop_to_page':True,
+        'crop_to_page':False,
         'rescale_range':[0.52,0.52],
         #'crop_params':{"crop_size":512}, 
         'no_blanks':True,
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         'rotation':False,
         #"only_types": ["text_start_gt"]
 })
-    #data.cluster(start,repeat,'anchors_noRot_stats.json'.format(start))
+    data.cluster(start,repeat,'anchors_noRot_better{}.json')
 
     dataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False, num_workers=0, collate_fn=forms_box_detect.collate)
     dataLoaderIter = iter(dataLoader)

@@ -146,15 +146,16 @@ class BoxDetectTrainer(BaseTrainer):
         losses={}
         ##tic=timeit.default_timer()
         #predictions = util.pt_xyrs_2_xyxy(outputBoxes)
-        if self.iteration % self.save_step == 0:
-            targetPoints={}
-            targetPixels=None
-            _,lossC=FormsBoxDetect_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
-            this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
-        else:
-            data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
-            outputBoxes, outputOffsets, outputPoints, outputPixels = self.model(data)
-            this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+        #if self.iteration % self.save_step == 0:
+        #    targetPoints={}
+        #    targetPixels=None
+        #    _,lossC=FormsBoxDetect_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
+        #    this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
+        #else:
+        data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
+        outputBoxes, outputOffsets, outputPoints, outputPixels = self.model(data)
+        this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+
         this_loss*=self.loss_weight['box']
         loss+=this_loss
         losses['box_loss']=this_loss.item()

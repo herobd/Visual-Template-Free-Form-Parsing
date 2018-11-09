@@ -68,6 +68,7 @@ def fixAnnotations(this,annotations):
     #reconnect para chains we broke by removing them
     #print('removing fields')
     idsToFix=[]
+    circleIds=[]
     for bb in annotations['fieldBBs']:
         id=bb['id']
         if this.isSkipField(bb):
@@ -75,8 +76,11 @@ def fixAnnotations(this,annotations):
             idsToRemove.add(id)
             if bb['type']=='fieldP':
                 idsToFix.append(id)
-        elif this.swapCircle and bb['type']=='fieldCircle':
-            annotations['byId'][id]['type']='textCircle'
+        elif bb['type']=='fieldCircle':
+            circleIds.append(id)
+            if this.swapCircle:
+                annotations['byId'][id]['type']='textCircle'
+
     
     parasLinkedTo=defaultdict(list)
     pairsToRemove=[]
@@ -184,6 +188,57 @@ def fixAnnotations(this,annotations):
              annotations['pairs'].append(pair)
     #annotations['pairs']+=toAdd
 
+    #handle groups of things that are intended to be circled or crossed out
+    #first identify groups
+    circleGroups={}
+    circleGroupId=0
+    for pair in annotations['pairs']:
+        if pair[0] in circleIds and pair[1] in circleIds:
+            group0=None
+            group1=None
+            for id,group in circleGroups.items():
+                if pair[0] in group:
+                    group0=id
+                if pair[1] in group:
+                    group1=id
+            if group0 is not None:
+                if group1 is None:
+                    circleGroups[group0].append(pair[1])
+                elif group0!=group1:
+                    circleGroups[group0] += circleGroups[group1]
+                    del circleGroups[group1]
+            elif group1 is not None:
+                circleGroups[group1].append(pair[0])
+            else:
+                circleGroups[circleGroupId] = pair
+                circleGroupId+=1
+
+    #what pairs to each group?
+    groupPairedTo=defaultdict(list)
+    for pair in annotations['pairs']:
+        if pair[0] in circleIds and pair[1] not in circleIds:
+            for id,group in circleGroups.items():
+                if pair[0] in group:
+                    groupPairedTop[id].append(pair[1])
+
+        if pair[1] in circleIds and pair[0] not in circleIds:
+            for id,group in circleGroups.items():
+                if pair[1] in group:
+                    groupPairedTo[id].append(pair[0])
+
+
+    #add pairs
+    toAdd=[]
+    for gid,group in  circleGroups.items():
+        for id in group:
+            for id2 in group:
+                if id!=id2:
+                    toAdd.append([id,id2])
+            for id2 in groupPairedTo[gid]:
+                toAdd.append([id,id2])
+    for pair in toAdd:
+        if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
+             annotations['pairs'].append(pair)
 
 def collate(batch):
 
@@ -326,6 +381,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
         self.useDoughnutMask = config['use_doughnut_mask'] if 'use_doughnut_mask' in config else False
         self.useVDistMask = config['use_vdist_mask'] if 'use_vdist_mask' in config else False
         self.useHDistMask = config['use_hdist_mask'] if 'use_hdist_mask' in config else False
+
+        self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
         
         self.rescale_range=config['rescale_range']
         if 'cache_resized_images' in config:
@@ -345,7 +402,11 @@ class FormsBoxPair(torch.utils.data.Dataset):
         if instances is not None:
             self.instances=instances
         else:
-            with open(os.path.join(dirPath,'train_valid_test_split.json')) as f:
+            if self.simple_dataset:
+                splitFile = 'simple_train_valid_test_split.json'
+            else:
+                splitFile = 'train_valid_test_split.json'
+            with open(os.path.join(dirPath,splitFile)) as f:
                 groupsToUse = json.loads(f.read())[split]
             self.instances=[]
             for groupName, imageNames in groupsToUse.items():
@@ -426,6 +487,9 @@ class FormsBoxPair(torch.utils.data.Dataset):
 
 
         np_img = cv2.imread(imagePath, 1 if self.color else 0)
+        if np_img.shape[0]==0:
+            print("ERROR, could not open "+imagePath)
+            return self.__getitem__((index+1)%self.__len__())
         #Rescale
         scale = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
         partial_rescale = scale/rescaled

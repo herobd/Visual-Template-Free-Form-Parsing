@@ -2,6 +2,19 @@ from collections import defaultdict
 import numpy as np
 import torch
 
+def avg_y(bb):
+    points = bb['poly_points']
+    return (points[0][1]+points[1][1]+points[2][1]+points[3][1])/4.0
+def avg_x(bb):
+    points = bb['poly_points']
+    return (points[0][0]+points[1][0]+points[2][0]+points[3][0])/4.0
+def left_x(bb):
+    points = bb['poly_points']
+    return (points[0][0]+points[3][0])/2.0
+def right_x(bb):
+    points = bb['poly_points']
+    return (points[1][0]+points[2][0])/2.0
+
 
 def convertBBs(bbs,rotate,numClasses):
     if bbs.shape[1]==0:

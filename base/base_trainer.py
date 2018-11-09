@@ -25,6 +25,7 @@ class BaseTrainer:
         self.iterations = config['trainer']['iterations']
         self.val_step = config['trainer']['val_step']
         self.save_step = config['trainer']['save_step']
+        self.save_step_minor = config['trainer']['save_step_minor'] if 'save_step_minor' in config['trainer'] else None
         self.log_step = config['trainer']['log_step']
         self.verbosity = config['trainer']['verbosity']
         self.with_cuda = config['cuda'] and torch.cuda.is_available()
@@ -85,7 +86,7 @@ class BaseTrainer:
                     sumLog['avg_'+key] += value
             
             #log prep
-            if self.iteration%self.log_step==0 or self.iteration%self.val_step==0 or self.iteration % self.save_step == 0:
+            if self.iteration%self.log_step==0 or self.iteration%self.val_step==0 or self.iteration % self.save_step == 0 or self.iteration % self.save_step_minor:
                 log = {'iteration': self.iteration}
 
                 for key, value in result.items():
@@ -142,6 +143,12 @@ class BaseTrainer:
                     print('                   ', end='\r')
                 #    print()#clear inplace text
                 self.logger.info('Checkpoint saved for iteration '+str(self.iteration))
+            elif self.iteration % self.save_step_minor == 0:
+                self._save_checkpoint(self.iteration, log, minor=True)
+                if self.iteration%self.log_step!=0:
+                    print('                   ', end='\r')
+                #    print()#clear inplace text
+                self.logger.info('Minor checkpoint saved for iteration '+str(self.iteration))
 
             #LR ADJUST
             if self.lr_scheduler and self.iteration % self.epoch_size == 0:
@@ -164,7 +171,7 @@ class BaseTrainer:
     def save(self):
         self._save_checkpoint(self.iteration, None)
 
-    def _save_checkpoint(self, iteration, log, save_best=False):
+    def _save_checkpoint(self, iteration, log, save_best=False, minor=False):
         """
         Saving checkpoints
 
@@ -185,15 +192,26 @@ class BaseTrainer:
             state['state_dict']= self.model.state_dict()
         else:
             state['model'] = self.model
-        filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
-                                .format(iteration))
+        if not minor:
+            filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
+                                    .format(iteration))
+        else:
+            filename = os.path.join(self.checkpoint_dir, 'checkpoint-latest.pth.tar')
+                            
         #print(self.module.state_dict().keys())
         torch.save(state, filename)
+        if not minor:
+            #remove minor as this is the latest
+            filename_late = os.path.join(self.checkpoint_dir, 'checkpoint-latest.pth.tar')
+            try:
+                os.remove(filename_late)
+            except FileNotFoundError:
+                pass
         if save_best:
             os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))
-            self.logger.info("Saving current best: {} ...".format('model_best.pth.tar'))
+            self.logger.info("Saved current best: {} ...".format('model_best.pth.tar'))
         else:
-            self.logger.info("Saving checkpoint: {} ...".format(filename))
+            self.logger.info("Saved checkpoint: {} ...".format(filename))
 
         ######DEBUG
         #checkpoint = torch.load(filename)

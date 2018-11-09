@@ -16,18 +16,6 @@ from utils.crop_transform import CropBoxTransform
 from utils.forms_annotations import fixAnnotations, convertBBs
 SKIP=['121','174']
 
-def avg_y(bb):
-    points = bb['poly_points']
-    return (points[0][1]+points[1][1]+points[2][1]+points[3][1])/4.0
-def avg_x(bb):
-    points = bb['poly_points']
-    return (points[0][0]+points[1][0]+points[2][0]+points[3][0])/4.0
-def left_x(bb):
-    points = bb['poly_points']
-    return (points[0][0]+points[3][0])/2.0
-def right_x(bb):
-    points = bb['poly_points']
-    return (points[1][0]+points[2][0])/2.0
 
 def getDistMask(queryMask,thresh=1000,reverse=True, negative=True):
     dist_transform = cv2.distanceTransform(1-queryMask.astype(np.uint8),cv2.DIST_L2,5)

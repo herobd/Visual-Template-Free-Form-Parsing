@@ -81,11 +81,11 @@ if __name__ == "__main__":
         'no_graphics':True,
         'rotation':False,
         #'use_dist_mask':True,
-        'use_hdist_mask':True,
+        #'use_hdist_mask':True,
         #'use_vdist_mask':True,
         #"only_types": ["text_start_gt"]
 })
-    dataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=False, num_workers=0, collate_fn=forms_box_pair.collate)
+    dataLoader = torch.utils.data.DataLoader(data, batch_size=1, shuffle=True, num_workers=0, collate_fn=forms_box_pair.collate)
     dataLoaderIter = iter(dataLoader)
 
         #if start==0:

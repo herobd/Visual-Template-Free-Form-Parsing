@@ -1,7 +1,7 @@
 {
     "name": "Forms12_iouVGG_dilV_bb16",
     "cuda": true,
-    "gpu": 0,
+    "gpu": 1,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
@@ -66,7 +66,7 @@
         "class": "BoxDetectTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 5,
+        "val_step": 5000,
         "save_step": 20000,
         "log_step": 1000,
         "verbosity": 1,

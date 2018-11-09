@@ -35,6 +35,8 @@ class PairingBoxFull(BaseModel):
 
         self.storedImageName=None
 
+        self.no_final_features = config['no_final_features'] if 'no_final_features' in config else False
+
  
     def unfreeze(self): 
         for param in self.detector.parameters(): 
@@ -70,6 +72,8 @@ class PairingBoxFull(BaseModel):
                 #print('size {}'.format(image.size()))
         if final_features is None:
             import pdb;pdb.set_trace()
+        if self.no_final_features:
+            final_features[...]=0
         bbPredictions, offsetPredictions = self.pairer( image,
                                                         queryMask,
                                                         final_features, 

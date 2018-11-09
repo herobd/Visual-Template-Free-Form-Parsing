@@ -2,11 +2,12 @@
     "name": "pair_test",
     "cuda": true,
     "gpu": 0,
+    "super_computer":true,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxPair",
-        "data_dir": "../data/testF",
+        "data_dir": "../data/testS",
         "batch_size": 1,
         "shuffle": true,
         "num_workers": 1,
@@ -52,14 +53,15 @@
     "loss_params":
         {
             "ignore_thresh": 0.5,
-	    "useSpecialLoss": false
+	    "use_special_loss": false,
+            "bad_conf_weight": 3.0
         },
     "metrics": [],
     "trainer": {
         "class": "BoxPairTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 5000,
+        "val_step": 100000,
         "save_step": 5000,
         "log_step": 250,
         "verbosity": 1,

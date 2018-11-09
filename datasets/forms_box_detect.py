@@ -9,6 +9,7 @@ import math
 from utils.crop_transform import CropBoxTransform
 from utils import augmentation
 from collections import defaultdict
+from utils.forms_annotations import fixAnnotations, convertBBs
 import timeit
 
 import cv2
@@ -16,83 +17,6 @@ import cv2
 SKIP=['174']#['193','194','197','200']
 ONE_DONE=[]
 
-def convertBBs(bbs,rotate,numClasses):
-    if bbs.shape[1]==0:
-        return None
-    new_bbs = np.empty((1,bbs.shape[1], 5+8+numClasses), dtype=np.float32) #5 params, 8 points (used in loss), n classes
-    
-    tlX = bbs[:,:,0]
-    tlY = bbs[:,:,1]
-    trX = bbs[:,:,2]
-    trY = bbs[:,:,3]
-    brX = bbs[:,:,4]
-    brY = bbs[:,:,5]
-    blX = bbs[:,:,6]
-    blY = bbs[:,:,7]
-
-    if not rotate:
-        tlX = np.minimum.reduce((tlX,blX,trX,brX))
-        tlY = np.minimum.reduce((tlY,trY,blY,brY))
-        trX = np.maximum.reduce((tlX,blX,trX,brX))
-        trY = np.minimum.reduce((tlY,trY,blY,brY))
-        brX = np.maximum.reduce((tlX,blX,trX,brX))
-        brY = np.maximum.reduce((tlY,trY,blY,brY))
-        blX = np.minimum.reduce((tlX,blX,trX,brX))
-        blY = np.maximum.reduce((tlY,trY,blY,brY))
-
-    lX = (tlX+blX)/2.0
-    lY = (tlY+blY)/2.0
-    rX = (trX+brX)/2.0
-    rY = (trY+brY)/2.0
-    d=np.sqrt((lX-rX)**2 + (lY-rY)**2)
-
-    hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
-    hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
-    h = (hl+hr)/2.0
-
-    #tX = lX + h*-(rY-lY)/d
-    #tY = lY + h*(rX-lX)/d
-    #bX = lX - h*-(rY-lY)/d
-    #bY = lY - h*(rX-lX)/d
-
-    #etX =tX + rX-lX
-    #etY =tY + rY-lY
-    #ebX =bX + rX-lX
-    #ebY =bY + rY-lY
-
-    cX = (lX+rX)/2.0
-    cY = (lY+rY)/2.0
-    rot = np.arctan2((rY-lY),rX-lX)
-    height = np.abs(h)    #this is half height
-    width = d/2.0 #and half width
-
-    topX = (tlX+trX)/2.0
-    topY = (tlY+trY)/2.0
-    botX = (blX+brX)/2.0
-    botY = (blY+brY)/2.0
-    leftX = lX
-    leftY = lY
-    rightX = rX
-    rightY = rY
-
-    new_bbs[:,:,0]=cX
-    new_bbs[:,:,1]=cY
-    new_bbs[:,:,2]=rot
-    new_bbs[:,:,3]=height
-    new_bbs[:,:,4]=width
-    new_bbs[:,:,5]=leftX
-    new_bbs[:,:,6]=leftY
-    new_bbs[:,:,7]=rightX
-    new_bbs[:,:,8]=rightY
-    new_bbs[:,:,9]=topX
-    new_bbs[:,:,10]=topY
-    new_bbs[:,:,11]=botX
-    new_bbs[:,:,12]=botY
-    #print("{} {}, {} {}".format(new_bbs.shape,new_bbs[:,:,13:].shape,bbs.shape,bbs[:,:,-numClasses].shape))
-    new_bbs[:,:,13:]=bbs[:,:,-numClasses:]
-
-
-    return torch.from_numpy(new_bbs)
 
 def polyIntersect(poly1, poly2):
     prevPoint = poly1[-1]
@@ -430,6 +354,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         rescaled = self.images[index]['rescaled']
         with open(annotationPath) as annFile:
             annotations = json.loads(annFile.read())
+        fixAnnotations(self,annotations)
         #swap to-be-circled from field to text (?)
         if self.swapCircle:
             indexToSwap=[]
@@ -613,12 +538,12 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
     def getBBGT(self,bbs,s, fields=False):
 
-        useBBs=[]
-        for bb in bbs:
-            if fields and self.isSkipField(bb):
-                continue
-            else:
-                useBBs.append(bb)
+        useBBs=bbs
+        #for bb in bbs:
+        #    if fields and self.isSkipField(bb):
+        #        continue
+        #    else:
+        #        useBBs.append(bb)
         bbs = np.empty((1,len(useBBs), 8+8+2), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
         j=0
         for bb in useBBs:
@@ -1091,14 +1016,6 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         cv2.imshow('clusters',draw)
         cv2.waitKey()
 
-    def isSkipField(self,bb):
-        return (    (self.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
-                    (self.no_print_fields and (bb['isBlank']=='print' or bb['isBlank']==2)) or
-                    #TODO no graphics
-                    bb['type'] == 'fieldRow' or
-                    bb['type'] == 'fieldCol' or
-                    bb['type'] == 'fieldRegion'
-                )
 
 def getWidthFromBB(bb):
     return (np.linalg.norm(bb[0]-bb[1]) + np.linalg.norm(bb[3]-bb[2]))/2

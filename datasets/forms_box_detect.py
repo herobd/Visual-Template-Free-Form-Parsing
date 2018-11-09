@@ -986,31 +986,45 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 randomIndexes = np.random.randint(0,pointsAndRects.shape[0],(k))
                 means=pointsAndRects[randomIndexes]
             else:
-                minH=5
-                minW=5
-                ratios
+                #minH=5
+                #minW=5
                 means=[]
 
-                #smaller than mean
-                for step in range(5):
-                    height = minH + (meanH-minH)*(step/5.0)
-                    width = minW + (meanW-minW)*(step/5.0)
-                    for ratio in ratios:
-                        means.append(makePointsAndRects(height,ratio*height))
-                        means.append(makePointsAndRects(width/ratio,width))
-                for stddev in range(0,5):
-                    for step in range(5-stddev):
-                        height = meanH + stddev*stdH + stdH*(step/(5.0-stddev))
-                        width = meanW + stddev*stdW + stdW*(step/(5.0-stddev))
-                        for ratio in ratios:
-                            means.append(makePointsAndRects(height,ratio*height))
-                            means.append(makePointsAndRects(width/ratio,width))
+                ##smaller than mean
+                #for step in range(5):
+                #    height = minH + (meanH-minH)*(step/5.0)
+                #    width = minW + (meanW-minW)*(step/5.0)
+                #    for ratio in ratios:
+                #        means.append(makePointsAndRects(height,ratio*height))
+                #        means.append(makePointsAndRects(width/ratio,width))
+                #for stddev in range(0,5):
+                #    for step in range(5-stddev):
+                #        height = meanH + stddev*stdH + stdH*(step/(5.0-stddev))
+                #        width = meanW + stddev*stdW + stdW*(step/(5.0-stddev))
+                #        for ratio in ratios:
+                #            means.append(makePointsAndRects(height,ratio*height))
+                #            means.append(makePointsAndRects(width/ratio,width))
+                #rotated boxes
+                for height in np.linspace(13,300,num=4):
+                    means.append(makePointsAndRects(height,20))
+                #general boxes
+                for height in np.linspace(15,200,num=4):
+                    for width in np.linspace(30,1200,num=4):
+                        means.append(makePointsAndRects(height,width))
+                #long boxes
+                for width in np.linspace(1600,4000,num=3):
+                    for height in np.linspace(30,100,num=3):
+                        means.append(makePointsAndRects(height,width))
+                    #means.append(makePointsAndRects(50,width))
+
                 k=len(means)
                 print('K: {}'.format(k))
                 means = np.stack(means,axis=0)
             #pointsAndRects [0:p_left_x, 1:p_left_y,2:p_right_x,3:p_right_y,4:p_top_x,5:p_top_y,6:p_bot_x,7:p_bot_y, 8:xc, 9:yc, 10:rot, 11:h, 12:w
+            cluster_centers=means
+            distsFromMean=None
             prevDistsFromMean=None
-            for iteration in range(1000000): #intended to break out
+            for iteration in range(100000): #intended to break out
                 print('attempt:{}, bestDistsFromMean:{}, iteration:{}, bestDistsFromMean:{}'.format(attempt,bestDistsFromMean,iteration,prevDistsFromMean), end='\r')
                 #means_points = means[:,0:8]
                 #means_heights = means[:,11]
@@ -1066,27 +1080,35 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 bestDistsFromMean = distsFromMean
                 cluster_centers=means
         #cluster_centers=means
-        draw = np.zeros([600,600,3],dtype=np.float)
+        dH=600
+        dW=3000
+        draw = np.zeros([dH,dW,3],dtype=np.float)
         toWrite = []
+        final_k=k
         for ki in range(k):
-            color = np.random.uniform(0.2,1,3).tolist()
-            #d=math.sqrt(mean[ki,11]**2 + mean[ki,12]**2)
-            #theta = math.atan2(mean[ki,11],mean[ki,12]) + mean[ki,10]
-            h=cluster_centers[ki,11]
-            w=cluster_centers[ki,12]
-            rot=cluster_centers[ki,10]
-            toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item(),'popularity':(groups==ki).sum().item()})
-            tr = ( int(math.cos(rot)*w-math.sin(rot)*h)+300,   int(math.sin(rot)*w+math.cos(rot)*h)+300 )
-            tl = ( int(math.cos(rot)*-w-math.sin(rot)*h)+300,  int(math.sin(rot)*-w+math.cos(rot)*h)+300 )
-            br = ( int(math.cos(rot)*w-math.sin(rot)*-h)+300,  int(math.sin(rot)*w+math.cos(rot)*-h)+300 )
-            bl = ( int(math.cos(rot)*-w-math.sin(rot)*-h)+300, int(math.sin(rot)*-w+math.cos(rot)*-h)+300 )
-            
-            cv2.line(draw,tl,tr,color)
-            cv2.line(draw,tr,br,color)
-            cv2.line(draw,br,bl,color)
-            cv2.line(draw,bl,tl,color,2)
-        print(toWrite)
-        with open(outPath,'w') as out:
+            pop = (groups==ki).sum().item()
+            if pop>2:
+                color = np.random.uniform(0.2,1,3).tolist()
+                #d=math.sqrt(mean[ki,11]**2 + mean[ki,12]**2)
+                #theta = math.atan2(mean[ki,11],mean[ki,12]) + mean[ki,10]
+                h=cluster_centers[ki,11]
+                w=cluster_centers[ki,12]
+                rot=cluster_centers[ki,10]
+                toWrite.append({'height':h.item(),'width':w.item(),'rot':rot.item(),'popularity':pop})
+                tr = ( int(math.cos(rot)*w-math.sin(rot)*h)+dW//2,   int(math.sin(rot)*w+math.cos(rot)*h)+dH//2 )
+                tl = ( int(math.cos(rot)*-w-math.sin(rot)*h)+dW//2,  int(math.sin(rot)*-w+math.cos(rot)*h)+dH//2 )
+                br = ( int(math.cos(rot)*w-math.sin(rot)*-h)+dW//2,  int(math.sin(rot)*w+math.cos(rot)*-h)+dH//2 )
+                bl = ( int(math.cos(rot)*-w-math.sin(rot)*-h)+dW//2, int(math.sin(rot)*-w+math.cos(rot)*-h)+dH//2 )
+                
+                cv2.line(draw,tl,tr,color)
+                cv2.line(draw,tr,br,color)
+                cv2.line(draw,br,bl,color)
+                cv2.line(draw,bl,tl,color,2)
+            else:
+                final_k-=1
+        
+        #print(toWrite)
+        with open(outPath.format(final_k),'w') as out:
             out.write(json.dumps(toWrite))
         cv2.imshow('clusters',draw)
         cv2.waitKey()

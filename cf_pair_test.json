@@ -1,7 +1,8 @@
 {
     "name": "pair_test",
     "cuda": true,
-    "gpu": 1,
+    "gpu": 0,
+    "super_computer":false,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
@@ -53,15 +54,16 @@
         {
             "ignore_thresh": 0.5,
 	    "use_special_loss": false,
-            "bad_conf_weight": 10.0
+            "bad_conf_weight": 3.0
         },
     "metrics": [],
     "trainer": {
         "class": "BoxPairTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 5000,
-        "save_step": 5000,
+        "val_step": 100000,
+        "save_step": 50,
+        "save_step_minor": 5,
         "log_step": 250,
         "verbosity": 1,
         "monitor": "loss",

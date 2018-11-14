@@ -2,6 +2,7 @@
     "name": "Forms12_dil5_neg10_better14",
     "cuda": true,
     "gpu": 0,
+    "super_computer":true,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {

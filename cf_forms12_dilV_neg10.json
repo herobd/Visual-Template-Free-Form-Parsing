@@ -1,8 +1,7 @@
 {
-    "name": "Forms13_crazy",
+    "name": "Forms12_dilV_neg10",
     "cuda": true,
     "gpu": 0,
-    "super_computer":true,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
@@ -68,7 +67,7 @@
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 25000,
-        "save_step_minor": 1000,
+        "save_step_minor": 5000,
         "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
@@ -85,9 +84,9 @@
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
         "dilation": 5,
-        "down_layers_cfg": [1,"k5-64", "M", "d5-128", 128, "M", "d4-256", 256, "M", "d4-512", "k1-512", "d3-512", "k1-512", "M", "d1-1024", 1024],
+        "down_layers_cfg": [1,"k5-64", "M", "d5-128", 128, "M", "d4-256", 256, "M", "d3-512", 512, "M", "d2-1024", 1024, 1024],
         "up_layers_cfg":[],
-        "anchors_file": "anchors_noRot_better14.json",
+        "anchors_file": "anchors_noRot_12.json",
         "rotation":false
     }
 }

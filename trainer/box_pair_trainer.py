@@ -242,7 +242,8 @@ class BoxPairTrainer(BaseTrainer):
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
-                print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
+                if not self.logged:
+                    print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
 
                 image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(instance)
 

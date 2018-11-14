@@ -1,12 +1,13 @@
 {
-    "name": "Forms13_crazy",
+    "name": "Simple13_pair_iouVGG_dil5_neg10",
     "cuda": true,
     "gpu": 0,
-    "super_computer":true,
     "save_mode": "state_dict",
     "override": true,
+    "super_computer":true,
     "data_loader": {
-        "data_set_name": "FormsBoxDetect",
+        "data_set_name": "FormsBoxPair",
+        "simple_dataset": true,
         "data_dir": "../data/forms",
         "batch_size": 2,
         "shuffle": true,
@@ -21,26 +22,27 @@
         "swap_circle":true,
         "no_graphics":true,
         "cache_resized_images": true,
-        "only_types": {
-            "boxes":true
-        },
-        "rotation": false
+        "rotation": false,
+	"use_doughnut_mask": true,
+	"use_vdist_mask": true,
+	"use_hdist_mask": true
 
 
     },
     "validation": {
+        "simple_dataset": true,
         "shuffle": false,
         "crop_to_page":false,
         "color":false,
         "rescale_range": [0.52,0.52],
-        "only_types": {
-            "boxes":true
-        },
         "no_blanks": true,
         "swap_circle":true,
         "no_graphics":true,
         "batch_size": 1,
-        "rotation": false
+        "rotation": false,
+	"use_doughnut_mask": true,
+	"use_vdist_mask": true,
+	"use_hdist_mask": true
     },
 
     
@@ -48,46 +50,39 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.01,
+        "lr": 0.1,
         "weight_decay": 0
     },
-    "loss": {
-        "box":"YoloLoss"
-    },
-    "loss_params": {
-        "box": {
+    "loss": "YoloLoss",
+    "loss_params": 
+        {
             "ignore_thresh": 0.5,
             "bad_conf_weight": 10.0
-        }
-    },
-    "loss_weights":{"box":1.0},
+        },
     "metrics": [],
     "trainer": {
-        "class": "BoxDetectTrainer",
+        "class": "BoxPairTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
         "val_step": 5000,
-        "save_step": 25000,
+        "save_step": 20000,
         "save_step_minor": 1000,
-        "log_step": 500,
+        "log_step": 250,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
-        "warmup_steps": 3000,
-        "thresh_conf":0.88,
-        "thresh_intersect":0.4
+        "warmup_steps": 1000
     },
-    "arch": "YoloBoxDetector", 
+    "arch": "PairingBoxFull", 
     "model": {
-        "color":false,
-        "number_of_box_types": 2,
-        "number_of_point_types": 0,
-        "number_of_pixel_types": 0,
-        "norm_type": "group_norm",
-        "dilation": 5,
-        "down_layers_cfg": [1,"k5-64", "M", "d5-128", 128, "M", "d4-256", 256, "M", "d4-512", "k1-512", "d3-512", "k1-512", "M", "d1-1024", 1024],
-        "up_layers_cfg":[],
-        "anchors_file": "anchors_noRot_better14.json",
-        "rotation":false
+        "detector_checkpoint": "saved/forms11_iouVGG_dil5/checkpoint-iteration200000.pth.tar.sav",
+        "pairer_config": {
+	    "num_dist_masks": 3,
+            "norm_type": "group_norm",
+            "up_sample_ch": 128,
+            "down1_layers_cfg": ["k9-32", "M"],
+            "down2_layers_cfg": ["d6-128", 128, "M","d5-256", 256, "M", "d4-512", 512, "M", "d3-1024"],
+            "final_layers_cfg": [1024, 1024]
+        }
     }
 }

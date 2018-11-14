@@ -279,8 +279,8 @@ class BoxDetectTrainer(BaseTrainer):
                 tota_class_loss+=class_loss
                 losses['val_box_loss']+=this_loss.item()
                 
-                threshConf = self.thresh_conf*outputBoxes[:,:,0].max()
-                outputBoxes = non_max_sup_iou(outputBoxes.cpu(),self.thresh_conf,self.thresh_intersect)
+                threshConf = self.thresh_conf*outputBoxes[:,:,0].max().cpu()
+                outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,self.thresh_intersect)
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
                 for b in range(len(outputBoxes)):

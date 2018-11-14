@@ -46,7 +46,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     assert args.checkpoint is not None
-    log = torch.load(args.checkpoint,map_location=lambda storage, loc: storage)['logger']
-    print('loaded')
+    saved = torch.load(args.checkpoint,map_location=lambda storage, loc: storage)
+    log = saved['logger']
+    print('loaded iteration {}'.format(saved['iteration']))
+    saved=None
 
     graph(log)

@@ -1,13 +1,12 @@
 {
-    "name": "Forms13_crazy",
+    "name": "forms12_iouVGG_dil5_10neg",
     "cuda": true,
     "gpu": 0,
-    "super_computer":true,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
-        "data_dir": "../data/forms",
+        "data_dir": "/home/ubuntu/brian/data/forms",
         "batch_size": 2,
         "shuffle": true,
         "num_workers": 2,
@@ -67,9 +66,8 @@
         "iterations": 200000,
         "save_dir": "saved/",
         "val_step": 5000,
-        "save_step": 25000,
-        "save_step_minor": 1000,
-        "log_step": 500,
+        "save_step": 20000,
+        "log_step": 1000,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
@@ -85,9 +83,9 @@
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
         "dilation": 5,
-        "down_layers_cfg": [1,"k5-64", "M", "d5-128", 128, "M", "d4-256", 256, "M", "d4-512", "k1-512", "d3-512", "k1-512", "M", "d1-1024", 1024],
+        "down_layers_cfg": [1,64, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024", 1024, 1024],
         "up_layers_cfg":[],
-        "anchors_file": "anchors_noRot_better14.json",
+        "anchors_file": "anchors_noRot_12.json",
         "rotation":false
     }
 }

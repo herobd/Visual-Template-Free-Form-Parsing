@@ -197,7 +197,10 @@ class FormsBoxPair(torch.utils.data.Dataset):
             with open(os.path.join(dirPath,splitFile)) as f:
                 groupsToUse = json.loads(f.read())[split]
             self.instances=[]
-            for groupName, imageNames in groupsToUse.items():
+            groupNames = list(groupsToUse.keys())
+            groupNames.sort()
+            for groupName in groupNames:
+                imageNames=groupsToUse[groupName]
                 if groupName in SKIP:
                     print('Skipped group {}'.format(groupName))
                     continue

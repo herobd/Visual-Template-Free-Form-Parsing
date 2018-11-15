@@ -289,7 +289,7 @@ def fixAnnotations(this,annotations):
         if pair[0] in circleIds and pair[1] not in circleIds:
             for id,group in circleGroups.items():
                 if pair[0] in group:
-                    groupPairedTop[id].append(pair[1])
+                    groupPairedTo[id].append(pair[1])
 
         if pair[1] in circleIds and pair[0] not in circleIds:
             for id,group in circleGroups.items():

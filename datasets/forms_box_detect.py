@@ -865,8 +865,12 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         return intersectionPointsM, pixelMap
 
     def cluster(self,k,sample_count,outPath):
-        def makePointsAndRects(h,w):
-            return np.array([-w/2.0,0,w/2.0,0,0,-h/2.0,0,h/2.0, 0,0, 0, h,w])
+        def makePointsAndRects(h,w,r=None):
+            if r is None:
+                return np.array([-w/2.0,0,w/2.0,0,0,-h/2.0,0,h/2.0, 0,0, 0, h,w])
+            else:
+                #TODO
+                return None
         meanH=62.42
         stdH=87.31
         meanW=393.03
@@ -929,18 +933,32 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 #        for ratio in ratios:
                 #            means.append(makePointsAndRects(height,ratio*height))
                 #            means.append(makePointsAndRects(width/ratio,width))
-                #rotated boxes
-                for height in np.linspace(13,300,num=4):
-                    means.append(makePointsAndRects(height,20))
-                #general boxes
-                for height in np.linspace(15,200,num=4):
-                    for width in np.linspace(30,1200,num=4):
-                        means.append(makePointsAndRects(height,width))
-                #long boxes
-                for width in np.linspace(1600,4000,num=3):
-                    for height in np.linspace(30,100,num=3):
-                        means.append(makePointsAndRects(height,width))
-                    #means.append(makePointsAndRects(50,width))
+                rots = [0,math.pi/2,math.pi,1.5*math,pi]
+                if self.rotate:
+                    for height in np.linspace(15,200,num=4):
+                        for width in np.linspace(30,1200,num=4):
+                            for rot in rots:
+                                means.append(makePointsAndRects(height,width,rot))
+                        #long boxes
+                    for width in np.linspace(1600,4000,num=3):
+                        #for height in np.linspace(30,100,num=3):
+                        #    for rot in rots:
+                        #        means.append(makePointsAndRects(height,width,rot))
+                        for rot in rots:
+                            means.append(makePointsAndRects(50,width,rot))
+                else:
+                    #rotated boxes
+                    for height in np.linspace(13,300,num=4):
+                        means.append(makePointsAndRects(height,20))
+                    #general boxes
+                    for height in np.linspace(15,200,num=4):
+                        for width in np.linspace(30,1200,num=4):
+                            means.append(makePointsAndRects(height,width))
+                    #long boxes
+                    for width in np.linspace(1600,4000,num=3):
+                        for height in np.linspace(30,100,num=3):
+                            means.append(makePointsAndRects(height,width))
+                        #means.append(makePointsAndRects(50,width))
 
                 k=len(means)
                 print('K: {}'.format(k))

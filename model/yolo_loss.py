@@ -311,14 +311,14 @@ class YoloDistLoss (nn.Module):
         o_w = torch.FloatTensor([a['width'] for a in anchors])
         cos_rot = torch.cos(o_r)
         sin_rot = torch.sin(o_r)
-        p_left_x = o_x-cos_rot*o_w
-        p_left_y = o_y-sin_rot*o_w
-        p_right_x = o_x+cos_rot*o_w
-        p_right_y = o_y+sin_rot*o_w
-        p_top_x = o_x+sin_rot*o_h
-        p_top_y = o_y-cos_rot*o_h
-        p_bot_x = o_x-sin_rot*o_h
-        p_bot_y = o_y+cos_rot*o_h
+        p_left_x =  -cos_rot*o_w
+        p_left_y =  -sin_rot*o_w
+        p_right_x = +cos_rot*o_w
+        p_right_y = +sin_rot*o_w
+        p_top_x =   +sin_rot*o_h
+        p_top_y =   -cos_rot*o_h
+        p_bot_x =   -sin_rot*o_h
+        p_bot_y =   +cos_rot*o_h
         self.anchor_points=torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=1)
 
     def forward(self,prediction, target, target_sizes ):

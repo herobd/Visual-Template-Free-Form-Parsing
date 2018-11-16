@@ -869,8 +869,15 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             if r is None:
                 return np.array([-w/2.0,0,w/2.0,0,0,-h/2.0,0,h/2.0, 0,0, 0, h,w])
             else:
-                #TODO
-                return None
+                lx= -math.cos(r)*w
+                ly= -math.sin(r)*w
+                rx= math.cos(r)*w
+                ry= math.sin(r)*w
+                tx= math.sin(r)*h
+                ty= -math.cos(r)*h
+                bx= -math.sin(r)*h
+                by= math.cos(r)*h
+                return np.array([lx,ly,rx,ry,tx,ty,bx,by, 0,0, r, h,w])
         meanH=62.42
         stdH=87.31
         meanW=393.03
@@ -933,7 +940,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 #        for ratio in ratios:
                 #            means.append(makePointsAndRects(height,ratio*height))
                 #            means.append(makePointsAndRects(width/ratio,width))
-                rots = [0,math.pi/2,math.pi,1.5*math,pi]
+                rots = [0,math.pi/2,math.pi,1.5*math.pi]
                 if self.rotate:
                     for height in np.linspace(15,200,num=4):
                         for width in np.linspace(30,1200,num=4):

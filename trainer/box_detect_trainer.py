@@ -279,7 +279,7 @@ class BoxDetectTrainer(BaseTrainer):
                 tota_class_loss+=class_loss
                 losses['val_box_loss']+=this_loss.item()
                 
-                threshConf = self.thresh_conf*outputBoxes[:,:,0].max().cpu()
+                threshConf = max(self.thresh_conf*outputBoxes[:,:,0].max().item(),0.5)
                 outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,self.thresh_intersect)
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
@@ -289,9 +289,9 @@ class BoxDetectTrainer(BaseTrainer):
                     else:
                         target_for_b = torch.empty(0)
                     ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
-                    mAP += np.array(ap_5)/len(outputBoxes)
-                    mRecall += np.array(recall_5)/len(outputBoxes)
-                    mPrecision += np.array(prec_5)/len(outputBoxes)
+                    mAP += np.array(ap_5,dtype=np.float)/len(outputBoxes)
+                    mRecall += np.array(recall_5,dtype=np.float)/len(outputBoxes)
+                    mPrecision += np.array(prec_5,dtype=np.float)/len(outputBoxes)
                 index=0
                 for name, target in targetPoints.items():
                     predictions = outputPoints[index]

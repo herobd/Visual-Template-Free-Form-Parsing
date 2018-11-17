@@ -8,7 +8,7 @@ import os
 import math
 from utils.crop_transform import CropBoxTransform
 from utils import augmentation
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from utils.forms_annotations import fixAnnotations, convertBBs
 import timeit
 
@@ -267,7 +267,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 #    trainTest=split
                 groupsToUse = json.loads(f.read())[split]
             self.images=[]
-            for groupName, imageNames in groupsToUse.items():
+            groupNames = list(groupsToUse.keys())
+            groupNames.sort()
+            for groupName in groupNames:
+                imageNames=groupsToUse[groupName]
                 #print('{} {}'.format(groupName, imageNames))
                 #oneonly=False
                 if groupName in SKIP:
@@ -469,8 +472,6 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         img = torch.from_numpy(img)
         img = 1.0 - img / 128.0 #ideally the median value would be 0
         #img = 1.0 - img / 255.0 #this way ink is on, page is off
-        if not self.color and img.size(1)!=1:
-            import pdb; pdb.set_trace()
         if pixel_gt is not None:
             pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
             pixel_gt = torch.from_numpy(pixel_gt)

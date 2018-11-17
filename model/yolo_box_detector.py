@@ -20,9 +20,31 @@ def offsetFunc(netPred): #this changes the offset prediction from the network
 def rotFunc(netPred):
     return math.pi/2 * netPred
 
+class ncReLU(nn.Module):
+    def __init__(self):
+        super(ncReLU, self).__init__()
+        self.r = nn.ReLU(inplace=False)
+    def forward(self,input):
+        return torch.cat([self.r(input), -self.r(-input)], 1)
+
+#ResNet block based on:
+ #No projection in the residual network https://link.springer.com/content/pdf/10.1007%2Fs10586-017-1389-z.pdf
 class ResBlock(nn.Module):
-    def __init__(self,in_ch,out_ch,dilation=1,norm=''):
+    def __init__(self,in_ch,out_ch,dilation=1,norm='',downsample=False, dropout=None):
         super(ResBlock, self).__init__()
+        layers=[]
+        skipFirstReLU=False
+        if in_ch!=out_ch:
+            assert(out_ch==2*in_ch)
+            layers.append(ncReLU())
+            skipFirstReLU=True
+        if downsample:
+            layers.append(nn.AvgPool2d(2))
+        if len(layers)>0:
+            self.transform = nn.Sequential(*layers)
+        else:
+            self.transform = lambda x: x
+
         layers=[]
         if norm=='batch_norm':
             layers.append(nn.BatchNorm2d(out_ch))
@@ -30,8 +52,9 @@ class ResBlock(nn.Module):
             layers.append(nn.InstanceNorm2d(out_ch))
         if norm=='group_norm':
             layers.append(nn.GroupNorm(8,out_ch))
-        layers.append(nn.ReLU(inplace=True)) 
-        conv1=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation)
+        if not skipFirstReLU:
+            layers.append(nn.ReLU(inplace=True)) 
+        conv1=nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation)
         if norm=='weight_norm':
             layers.append(weight_norm(conv1))
         else:
@@ -45,7 +68,12 @@ class ResBlock(nn.Module):
         if norm=='group_norm':
             layers.append(nn.GroupNorm(8,out_ch))
         layers.append(nn.ReLU(inplace=True)) 
-        conv2=nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)
+        if dropout is not None:
+            if dropout==True or dropout=='normal':
+                layers.append(nn.Dropout(p=0.1),inplace=True)
+            elif dropout=='2d':
+                layers.append(nn.Dropout2d(p=0.1),inplace=True)
+        conv2=nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1)
         if norm=='weight_norm':
             layers.append(weight_norm(conv2))
         else:
@@ -54,9 +82,10 @@ class ResBlock(nn.Module):
         self.side = nn.Sequential(*layers)
 
     def forward(self,x):
+        x=self.transform(x)
         return x+self.side(x)
 
-def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3):
+def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
     conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=dilation*(kernel//2),dilation=dilation)
     #if i == len(cfg)-1:
     #    layers += [conv2d]
@@ -71,9 +100,14 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3):
         layers = [weight_norm(conv2d), nn.ReLU(inplace=True)]
     else:
         layers = [conv2d, nn.ReLU(inplace=True)]
+    if dropout is not None:
+        if dropout==True or dropout=='normal':
+            layers.append(nn.Dropout(p=0.1),inplace=True)
+        elif dropout=='2d':
+            layers.append(nn.Dropout2d(p=0.1),inplace=True)
     return layers
 
-def make_layers(cfg, dilation=1, norm=None):
+def make_layers(cfg, dilation=1, norm=None, dropout=None):
     modules = []
     in_channels = [cfg[0]]
     
@@ -99,7 +133,7 @@ def make_layers(cfg, dilation=1, norm=None):
             in_channels.append(int(v[2:])+in_channels[-1])
         elif type(v)==str and v[0] == 'R':
             outCh=int(v[1:])
-            layers.append(ResBlock(in_channels[-1],outCh,dilation,norm))
+            layers.append(ResBlock(in_channels[-1],outCh,dilation,norm,dropout=dropout))
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'C': 
@@ -111,14 +145,9 @@ def make_layers(cfg, dilation=1, norm=None):
             layers.append(conv2d)
             layerCodes.append(v)
             in_channels.append(outCh)
-        elif type(v)==str and v[0] == 'K':
-            outCh=int(v[1:]) #down sampling layer, linear
-            layers.append(nn.Conv2d(in_channels[-1], outCh, kernel_size=1, stride=1, bias=False))
-            layerCodes.append(v)
-            in_channels.append(outCh)
         elif type(v)==str and v[0] == 'D':
-            outCh=int(v[1:]) #down sampling layer, linear
-            layers.append(nn.Conv2d(in_channels[-1], outCh, kernel_size=2, stride=2, bias=False))
+            outCh=int(v[1:]) #down sampling ResNet layer
+            layers.append(ResBlock(in_channels[-1],outCh,dilation,norm,downsample=True,dropout=dropout))
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'U':
@@ -128,28 +157,35 @@ def make_layers(cfg, dilation=1, norm=None):
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'W': #dilated conv later
             outCh=int(v[1:])
-            layers += convReLU(in_channels[-1],outCh,norm,dilation)
+            layers += convReLU(in_channels[-1],outCh,norm,dilation,dropout=dropout)
             layerCodes.append(outCh)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'k': #conv later with custom kernel size
             div = v.find('-')
             kernel_size=int(v[1:div])
             outCh=int(v[div+1:])
-            layers += convReLU(in_channels[-1],outCh,norm,kernel=kernel_size)
+            layers += convReLU(in_channels[-1],outCh,norm,kernel=kernel_size,dropout=dropout)
             layerCodes.append(outCh)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'd': #conv later with custom dilation
             div = v.find('-')
             dilate=int(v[1:div])
             outCh=int(v[div+1:])
-            layers += convReLU(in_channels[-1],outCh,norm,dilate)
+            layers += convReLU(in_channels[-1],outCh,norm,dilate,dropout=dropout)
             layerCodes.append(outCh)
+            in_channels.append(outCh)
+        elif type(v)==str and v[0] == 'B': #ResNet layer with custom dilation
+            div = v.find('-')
+            dilate=int(v[1:div])
+            outCh=int(v[div+1:])
+            layers.append(ResBlock(in_channels[-1],outCh,dilate,norm,dropout=dropout))
+            layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str:
             print('Error reading net cfg, unknown later: '+v)
             exit(1)
         else:
-            layers += convReLU(in_channels[-1],v,norm)
+            layers += convReLU(in_channels[-1],v,norm,dropout=dropout)
             layerCodes.append(v)
             in_channels.append(v)
     if len(layers)>0:

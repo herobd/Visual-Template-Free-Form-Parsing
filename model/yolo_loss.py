@@ -294,7 +294,7 @@ def build_targets(
 
 class YoloDistLoss (nn.Module):
     def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,bad_conf_weight=1.25):
-        super(YoloRotLoss, self).__init__()
+        super(YoloDistLoss, self).__init__()
         self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.rotation=rotation
@@ -313,13 +313,14 @@ class YoloDistLoss (nn.Module):
         sin_rot = torch.sin(o_r)
         p_left_x =  -cos_rot*o_w
         p_left_y =  -sin_rot*o_w
-        p_right_x = +cos_rot*o_w
-        p_right_y = +sin_rot*o_w
-        p_top_x =   +sin_rot*o_h
+        p_right_x = cos_rot*o_w
+        p_right_y = sin_rot*o_w
+        p_top_x =   sin_rot*o_h
         p_top_y =   -cos_rot*o_h
         p_bot_x =   -sin_rot*o_h
-        p_bot_y =   +cos_rot*o_h
+        p_bot_y =   cos_rot*o_h
         self.anchor_points=torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=1)
+        self.anchor_hws= (o_h+o_w)/2.0
 
     def forward(self,prediction, target, target_sizes ):
 
@@ -344,8 +345,8 @@ class YoloDistLoss (nn.Module):
         grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor)
         grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor)
         scaled_anchors = FloatTensor([(a['width'] / stride, a['height']/ stride, a['rot']) for a in self.anchors])
-        scaled_anchor_points = self.achor_points/stride
-        scaled_anchor_hws = self.achor_hws/stride
+        scaled_anchor_points = self.anchor_points/stride
+        scaled_anchor_hws = self.anchor_hws/stride
         anchor_w = scaled_anchors[:, 0:1].view((1, nA, 1, 1)).to(prediction.device)
         anchor_h = scaled_anchors[:, 1:2].view((1, nA, 1, 1)).to(prediction.device)
         anchor_r = scaled_anchors[:, 2:3].view((1, nA, 1, 1)).to(prediction.device)

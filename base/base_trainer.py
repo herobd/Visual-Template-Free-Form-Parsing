@@ -189,9 +189,13 @@ class BaseTrainer:
             'config': self.config
         }
         if 'save_mode' not in self.config or self.config['save_mode']=='state_dict':
-            state['state_dict']= self.model.state_dict()
+            state_dict = self.model.state_dict()
+            for k,v in state_dict.items():
+                state_dict[k]=v.cpu()
+            state['state_dict']= state_dict
         else:
-            state['model'] = self.model
+            state['model'] = self.model.cpu()
+        torch.cuda.empty_cache() #weird gpu memory issue when calling torch.save()
         if not minor:
             filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
                                     .format(iteration))

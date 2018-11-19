@@ -454,7 +454,7 @@ class YoloDistLoss (nn.Module):
 
 
 
-def build_targets_rot(
+def build_targets_dist(
     pred_points, pred_hws, pred_conf, pred_cls, target, target_sizes, anchors, anchor_points, anchor_hws, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale
 ):
     nB = pred_points.size(0)
@@ -492,11 +492,11 @@ def build_targets_rot(
             gi = max(min(int(gx),conf_mask.size(3)-1),0)
             gj = max(min(int(gy),conf_mask.size(2)-1),0)
             # Get shape of gt box
-            gt_points = target[b,j,5:13] / scale
+            gt_points = target[b,t,5:13] / scale
             # Get shape of anchor box
             #anchor_shapes = torch.FloatTensor(np.concatenate((np.zeros((len(anchors), 2)), np.array(anchors)), 1))
             # Calculate iou between gt and anchor shapes
-            anch_dists = bbox_dist(gt_points, (gt_h+gt_w)/2.0, anchor_points, anchor_hws)
+            anch_dists = bbox_dist(gt_points, (gh+gw)/2.0, anchor_points, anchor_hws)
             # Where the overlap is larger than threshold set mask to zero (ignore)
             conf_mask[b, anch_dists < ignore_thres, gj, gi] = 0
             # Find the best matching anchor box
@@ -505,7 +505,8 @@ def build_targets_rot(
             gt_points[[0,2,4,6]]+=gx
             gt_points[[1,3,5,7]]+=gy
             # Get the best prediction
-            pred_points = pred_points[b, best_n, gj, gi].unsqueeze(0)
+            pred_point = pred_points[b, best_n, gj, gi].unsqueeze(0)
+            pred_hw = pred_hws[b, best_n, gj, gi].unsqueeze(0)
             # Masks
             mask[b, best_n, gj, gi] = 1
             conf_mask[b, best_n, gj, gi] = 1
@@ -528,7 +529,7 @@ def build_targets_rot(
             tconf[b, best_n, gj, gi] = 1
 
             # Calculate iou between ground truth and best matching prediction
-            dist = bbox_dist(gt_points, pred_points)
+            dist = bbox_dist(gt_points, (gh+gw)/2.0, pred_point, pred_hw)
             pred_label = torch.argmax(pred_cls[b, best_n, gj, gi])
             score = pred_conf[b, best_n, gj, gi]
             if dist < 0.85 and pred_label == torch.argmax(target[b,t,13:]) and score > 0.0:
@@ -537,7 +538,7 @@ def build_targets_rot(
     return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls
 
 
-def bbox_dists(box1, box1H, box2, box2H):
+def bbox_dist(box1, box1H, box2, box2H):
     """
     Returns the point distance of bounding boxes
     the boxes are [leftX,Y,rightX,Y,topX,Y,botX,Y]

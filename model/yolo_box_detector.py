@@ -345,6 +345,22 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
         offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous()
 
+        #linePreds=[]
+        #for i in range(self.predLineCount):
+        #    offset = i*(5+self.numBBTypes) + self.numAnchors*(self.numBBParams+self.numBBTypes)
+        #    predictions = torch.cat([
+        #        torch.sigmoid(y[:,0+offset:1+offset,:,:]),    #confidence
+        #        y[:,1+offset:2+offset,:,:] + priors_1,        #x-center
+        #        y[:,2+offset:3+offset,:,:] + priors_0,        #y-center
+        #        y[:,3+offset:4+offset,:,:],                   #rotation (radians)
+        #        y[:,4+offset:5+offset,:,:]                    #scale (half-height?),
+        #        
+        #    ], dim=1)
+
+        #    predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
+        #    predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
+        #    linePreds.append(predictions)
+
         pointPreds=[]
         for i in range(self.predPointCount):
             offset = i*3 + self.numAnchors*(self.numBBParams+self.numBBTypes)

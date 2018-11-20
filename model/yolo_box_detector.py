@@ -85,8 +85,8 @@ class ResBlock(nn.Module):
         x=self.transform(x)
         return x+self.side(x)
 
-def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3):
-    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=dilation*(kernel//2),dilation=dilation,dropout=None)
+def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
+    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=dilation*(kernel//2),dilation=dilation)
     #if i == len(cfg)-1:
     #    layers += [conv2d]
     #    break

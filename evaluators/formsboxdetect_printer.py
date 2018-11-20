@@ -10,7 +10,7 @@ from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou
 
-THRESH=0.85
+THRESH=0.92
 
 def plotRect(img,color,xyrhw):
     xc=xyrhw[0].item()

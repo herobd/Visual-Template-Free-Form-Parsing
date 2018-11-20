@@ -2,7 +2,7 @@ import torch.nn.functional as F
 import utils
 #import torch.nn as nn
 from model.alignment_loss import alignment_loss, box_alignment_loss, iou_alignment_loss
-from model.yolo_loss import YoloLoss
+from model.yolo_loss import YoloLoss, YoloDistLoss
 from model.lf_loss import point_loss as lf_point_loss
 from model.lf_loss import special_loss as lf_line_loss
 from model.lf_loss import xyrs_loss as lf_xyrs_loss

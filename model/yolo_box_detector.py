@@ -290,13 +290,13 @@ class YoloBoxDetector(nn.Module): #BaseModel
         priors_0 = torch.arange(0,y.size(2)).type_as(img.data)[None,:,None]
         priors_0 = (priors_0 + 0.5) * self.scale #self.base_0
         priors_0 = priors_0.expand(y.size(0), priors_0.size(1), y.size(3))
-        priors_0 = priors_0[:,None,:,:]
+        priors_0 = priors_0[:,None,:,:].to(img.device)
 
         #priors_1 = Variable(torch.arange(0,y.size(3)).type_as(img.data), requires_grad=False)[None,None,:]
         priors_1 = torch.arange(0,y.size(3)).type_as(img.data)[None,None,:]
         priors_1 = (priors_1 + 0.5) * self.scale #elf.base_1
         priors_1 = priors_1.expand(y.size(0), y.size(2), priors_1.size(2))
-        priors_1 = priors_1[:,None,:,:]
+        priors_1 = priors_1[:,None,:,:].to(img.device)
 
         anchor = self.anchors
         pred_boxes=[]

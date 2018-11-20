@@ -1,6 +1,6 @@
 {
     "name": "Forms14_rot_dil5_20neg",
-    "cuda": false,
+    "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
@@ -67,6 +67,7 @@
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 20000,
+        "save_step_minor":1000,
         "log_step": 1000,
         "verbosity": 1,
         "monitor": "loss",

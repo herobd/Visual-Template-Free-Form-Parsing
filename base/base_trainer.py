@@ -88,7 +88,11 @@ class BaseTrainer:
                     sumLog['avg_'+key] += value
             
             #log prep
-            if self.iteration%self.log_step==0 or self.iteration%self.val_step==0 or self.iteration % self.save_step == 0 or self.iteration % self.save_step_minor:
+            if (    self.iteration%self.log_step==0 or 
+                    self.iteration%self.val_step==0 or 
+                    self.iteration % self.save_step == 0 or 
+                    (self.save_step_minor is not None and self.iteration % self.save_step_minor)
+                ):
                 log = {'iteration': self.iteration}
 
                 for key, value in result.items():

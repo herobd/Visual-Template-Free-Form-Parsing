@@ -299,6 +299,7 @@ class YoloDistLoss (nn.Module):
         self.num_classes=num_classes
         self.rotation=rotation
         self.scale=scale
+        self.bad_conf_weight=bad_conf_weight
         self.anchors=anchors
         self.num_anchors=len(anchors)
         self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
@@ -376,7 +377,7 @@ class YoloDistLoss (nn.Module):
         p_top_y = o_y-cos_rot*o_h
         p_bot_x = o_x-sin_rot*o_h
         p_bot_y = o_y+cos_rot*o_h
-        pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=2)
+        pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=4)
 
         if target is not None:
             target[:,:,[0,1,3,4]] /= self.scale
@@ -424,7 +425,7 @@ class YoloDistLoss (nn.Module):
         conf_mask_false = conf_mask - mask
 
         # Mask outputs to ignore non-existing objects
-        loss_conf = bad_conf_weight*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+        loss_conf = self.bad_conf_weight*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
         if target is not None and nGT>0:
             loss_x = self.mse_loss(x[mask], tx[mask])
             loss_y = self.mse_loss(y[mask], ty[mask])
@@ -534,8 +535,8 @@ def build_targets_dist(
             score = pred_conf[b, best_n, gj, gi]
             if dist < 0.85 and pred_label == torch.argmax(target[b,t,13:]) and score > 0.0:
                 nCorrect += 1
-
-    return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls
+    #nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tr, tconf, tcls
+    return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tr, tconf, tcls
 
 
 def bbox_dist(box1, box1H, box2, box2H):

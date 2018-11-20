@@ -293,8 +293,8 @@ def build_targets(
 
 
 class YoloDistLoss (nn.Module):
-    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5):
-        super(YoloRotLoss, self).__init__()
+    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,bad_conf_weight=1.25):
+        super(YoloDistLoss, self).__init__()
         self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.rotation=rotation
@@ -305,7 +305,22 @@ class YoloDistLoss (nn.Module):
         self.bce_loss = nn.BCEWithLogitsLoss(size_average=True)  # Confidence loss
         self.ce_loss = nn.CrossEntropyLoss()  # Class loss
 
-        #TODO make anchor points from anchors
+        #make anchor points from anchors
+        o_r = torch.FloatTensor([a['rot'] for a in anchors])
+        o_h = torch.FloatTensor([a['height'] for a in anchors])
+        o_w = torch.FloatTensor([a['width'] for a in anchors])
+        cos_rot = torch.cos(o_r)
+        sin_rot = torch.sin(o_r)
+        p_left_x =  -cos_rot*o_w
+        p_left_y =  -sin_rot*o_w
+        p_right_x = cos_rot*o_w
+        p_right_y = sin_rot*o_w
+        p_top_x =   sin_rot*o_h
+        p_top_y =   -cos_rot*o_h
+        p_bot_x =   -sin_rot*o_h
+        p_bot_y =   cos_rot*o_h
+        self.anchor_points=torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=1)
+        self.anchor_hws= (o_h+o_w)/2.0
 
     def forward(self,prediction, target, target_sizes ):
 
@@ -330,11 +345,11 @@ class YoloDistLoss (nn.Module):
         grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor)
         grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor)
         scaled_anchors = FloatTensor([(a['width'] / stride, a['height']/ stride, a['rot']) for a in self.anchors])
-        scaled_anchor_points = self.achor_points/stride
-        scaled_anchor_hws = self.achor_hws/stride
-        anchor_w = scaled_anchors[:, 0:1].view((1, nA, 1, 1))
-        anchor_h = scaled_anchors[:, 1:2].view((1, nA, 1, 1))
-        anchor_r = scaled_anchors[:, 2:3].view((1, nA, 1, 1))
+        scaled_anchor_points = self.anchor_points/stride
+        scaled_anchor_hws = self.anchor_hws/stride
+        anchor_w = scaled_anchors[:, 0:1].view((1, nA, 1, 1)).to(prediction.device)
+        anchor_h = scaled_anchors[:, 1:2].view((1, nA, 1, 1)).to(prediction.device)
+        anchor_r = scaled_anchors[:, 2:3].view((1, nA, 1, 1)).to(prediction.device)
 
         # Add offset and scale with anchors
         #pred_boxes = FloatTensor(prediction[..., :bbParams].shape)
@@ -343,6 +358,8 @@ class YoloDistLoss (nn.Module):
         #pred_boxes[..., 2] = torch.exp(w.data) * anchor_w
         #pred_boxes[..., 3] = torch.exp(h.data) * anchor_h
         #pred_boxes[..., 4] = r.data
+
+        #Create points from predicted boxes
         o_x = torch.tanh(x)+0.5 + grid_x
         o_y = torch.tanh(y)+0.5 + grid_y
         o_w = torch.exp(w) * anchor_w
@@ -360,6 +377,9 @@ class YoloDistLoss (nn.Module):
         p_bot_x = o_x-sin_rot*o_h
         p_bot_y = o_y+cos_rot*o_h
         pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=2)
+
+        if target is not None:
+            target[:,:,[0,1,3,4]] /= self.scale
 
         nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tr, tconf, tcls = build_targets_dist(
             pred_points=pred_points.cpu().data,
@@ -404,7 +424,7 @@ class YoloDistLoss (nn.Module):
         conf_mask_false = conf_mask - mask
 
         # Mask outputs to ignore non-existing objects
-        loss_conf = 1.25*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+        loss_conf = bad_conf_weight*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
         if target is not None and nGT>0:
             loss_x = self.mse_loss(x[mask], tx[mask])
             loss_y = self.mse_loss(y[mask], ty[mask])
@@ -426,7 +446,7 @@ class YoloDistLoss (nn.Module):
             return (
                 loss_conf,
                 0,
-                loss_conf,
+                loss_conf.item(),
                 0,
                 recall,
                 precision,
@@ -434,7 +454,7 @@ class YoloDistLoss (nn.Module):
 
 
 
-def build_targets_rot(
+def build_targets_dist(
     pred_points, pred_hws, pred_conf, pred_cls, target, target_sizes, anchors, anchor_points, anchor_hws, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale
 ):
     nB = pred_points.size(0)
@@ -448,6 +468,7 @@ def build_targets_rot(
     ty = torch.zeros(nB, nA, nH, nW)
     tw = torch.zeros(nB, nA, nH, nW)
     th = torch.zeros(nB, nA, nH, nW)
+    tr = torch.zeros(nB, nA, nH, nW)
     tconf = torch.ByteTensor(nB, nA, nH, nW).fill_(0)
     tcls = torch.ByteTensor(nB, nA, nH, nW, nC).fill_(0)
 
@@ -459,10 +480,10 @@ def build_targets_rot(
             #    continue
 
             # Convert to position relative to box
-            gx = target[b, t, 0] / scale
-            gy = target[b, t, 1] / scale
-            gw = target[b, t, 4] / scale
-            gh = target[b, t, 3] / scale
+            gx = target[b, t, 0] #/ scale
+            gy = target[b, t, 1] #/ scale
+            gw = target[b, t, 4] #/ scale
+            gh = target[b, t, 3] #/ scale
             gr = target[b, t, 2]
             if gw==0 or gh==0:
                 continue
@@ -471,11 +492,11 @@ def build_targets_rot(
             gi = max(min(int(gx),conf_mask.size(3)-1),0)
             gj = max(min(int(gy),conf_mask.size(2)-1),0)
             # Get shape of gt box
-            gt_points = target[b,j,5:13] / scale
+            gt_points = target[b,t,5:13] / scale
             # Get shape of anchor box
             #anchor_shapes = torch.FloatTensor(np.concatenate((np.zeros((len(anchors), 2)), np.array(anchors)), 1))
             # Calculate iou between gt and anchor shapes
-            anch_dists = bbox_dist(gt_points, (gt_h+gt_w)/2.0, anchor_points, anchor_hws)
+            anch_dists = bbox_dist(gt_points, (gh+gw)/2.0, anchor_points, anchor_hws)
             # Where the overlap is larger than threshold set mask to zero (ignore)
             conf_mask[b, anch_dists < ignore_thres, gj, gi] = 0
             # Find the best matching anchor box
@@ -484,7 +505,8 @@ def build_targets_rot(
             gt_points[[0,2,4,6]]+=gx
             gt_points[[1,3,5,7]]+=gy
             # Get the best prediction
-            pred_points = pred_points[b, best_n, gj, gi].unsqueeze(0)
+            pred_point = pred_points[b, best_n, gj, gi].unsqueeze(0)
+            pred_hw = pred_hws[b, best_n, gj, gi].unsqueeze(0)
             # Masks
             mask[b, best_n, gj, gi] = 1
             conf_mask[b, best_n, gj, gi] = 1
@@ -493,10 +515,10 @@ def build_targets_rot(
             ty[b, best_n, gj, gi] = inv_tanh(gy - (gj+0.5))
             # Rotation
             rot_diff = gr-anchors[best_n][2]
-            if rot_diff>math.pi/2:
-                rot_diff-=math.pi
-            elif rot_diff<-match.pi/2:
-                rot_diff+=math.pi
+            if rot_diff>math.pi:
+                rot_diff-=2*math.pi
+            elif rot_diff<-math.pi:
+                rot_diff+=2*math.pi
             tr[b, best_n, gj, gi] = inv_tanh(rot_diff/(math.pi/2))
             # Width and height
             tw[b, best_n, gj, gi] = math.log(gw / anchors[best_n][0] + 1e-16)
@@ -507,7 +529,7 @@ def build_targets_rot(
             tconf[b, best_n, gj, gi] = 1
 
             # Calculate iou between ground truth and best matching prediction
-            dist = bbox_dist(gt_points, pred_points)
+            dist = bbox_dist(gt_points, (gh+gw)/2.0, pred_point, pred_hw)
             pred_label = torch.argmax(pred_cls[b, best_n, gj, gi])
             score = pred_conf[b, best_n, gj, gi]
             if dist < 0.85 and pred_label == torch.argmax(target[b,t,13:]) and score > 0.0:
@@ -516,11 +538,52 @@ def build_targets_rot(
     return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls
 
 
-def bbox_dists(box1, box1H, box2, box2H):
+def bbox_dist(box1, box1H, box2, box2H):
     """
-    Returns the point of two bounding boxes
-    the boxes are [leftX,rightX,topX,botX]
+    Returns the point distance of bounding boxes
+    the boxes are [leftX,Y,rightX,Y,topX,Y,botX,Y]
     """
-    #TODO
+    if len(box2.size())>1 or len(box1.size())>1:
+        if len(box1.size())==1:
+            box1=box1[None,:]
+            box1H=torch.tensor([box1H])
+            flat1=True
+        else:
+            flat1=False
+        if len(box2.size())==1:
+            box2=box2[None,:]
+            box2H=torch.tensor([box2H])
+            flat2=True
+        else:
+            flat2=False
+        expanded1 = box1[:,None,:].expand(box1.size(0),box2.size(0),8)
+        expanded1H = box1H[:,None].expand(box1.size(0),box2.size(0))
+        expanded2 = box2[None,:,:].expand(box1.size(0),box2.size(0),8)
+        expanded2H = box2H[None,:].expand(box1.size(0),box2.size(0))
 
-    return iou
+        normalization = (expanded1H+expanded2H)/2.0
+
+        deltas = expanded1-expanded2
+        dist = ((
+                torch.norm(deltas[:,:,0:2],2,2) +
+                torch.norm(deltas[:,:,0:2],2,2) +
+                torch.norm(deltas[:,:,0:2],2,2) +
+                torch.norm(deltas[:,:,0:2],2,2) 
+               )/normalization)**2
+        if flat1:
+            assert(dist.size(0)==1)
+            dist=dist[0]
+        if flat2:
+            if flat1:
+                assert(dist.size(0)==1)
+                dist=dist[0]
+            else:
+                assert(dist.size(1)==1)
+                dist=dist[:,0]
+    else:
+        diff = box1-box2
+        normalizer = (box1H+box2H)/2.0
+        dist = ((torch.norm(diff[0:2])+torch.norm(diff[2:4])+torch.norm(diff[4:6])+torch.norm(diff[6:8]))/normalizer)**2
+    return dist
+
+

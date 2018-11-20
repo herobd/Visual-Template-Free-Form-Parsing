@@ -10,6 +10,8 @@ from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou
 
+THRESH=0.75
+
 def plotRect(img,color,xyrhw):
     xc=xyrhw[0].item()
     yc=xyrhw[1].item()
@@ -142,7 +144,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     data = data.cpu().data.numpy()
     maxConf = outputBBs[:,:,0].max().item()
-    threshConf = max(maxConf*0.92,0.5)
+    threshConf = max(maxConf*THRESH,0.5)
     #print("threshConf:{}".format(threshConf))
     outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
     aps_3=[]

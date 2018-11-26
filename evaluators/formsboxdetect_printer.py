@@ -274,6 +274,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'
             io.imsave(os.path.join(outDir,saveName),image)
+            #print('saved: '+os.path.join(outDir,saveName))
 
             for name, out in outputPoints.items():
                 image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()

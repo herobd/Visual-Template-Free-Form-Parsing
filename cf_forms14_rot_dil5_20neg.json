@@ -3,6 +3,7 @@
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
+    "super_computer":true,
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",

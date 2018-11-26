@@ -1,5 +1,5 @@
 {
-    "name": "Simple14_pair_dil5be14_dil5_neg20",
+    "name": "Simple14_pair_dil5be14_dilB_neg20",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -80,8 +80,8 @@
 	    "num_dist_masks": 3,
             "norm_type": "group_norm",
             "up_sample_ch": 128,
-            "down1_layers_cfg": ["k5-32", "M"],
-            "down2_layers_cfg": ["d5-128", 128, "M","d5-256", 256, "M", "d5-512", 512, "M"],
+            "down1_layers_cfg": ["k7-32", "M"],
+            "down2_layers_cfg": ["d7-128", "k5-128", "M","d6-256", 256, "M", "d5-512", 512, "M"],
             "final_layers_cfg": [1024,"d5-1024",1024, 1024]
         }
     }

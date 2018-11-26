@@ -98,7 +98,7 @@ def fixAnnotations(this,annotations):
     def isSkipField(this,bb):
         return (    (this.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or
                     (this.no_print_fields and (bb['isBlank']=='print' or bb['isBlank']==2)) or
-                    #TODO no graphics
+                    (this.no_graphics and bb['type']=='graphic') or
                     bb['type'] == 'fieldRow' or
                     bb['type'] == 'fieldCol' or
                     bb['type'] == 'fieldRegion'
@@ -141,6 +141,7 @@ def fixAnnotations(this,annotations):
     circleIds=[]
     for bb in annotations['fieldBBs']:
         id=bb['id']
+        #print('skip:{}, type:{}'.format(isSkipField(this,bb),bb['type']))
         if isSkipField(this,bb):
             #print('remove {}'.format(id))
             idsToRemove.add(id)
@@ -150,6 +151,9 @@ def fixAnnotations(this,annotations):
             circleIds.append(id)
             if this.swapCircle:
                 annotations['byId'][id]['type']='textCircle'
+
+    del annotations['fieldBBs']
+    del annotations['textBBs']
 
     
     parasLinkedTo=defaultdict(list)
@@ -309,3 +313,60 @@ def fixAnnotations(this,annotations):
     for pair in toAdd:
         if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
              annotations['pairs'].append(pair)
+
+
+
+def getBBWithPoints(useBBs,s,useBlankClass=False):
+
+
+    if useBlankClass:
+        numClasses=3
+    else:
+        numClasses=2
+    bbs = np.empty((1,len(useBBs), 8+8+numClasses), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
+    j=0
+    for bb in useBBs:
+        tlX = bb['poly_points'][0][0]
+        tlY = bb['poly_points'][0][1]
+        trX = bb['poly_points'][1][0]
+        trY = bb['poly_points'][1][1]
+        brX = bb['poly_points'][2][0]
+        brY = bb['poly_points'][2][1]
+        blX = bb['poly_points'][3][0]
+        blY = bb['poly_points'][3][1]
+
+        field = bb['type'][:4]!='text'
+        if useBlankClass and (bb['isBlank']=='blank' or bb['isBlank']==3):
+            field=False
+            text=False
+            blank=True
+        else:
+            text=not field
+            blank=False
+            
+
+        bbs[:,j,0]=tlX*s
+        bbs[:,j,1]=tlY*s
+        bbs[:,j,2]=trX*s
+        bbs[:,j,3]=trY*s
+        bbs[:,j,4]=brX*s
+        bbs[:,j,5]=brY*s
+        bbs[:,j,6]=blX*s
+        bbs[:,j,7]=blY*s
+        #we add these for conveince to crop BBs within window
+        bbs[:,j,8]=s*(tlX+blX)/2
+        bbs[:,j,9]=s*(tlY+blY)/2
+        bbs[:,j,10]=s*(trX+brX)/2
+        bbs[:,j,11]=s*(trY+brY)/2
+        bbs[:,j,12]=s*(tlX+trX)/2
+        bbs[:,j,13]=s*(tlY+trY)/2
+        bbs[:,j,14]=s*(brX+blX)/2
+        bbs[:,j,15]=s*(brY+blY)/2
+
+        #classes
+        bbs[:,j,16]=1 if text else 0
+        bbs[:,j,17]=1 if field else 0
+        if useBlankClass:
+            bbs[:,j,18]=1 if blank else 0
+        j+=1
+    return bbs

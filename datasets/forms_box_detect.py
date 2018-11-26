@@ -9,7 +9,7 @@ import math
 from utils.crop_transform import CropBoxTransform
 from utils import augmentation
 from collections import defaultdict, OrderedDict
-from utils.forms_annotations import fixAnnotations, convertBBs
+from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints
 import timeit
 
 import cv2
@@ -357,17 +357,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         rescaled = self.images[index]['rescaled']
         with open(annotationPath) as annFile:
             annotations = json.loads(annFile.read())
+        fieldBBs = annotations['fieldBBs']
         fixAnnotations(self,annotations)
-        #swap to-be-circled from field to text (?)
-        if self.swapCircle:
-            indexToSwap=[]
-            for i in range(len(annotations['fieldBBs'])):
-                if annotations['fieldBBs'][i]['type']=='fieldCircle':
-                    indexToSwap.append(i)
-            indexToSwap.sort(reverse=True)
-            for i in indexToSwap:
-                annotations['textBBs'].append(annotations['fieldBBs'][i])
-                del annotations['fieldBBs'][i]
 
         ##tic=timeit.default_timer()
         np_img = cv2.imread(imagePath, 1 if self.color else 0)#/255.0
@@ -415,12 +406,12 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
         ##tic=timeit.default_timer()
-        text_bbs = self.getBBGT(annotations['textBBs'],s)
-        field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
-        bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
+        bbs = getBBWithPoints(annotations['byId'].values(),s)
+        #field_bbs = getBBWithPoints(annotations['fieldBBs'],s)
+        #bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
         try:
             table_points, table_pixels = self.getTables(
-                    annotations['fieldBBs'],
+                    fieldBBs,
                     s, 
                     np_img.shape[0], 
                     np_img.shape[1],
@@ -537,47 +528,47 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
 
 
-    def getBBGT(self,bbs,s, fields=False):
+            #def getBBGT(self,bbs,s):
 
-        useBBs=bbs
-        #for bb in bbs:
-        #    if fields and self.isSkipField(bb):
-        #        continue
-        #    else:
-        #        useBBs.append(bb)
-        bbs = np.empty((1,len(useBBs), 8+8+2), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
-        j=0
-        for bb in useBBs:
-            tlX = bb['poly_points'][0][0]
-            tlY = bb['poly_points'][0][1]
-            trX = bb['poly_points'][1][0]
-            trY = bb['poly_points'][1][1]
-            brX = bb['poly_points'][2][0]
-            brY = bb['poly_points'][2][1]
-            blX = bb['poly_points'][3][0]
-            blY = bb['poly_points'][3][1]
+            #    useBBs=bbs
+            #    #for bb in bbs:
+            #    #    if fields and self.isSkipField(bb):
+            #    #        continue
+            #    #    else:
+            #    #        useBBs.append(bb)
+            #    bbs = np.empty((1,len(useBBs), 8+8+2), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
+            #    j=0
+            #    for bb in useBBs:
+            #        tlX = bb['poly_points'][0][0]
+            #        tlY = bb['poly_points'][0][1]
+            #        trX = bb['poly_points'][1][0]
+            #        trY = bb['poly_points'][1][1]
+            #        brX = bb['poly_points'][2][0]
+            #        brY = bb['poly_points'][2][1]
+            #        blX = bb['poly_points'][3][0]
+            #        blY = bb['poly_points'][3][1]
 
-            bbs[:,j,0]=tlX*s
-            bbs[:,j,1]=tlY*s
-            bbs[:,j,2]=trX*s
-            bbs[:,j,3]=trY*s
-            bbs[:,j,4]=brX*s
-            bbs[:,j,5]=brY*s
-            bbs[:,j,6]=blX*s
-            bbs[:,j,7]=blY*s
-            #we add these for conveince to crop BBs within window
-            bbs[:,j,8]=s*(tlX+blX)/2
-            bbs[:,j,9]=s*(tlY+blY)/2
-            bbs[:,j,10]=s*(trX+brX)/2
-            bbs[:,j,11]=s*(trY+brY)/2
-            bbs[:,j,12]=s*(tlX+trX)/2
-            bbs[:,j,13]=s*(tlY+trY)/2
-            bbs[:,j,14]=s*(brX+blX)/2
-            bbs[:,j,15]=s*(brY+blY)/2
-            bbs[:,j,16]=1 if not fields else 0
-            bbs[:,j,17]=1 if fields else 0
-            j+=1
-        return bbs
+            #        bbs[:,j,0]=tlX*s
+            #        bbs[:,j,1]=tlY*s
+            #        bbs[:,j,2]=trX*s
+            #        bbs[:,j,3]=trY*s
+            #        bbs[:,j,4]=brX*s
+            #        bbs[:,j,5]=brY*s
+            #        bbs[:,j,6]=blX*s
+            #        bbs[:,j,7]=blY*s
+            #        #we add these for conveince to crop BBs within window
+            #        bbs[:,j,8]=s*(tlX+blX)/2
+            #        bbs[:,j,9]=s*(tlY+blY)/2
+            #        bbs[:,j,10]=s*(trX+brX)/2
+            #        bbs[:,j,11]=s*(trY+brY)/2
+            #        bbs[:,j,12]=s*(tlX+trX)/2
+            #        bbs[:,j,13]=s*(tlY+trY)/2
+            #        bbs[:,j,14]=s*(brX+blX)/2
+            #        bbs[:,j,15]=s*(brY+blY)/2
+            #        bbs[:,j,16]=1 if not fields else 0
+            #        bbs[:,j,17]=1 if fields else 0
+            #        j+=1
+            #    return bbs
 
 
     def getTables(self,bbs,s, sH, sW,selfPairs):
@@ -890,15 +881,16 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             #rescaled = inst['rescaled']
             with open(annotationPath) as annFile:
                 annotations = json.loads(annFile.read())
+            fixAnnotations(annotations)
             for i in range(sample_count):
                 if i==0:
                     s = (self.rescale_range[0]+self.rescale_range[1])/2
                 else:
                     s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
                 #partial_rescale = s/rescaled
-                text_bbs = self.getBBGT(annotations['textBBs'],s)
-                field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
-                bbs = np.concatenate([text_bbs,field_bbs],axis=1)
+                bbs = getBBWithPoints(annotations['byId'].values(),s)
+                #field_bbs = self.getBBGT(annotations['fieldBBs'],s,fields=True)
+                #bbs = np.concatenate([text_bbs,field_bbs],axis=1)
                 bbs = convertBBs(bbs,self.rotate,2).numpy()[0]
                 cos_rot = np.cos(bbs[:,2])
                 sin_rot = np.sin(bbs[:,2])

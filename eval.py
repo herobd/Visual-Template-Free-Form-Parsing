@@ -181,11 +181,16 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                 for name, typeLists in val_metrics_list[typ].items():
                     print('{} {} mean: {}, std {}'.format(typ,name,np.mean(typeLists,axis=0),np.std(typeLists,axis=0)))
 
-        else:
+        elif type(index)==int:
+            if index>0:
+                instances = train_iter
+            else:
+                index*=-1
+                instances = valid_iter
             batchIndex = index//batchSize
             inBatchIndex = index%batchSize
             for i in range(batchIndex+1):
-                instance= train_iter.next()
+                instance= instances.next()
             #data, target = data[inBatchIndex:inBatchIndex+1], target[inBatchIndex:inBatchIndex+1]
             #dataT = _to_tensor(gpu,data)
             #output = model(dataT)
@@ -198,6 +203,19 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
             #print ((target.amin(), target.amin()))
             #metricsO = _eval_metrics_ind(metrics,output, target)
             saveFunc(config,instance,model,gpu,metrics,saveDir,batchIndex*batchSize)
+        else:
+            for instance in data_loader:
+                if index in instance['imgName']:
+                    break
+            if index not in instance['imgName']:
+                for instance in valid_data_loader:
+                    if index in instance['imgName']:
+                        break
+            if index in instance['imgName']:
+                saveFunc(config,instance,model,gpu,metrics,saveDir,0)
+            else:
+                print('{} not found! (on {})'.format(index,instance['imgName']))
+                print('{} not found! (on {})'.format(index,instance['imgName']))
 
 
 if __name__ == '__main__':
@@ -220,6 +238,8 @@ if __name__ == '__main__':
                         help='shuffle data')
     parser.add_argument('-f', '--config', default=None, type=str,
                         help='config override')
+    parser.add_argument('-m', '--imgname', default=None, type=str,
+                        help='specify image')
 
     args = parser.parse_args()
 
@@ -228,4 +248,11 @@ if __name__ == '__main__':
         print('Must provide checkpoint (with -c) and save dir (with -d)')
         exit()
 
-    main(args.checkpoint, args.savedir, args.number, args.index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)
+    index = args.index
+    if args.index is not None and args.imgname is not None:
+        print("Cannot index by number and name at same time.")
+        exit()
+    if args.index is None and args.imgname is not None:
+        index = args.imgname
+
+    main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)

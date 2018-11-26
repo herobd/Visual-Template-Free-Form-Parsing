@@ -13,7 +13,7 @@ import random
 from random import shuffle
 from utils import augmentation
 from utils.crop_transform import CropBoxTransform
-from utils.forms_annotations import fixAnnotations, convertBBs
+from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints
 SKIP=['121','174']
 
 
@@ -288,8 +288,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
         if not self.color:
             np_img = np_img[:,:,None]
 
-        response_bbs = self.getBBGT(responseBBList,scale)
-        query_bb = self.getBBGT([queryBB],scale)[0,0]
+        response_bbs = getBBWithPoints(responseBBList,scale)
+        query_bb = getBBWithPoints([queryBB],scale)[0,0]
 
         queryMask = np.zeros([np_img.shape[0],np_img.shape[1]])
         rr, cc = draw.polygon(query_bb[[1,3,5,7]], query_bb[[0,2,4,6]], queryMask.shape)
@@ -370,43 +370,43 @@ class FormsBoxPair(torch.utils.data.Dataset):
                 'responseBBs':t_response_bbs
                 }
 
-    def getBBGT(self,useBBs,s):
+        #def getBBGT(self,useBBs,s):
 
-        
-        bbs = np.empty((1,len(useBBs), 8+8+2), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
-        j=0
-        for bb in useBBs:
-            tlX = bb['poly_points'][0][0]
-            tlY = bb['poly_points'][0][1]
-            trX = bb['poly_points'][1][0]
-            trY = bb['poly_points'][1][1]
-            brX = bb['poly_points'][2][0]
-            brY = bb['poly_points'][2][1]
-            blX = bb['poly_points'][3][0]
-            blY = bb['poly_points'][3][1]
+        #    
+        #    bbs = np.empty((1,len(useBBs), 8+8+2), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
+        #    j=0
+        #    for bb in useBBs:
+        #        tlX = bb['poly_points'][0][0]
+        #        tlY = bb['poly_points'][0][1]
+        #        trX = bb['poly_points'][1][0]
+        #        trY = bb['poly_points'][1][1]
+        #        brX = bb['poly_points'][2][0]
+        #        brY = bb['poly_points'][2][1]
+        #        blX = bb['poly_points'][3][0]
+        #        blY = bb['poly_points'][3][1]
 
-            field = bb['type'][:4]!='text' 
+        #        field = bb['type'][:4]!='text' 
 
-            bbs[:,j,0]=tlX*s
-            bbs[:,j,1]=tlY*s
-            bbs[:,j,2]=trX*s
-            bbs[:,j,3]=trY*s
-            bbs[:,j,4]=brX*s
-            bbs[:,j,5]=brY*s
-            bbs[:,j,6]=blX*s
-            bbs[:,j,7]=blY*s
-            #we add these for conveince to crop BBs within window
-            bbs[:,j,8]=s*(tlX+blX)/2
-            bbs[:,j,9]=s*(tlY+blY)/2
-            bbs[:,j,10]=s*(trX+brX)/2
-            bbs[:,j,11]=s*(trY+brY)/2
-            bbs[:,j,12]=s*(tlX+trX)/2
-            bbs[:,j,13]=s*(tlY+trY)/2
-            bbs[:,j,14]=s*(brX+blX)/2
-            bbs[:,j,15]=s*(brY+blY)/2
-            bbs[:,j,16]=1 if not field else 0
-            bbs[:,j,17]=1 if field else 0    
-            j+=1
-        return bbs
+        #        bbs[:,j,0]=tlX*s
+        #        bbs[:,j,1]=tlY*s
+        #        bbs[:,j,2]=trX*s
+        #        bbs[:,j,3]=trY*s
+        #        bbs[:,j,4]=brX*s
+        #        bbs[:,j,5]=brY*s
+        #        bbs[:,j,6]=blX*s
+        #        bbs[:,j,7]=blY*s
+        #        #we add these for conveince to crop BBs within window
+        #        bbs[:,j,8]=s*(tlX+blX)/2
+        #        bbs[:,j,9]=s*(tlY+blY)/2
+        #        bbs[:,j,10]=s*(trX+brX)/2
+        #        bbs[:,j,11]=s*(trY+brY)/2
+        #        bbs[:,j,12]=s*(tlX+trX)/2
+        #        bbs[:,j,13]=s*(tlY+trY)/2
+        #        bbs[:,j,14]=s*(brX+blX)/2
+        #        bbs[:,j,15]=s*(brY+blY)/2
+        #        bbs[:,j,16]=1 if not field else 0
+        #        bbs[:,j,17]=1 if field else 0    
+        #        j+=1
+        #    return bbs
 
 

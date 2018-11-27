@@ -339,6 +339,8 @@ class CropBoxTransform(object):
             M = cv2.getRotationMatrix2D((org_img.shape[1]/2,org_img.shape[0]/2),amount,1)
             #rotate image
             org_img = cv2.warpAffine(org_img,M,(org_img.shape[1],org_img.shape[0]))
+            if len(org_img.shape)==2:
+                org_img = org_img[:,:,None]
             #rotate points
             points = np.reshape(bb_gt[0,:,0:16],(-1,2)) #reshape all box points to vector of x,y pairs
             points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)

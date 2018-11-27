@@ -881,7 +881,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             #rescaled = inst['rescaled']
             with open(annotationPath) as annFile:
                 annotations = json.loads(annFile.read())
-            fixAnnotations(annotations)
+            fixAnnotations(self,annotations)
             for i in range(sample_count):
                 if i==0:
                     s = (self.rescale_range[0]+self.rescale_range[1])/2
@@ -948,17 +948,20 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                             means.append(makePointsAndRects(50,width,rot))
                 else:
                     #rotated boxes
-                    for height in np.linspace(13,300,num=4):
+                    #for height in np.linspace(13,300,num=4):
+                    for height in np.linspace(13,300,num=3):
                         means.append(makePointsAndRects(height,20))
                     #general boxes
-                    for height in np.linspace(15,200,num=4):
-                        for width in np.linspace(30,1200,num=4):
+                    #for height in np.linspace(15,200,num=4):
+                        #for width in np.linspace(30,1200,num=4):
+                    for height in np.linspace(15,200,num=2):
+                        for width in np.linspace(30,1200,num=3):
                             means.append(makePointsAndRects(height,width))
                     #long boxes
                     for width in np.linspace(1600,4000,num=3):
-                        for height in np.linspace(30,100,num=3):
-                            means.append(makePointsAndRects(height,width))
-                        #means.append(makePointsAndRects(50,width))
+                        #for height in np.linspace(30,100,num=3):
+                        #    means.append(makePointsAndRects(height,width))
+                        means.append(makePointsAndRects(50,width))
 
                 k=len(means)
                 print('K: {}'.format(k))

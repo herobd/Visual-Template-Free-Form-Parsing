@@ -215,9 +215,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #else:
         #    self.augmentation_params=None
         self.cropToPage=config['crop_to_page']
+        self.rotate = config['rotation'] if 'rotation' in config else True
         #patchSize=config['patch_size']
         if 'crop_params' in config:
-            self.transform = CropBoxTransform(config['crop_params'])
+            self.transform = CropBoxTransform(config['crop_params'],self.rotate)
         else:
             self.transform = None
         self.rescale_range = config['rescale_range']
@@ -249,7 +250,6 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         else:
             self.swapCircle = False
         self.color = config['color'] if 'color' in config else True
-        self.rotate = config['rotation'] if 'rotation' in config else True
 
         self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
 

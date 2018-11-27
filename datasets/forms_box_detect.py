@@ -1056,6 +1056,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #print(toWrite)
         with open(outPath.format(final_k),'w') as out:
             out.write(json.dumps(toWrite))
+            print('saved '+outPath.format(final_k))
         cv2.imshow('clusters',draw)
         cv2.waitKey()
 

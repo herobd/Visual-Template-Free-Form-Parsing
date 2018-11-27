@@ -311,12 +311,14 @@ class CropTransform(object):
 class CropBoxTransform(object):
     def __init__(self, crop_params,rotate):
         self.crop_size = crop_params['crop_size']
+        if type(self.crop_size) is int:
+            self.crop_size = (self.crop_size,self.crop_size)
         self.random_crop_params = crop_params
         self.rotate=rotate
         if 'pad' in crop_params:
             pad_by = crop_params['pad']
         else:
-            pad_by = self.crop_size//2
+            pad_by = min(self.crop_size)//2
         self.pad_params = ((pad_by,pad_by),(pad_by,pad_by),(0,0))
         #self.all_bbs=all_bbs
         if rotate:

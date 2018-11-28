@@ -309,15 +309,21 @@ class CropTransform(object):
             "pixel_gt": pixel_gt
         }
 class CropBoxTransform(object):
-    def __init__(self, crop_params):
+    def __init__(self, crop_params,rotate):
         self.crop_size = crop_params['crop_size']
         self.random_crop_params = crop_params
+        self.rotate=rotate
         if 'pad' in crop_params:
             pad_by = crop_params['pad']
         else:
             pad_by = self.crop_size//2
         self.pad_params = ((pad_by,pad_by),(pad_by,pad_by),(0,0))
         #self.all_bbs=all_bbs
+        if rotate:
+            if 'rot_degree_std_dev' in crop_params:
+                self.degree_std_dev = crop_params['rot_degree_std_dev']
+            else:
+                self.degree_std_dev = 1
 
     def __call__(self, sample):
         org_img = sample['img']
@@ -325,6 +331,19 @@ class CropBoxTransform(object):
         point_gts = sample['point_gt']
         pixel_gt = sample['pixel_gt']
         query_bb = sample['query_bb'] if 'query_bb' in sample else None
+
+        if self.rotate:
+            amount = np.random.normal(0,self.degree_std_dev)
+            M = cv2.getRotationMatrix2D((org_img.shape[1]/2,org_img.shape[0]/2),amount,1)
+            #rotate image
+            org_img = cv2.warpAffine(org_img,M,(org_img.shape[1],org_img.shape[0]))
+            if len(org_img.shape)==2:
+                org_img = org_img[:,:,None]
+            #rotate points
+            points = np.reshape(bb_gt[0,:,0:16],(-1,2)) #reshape all box points to vector of x,y pairs
+            points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)
+            points = M.dot(points.T).T #multiply rot matrix
+            bb_gt[0,:,0:16] = np.reshape(points,(-1,16)) #reshape back to single vector for each bb
         #page_boundaries =
         pad_params = self.pad_params
         if org_img.shape[0]+pad_params[0][0]+pad_params[0][1] < self.crop_size[0]+1:

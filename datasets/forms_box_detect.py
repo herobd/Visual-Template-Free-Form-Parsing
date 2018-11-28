@@ -215,9 +215,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         #else:
         #    self.augmentation_params=None
         self.cropToPage=config['crop_to_page']
+        self.rotate = config['rotation'] if 'rotation' in config else True
         #patchSize=config['patch_size']
         if 'crop_params' in config:
-            self.transform = CropBoxTransform(config['crop_params'])
+            self.transform = CropBoxTransform(config['crop_params'],self.rotate)
         else:
             self.transform = None
         self.rescale_range = config['rescale_range']
@@ -249,7 +250,6 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         else:
             self.swapCircle = False
         self.color = config['color'] if 'color' in config else True
-        self.rotate = config['rotation'] if 'rotation' in config else True
 
         self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
 
@@ -578,13 +578,16 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         groupId=0
         lookup=defaultdict(lambda: None)
         #print('num bbs {}'.format(len(bbs)))
+        intersect=defaultdict(list)
         for bb in bbs:
             if bb['type'] == 'fieldCol': # and bb['type'] != 'fieldRow':
                 myGroup = lookup[bb['id']]
+            
 
                 for bb2 in bbs:
                     if bb2['type'] == 'fieldRow':
                         if polyIntersect(bb['poly_points'], bb2['poly_points']):
+                            intersect[bb['id']].append(bb2['id'])
                             
                             otherGroup = lookup[bb2['id']]
                             #if otherGroup is None:
@@ -618,12 +621,93 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                         #print('{}  {}'.format(myGroup,otherGroup))
                         #print(groupsT)
                         #input("Press Enter to continue...")
+        #now we check if a group needs split into two tables (horizontally)
+        final_groups=[]
+        for gid, group in groups.items():
+            rowsOfCol=defaultdict(list)
+            colOfX={}
+            for bbCol in group:
+                if bbCol['type'] == 'fieldCol':
+                    colOfX[bbCol['poly_points'][0][0]] = bbCol['id']
+                    for bbRow in group:
+                        if bbRow['type'] == 'fieldRow' and bbRow['id'] in intersect(bbCol['id']):
+                            rowsOfCol[bbCol['id']].append(bbRow['id'])
+
+
+
+            if len(rowsOfCol)>4:
+                xs=list(colOfX.keys())
+                sort(xs)
+
+                numColAnchors = math.ceil(len(rowsOfCol)*0.25)
+                leftAnchors=[colOfX[x] for x in xs[0:numColAnchors]]
+                rightAnchors=[colOfX[x] for x in xs[-numColAnchors:]]
+                leftRows = []
+                for col in leftAnchors:
+                    leftRows+=rowsOfCol[col]
+                rightRows = []
+                for col in rightAnchors:
+                    rightRows+=rowsOfCol[col]
+                leftRows=set(leftRows)
+                rightRows=set(rightRows)
+                
+                intersect = leftRows.intersection(rightRows)
+                if len(intersect)==0:
+                    #split
+                    loseRowCounts=defaultdict(lambda:0)
+                    leftGroup=[]#list(leftRows)
+                    rightGroup=[]#list(rightRows)
+                    for bb in group:
+                        if bb['type'] == 'fieldCol':
+                            count=0
+                            addLose=[]
+                            for rowId in rowsOfCol[bb['id']]:
+                                if rowId in leftRows:
+                                    count-=1
+                                elif rowId in rightRows:
+                                    count+=1
+                                else:
+                                    addLose.append(rowId)
+                            if count<0:
+                                leftGroup.append(bb)
+                                for id in addLose:
+                                    loseRowCounts[id]-=1
+                            elif count>0:
+                                rightGroup.append(bb)
+                                for id in addLose:
+                                    loseRowCounts[id]+=1
+                            else:
+                                #error, this col is ambigous
+                                raise Exception("ambig col",bb)
+                        if bb['type'] == 'fieldRow':
+                            if bb['id'] in leftRows:
+                                leftGroup.append(bb)
+                            elif bb['id'] in rightRows:
+                                rightGroup.append(bb)
+                            else:
+                                loseRowCounts[bb['id']]+=0
+                    for bb in group:
+                        if bb['id'] in loseRowCounts:
+                            if loseRowCounts[bb['id']]<0:
+                                leftGroup.append(bb)
+                            elif loseRowCounts[bb['id']]>0:
+                                rightGroup.append(bb)
+                            else:
+                                raise Exception("ambig row",bb)
+                    final_groups+=[leftGroup,rightGroup]
+                else:
+                    final_groups.append(group)
+            else:
+                final_groups.append(group)
+                #elif len(intersect)<len(leftRows):
+                #    #error, we have a row spannign left to right, but some dont
+
         #print(groups)
         #parse table bbs for intersection points
         intersectionPoints = []
         pixelMap = np.zeros((sH,sW,1),dtype=np.float32)
         #print('num tables {}'.format(len(groups)))
-        for _,tableBBs in groups.items():
+        for tableBBs in final_groups:
             #print('tableBBs {}'.format(len(tableBBs)))
             table = {}
             for bb in tableBBs:
@@ -706,7 +790,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     distFromPrev=getWidthFromBB(lineComponent)/2#float('inf')
                 else:
                     distFromPrev=np.linalg.norm(lineComponent[0]-rows[0][j-1][1])
-                if j==len(rows[0])-1:
+                if j==len(rows[0]col:
                     distToNext=getWidthFromBB(lineComponent)/2#float('inf')
                 else:
                     distToNext=np.linalg.norm(lineComponent[1]-rows[0][j+1][0])

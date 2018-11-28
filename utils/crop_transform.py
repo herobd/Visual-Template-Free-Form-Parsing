@@ -30,7 +30,7 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
     cs=None
 
     cnt = 0
-    while True:
+    while True: #we loop random crops to try and get an instance
 
         if query_bb is None:
             dim0 = np.random.randint(0,img.shape[0]-csY)
@@ -159,6 +159,8 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                     if point_gt_match[name].sum() > 0:
                         hit=True
                     ##print('match: {}'.format(timeit.default_timer()-##tic))
+        else:
+            point_gt_match=None
         
         if (
             (
@@ -180,6 +182,9 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                     for name in line_gts:
                         line_gt_match[name] = np.where(line_gt_match[name]!=0)
                 if bb_gt is not None:
+                    #We need to clip bbs that go outsire crop
+                    #this is a bit of a mess...
+                    #we do the clipping for all BBs, but those inside just dont get clipped
                     bb_gt = bb_gt[np.where(bb_gt_candidate)]
                     left_inside_l = left_inside_l[np.where(bb_gt_candidate)] 
                     left_inside_r = left_inside_r[np.where(bb_gt_candidate)] 
@@ -194,7 +199,7 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                     #needs_left = np.logical_and(bb_gt_candidate,1-has_left)[:,:,None]#, [1,1,2]) # things that are candidates where the left point is out-of-bounds
                     v_r = bb_gt[...,10:12]-bb_gt[...,8:10] #vector to opposite point
                     #what do we need to bring in?
-                    dist1_l = (1-left_inside_l)*(dim1-bb_gt[...,8])/v_r[...,0] #distance along vector till intersecting left boundary
+                    dist1_l = (1-left_inside_l)*(dim1-bb_gt[...,8])/v_r[...,0] #distance along vector till intersecting left clipped boundary
                     dist1_r = (1-left_inside_r)*(dim1+csX-bb_gt[...,8])/v_r[...,0] # " right boundary
                     dist0_t = (1-left_inside_t)*(dim0-bb_gt[...,9])/v_r[...,1] # " top boudary
                     dist0_b = (1-left_inside_b)*(dim0+csY-bb_gt[...,9])/v_r[...,1] # " bottom boundarya
@@ -231,8 +236,9 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                     bb_gt[...,2:4] += mv_right
                     bb_gt[...,4:6] += mv_right
                     #bb_gt = bb_gt[np.where(bb_gt_candidate)]
-                for name in point_gt_match:
-                    point_gt_match[name] = np.where(point_gt_match[name]!=0)
+                if point_gts is not None:
+                    for name in point_gt_match:
+                        point_gt_match[name] = np.where(point_gt_match[name]!=0)
                 return crop, cropped_gt_img, cropped_pixel_gt, line_gt_match, point_gt_match, bb_gt
 
         cnt += 1
@@ -322,8 +328,9 @@ class CropBoxTransform(object):
     def __call__(self, sample):
         org_img = sample['img']
         bb_gt = sample['bb_gt']
-        point_gts = sample['point_gt']
-        pixel_gt = sample['pixel_gt']
+        line_gts = sample['line_gt'] if 'line_gt' in sample else None
+        point_gts = sample['point_gt'] if 'point_gt' in sample else None
+        pixel_gt = sample['pixel_gt'] if 'pixel_gt' in sample else None
         query_bb = sample['query_bb'] if 'query_bb' in sample else None
         #page_boundaries =
         pad_params = self.pad_params
@@ -388,9 +395,14 @@ class CropBoxTransform(object):
                 if gt is not None:
                     gt[:,:,0] = gt[:,:,0] + pad_params[1][0]
                     gt[:,:,1] = gt[:,:,1] + pad_params[0][0]
+        if line_gts is not None:
+            for name, gt in line_gts.items():
+                if gt is not None:
+                    gt[:,:,0] = gt[:,:,0] + pad_params[1][0]
+                    gt[:,:,1] = gt[:,:,1] + pad_params[0][0]
 
 
-        crop_params, org_img, pixel_gt, _, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, None, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
+        crop_params, org_img, pixel_gt, line_gt, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, line_gt, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
         #print(crop_params)
         #print(gt_match)
         
@@ -414,6 +426,14 @@ class CropBoxTransform(object):
                     gt[...,0] = gt[...,0] - crop_params['dim1'][0]
                     gt[...,1] = gt[...,1] - crop_params['dim0'][0]
                     new_point_gts[name]=gt
+        new_line_gts={}
+        if line_gts is not None:
+            for name, gt in line_gts.items():
+                if gt is not None:
+                    gt = gt[line_gt_match[name]][None,...] #add batch dim (?)
+                    gt[...,0] = gt[...,0] - crop_params['dim1'][0]
+                    gt[...,1] = gt[...,1] - crop_params['dim0'][0]
+                    new_line_gts[name]=gt
         ##print('pad-minus: {}'.format(timeit.default_timer()-##tic))
 
             #if 'start' in name:
@@ -423,6 +443,7 @@ class CropBoxTransform(object):
         return {
             "img": org_img,
             "bb_gt": new_bb_gt,
+            "line_gt": new_line_gts,
             "point_gt": new_point_gts,
             "pixel_gt": pixel_gt
         }

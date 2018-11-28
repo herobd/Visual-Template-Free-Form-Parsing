@@ -588,3 +588,197 @@ def bbox_dist(box1, box1H, box2, box2H):
     return dist
 
 
+
+
+
+class LineLoss (nn.Module):
+    def __init__(self, num_classes, scale,  anchor_h,bad_conf_weight=1.25):
+        super(YoloDistLoss, self).__init__()
+        self.ignore_thresh=ignore_thresh
+        self.num_classes=num_classes
+        self.scale=scale
+        self.bad_conf_weight=bad_conf_weight
+        self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
+        self.bce_loss = nn.BCEWithLogitsLoss(size_average=True)  # Confidence loss
+        self.ce_loss = nn.CrossEntropyLoss()  # Class loss
+        self.anchor_h = anchor_h
+
+    def forward(self,prediction, target, target_sizes ):
+
+        nB = prediction.size(0)
+        nH = prediction.size(2)
+        nW = prediction.size(3)
+        stride=self.scale
+
+        FloatTensor = torch.cuda.FloatTensor if prediction.is_cuda else torch.FloatTensor
+        LongTensor = torch.cuda.LongTensor if prediction.is_cuda else torch.LongTensor
+        ByteTensor = torch.cuda.ByteTensor if prediction.is_cuda else torch.ByteTensor
+
+        x = prediction[..., 1]  # Center x
+        y = prediction[..., 2]  # Center y
+        h = prediction[..., 4]  # Height
+        r = prediction[..., 3]  # Rotation
+        pred_conf = prediction[..., 0]  # Conf 
+        pred_cls = prediction[..., 5:]  # Cls pred.
+
+        grid_x = torch.arange(nW).repeat(nH, 1).view([1, nH, nW]).type(FloatTensor)
+        grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, nH, nW]).type(FloatTensor)
+
+        #Create points from predicted boxes
+        o_x = torch.tanh(x)+0.5 + grid_x
+        o_y = torch.tanh(y)+0.5 + grid_y
+        o_h = torch.exp(h) * self.anchor_h
+        o_r =  (math.pi/2)*torch.tanh(r)
+
+        cos_rot = torch.cos(o_r)
+        sin_rot = torch.sin(o_r)
+        p_left_x = o_x-cos_rot*o_w
+        p_left_y = o_y-sin_rot*o_w
+        p_right_x = o_x+cos_rot*o_w
+        p_right_y = o_y+sin_rot*o_w
+        p_top_x = o_x+sin_rot*o_h
+        p_top_y = o_y-cos_rot*o_h
+        p_bot_x = o_x-sin_rot*o_h
+        p_bot_y = o_y+cos_rot*o_h
+        pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=4)
+
+        pred = torch.stack([o_x,o_y,o_r,o_h],dim=3)
+
+        if target is not None:
+            target[:,:,[0,1,3]] /= self.scale
+
+        nGT, mask, conf_mask, tx, ty, th, tr, tconf, tcls = self.build_targets_lines(
+            pred=pred.cpu().data,
+            pred_conf=pred_conf.cpu().data,
+            pred_cls=pred_cls.cpu().data,
+            target=target.cpu().data if target is not None else None,
+            target_sizes=target_sizes,
+            num_classes=self.num_classes,
+            grid_sizeH=nH,
+            grid_sizeW=nW,
+            ignore_thres=self.ignore_thresh,
+            scale=self.scale
+        )
+
+        #nProposals = int((pred_conf > 0).sum().item())
+        #recall = float(nCorrect / nGT) if nGT else 1
+        #if nProposals>0:
+        #    precision = float(nCorrect / nProposals)
+        #else:
+        #    precision = 1
+
+        # Handle masks
+        mask = (mask.type(ByteTensor))
+        conf_mask = (conf_mask.type(ByteTensor))
+
+        # Handle target variables
+        tx = tx.type(FloatTensor)
+        ty = ty.type(FloatTensor)
+        th = th.type(FloatTensor)
+        tr = tr.type(FloatTensor)
+        tconf = tconf.type(FloatTensor)
+        tcls = tcls.type(LongTensor)
+
+        # Get conf mask where gt and where there is no gt
+        conf_mask_true = mask
+        conf_mask_false = conf_mask - mask
+
+        # Mask outputs to ignore non-existing objects
+        loss_conf = self.bad_conf_weight*self.bce_loss(pred_conf[conf_mask_false], tconf[conf_mask_false])
+        if target is not None and nGT>0:
+            loss_x = self.mse_loss(x[mask], tx[mask])
+            loss_y = self.mse_loss(y[mask], ty[mask])
+            loss_h = self.mse_loss(h[mask], th[mask])
+            loss_r = self.mse_loss(r[mask], tr[mask])
+            loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
+            loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
+            loss = loss_x + loss_y + loss_h + loss_r + loss_conf + loss_cls
+            return (
+                loss,
+                loss_x.item()+loss_y.item()+loss_h.item()+loss_r.item(),
+                loss_conf.item(),
+                loss_cls.item(),
+                #recall,
+                #precision,
+            )
+        else:
+            return (
+                loss_conf,
+                0,
+                loss_conf.item(),
+                0,
+                #recall,
+                #precision,
+            )
+
+
+
+    def build_targets_lines(self,
+        pred, pred_conf, pred_cls, target, target_sizes, grid_sizeH, grid_sizeW
+    ):
+        nB = pred_points.size(0)
+        nC = self.num_classes
+        nH = grid_sizeH
+        nW = grid_sizeW
+        mask = torch.zeros(nB, nH, nW)
+        conf_mask = torch.ones(nB, nH, nW)
+        tx = torch.zeros(nB, nH, nW)
+        ty = torch.zeros(nB, nH, nW)
+        th = torch.zeros(nB, nH, nW)
+        tr = torch.zeros(nB, nH, nW)
+        tconf = torch.ByteTensor(nB, nH, nW).fill_(0)
+        tcls = torch.ByteTensor(nB, nH, nW, nC).fill_(0)
+
+        nGT = 0
+        for b in range(nB):
+            for t in range(target_sizes[b]): #range(target.shape[1]):
+                #if target[b, t].sum() == 0:
+                #    continue
+
+                # Convert to position relative to box
+                gx = target[b, t, 0] #/ scale
+                gy = target[b, t, 1] #/ scale
+                gh = target[b, t, 3] #/ scale
+                gr = target[b, t, 2]
+                if gh==0:
+                    continue
+                nGT += 1
+                # Get grid box indices
+                gi = max(min(int(gx),conf_mask.size(3)-1),0)
+                gj = max(min(int(gy),conf_mask.size(2)-1),0)
+                # Get shape of gt box
+                gt_points = target[b,t,5:13] / self.scale
+                # Get ground truth box
+                gt_points[[0,2,4,6]]+=gx
+                gt_points[[1,3,5,7]]+=gy
+                # Get the best prediction
+                pred_point = pred_points[b, gj, gi].unsqueeze(0)
+                # Masks
+                mask[b, gj, gi] = 1
+                conf_mask[b, gj, gi] = 1
+                # Coordinates
+                tx[b, gj, gi] = inv_tanh(gx - (gi+0.5))
+                ty[b, gj, gi] = inv_tanh(gy - (gj+0.5))
+                # Rotation
+                rot_diff = gr-0
+                if rot_diff>math.pi:
+                    rot_diff-=2*math.pi
+                elif rot_diff<-math.pi:
+                    rot_diff+=2*math.pi
+                tr[b, gj, gi] = inv_tanh(rot_diff/(math.pi/2))
+                # height
+                th[b, gj, gi] = math.log(gh / self.anchor_h + 1e-16)
+                # One-hot encoding of label
+                #target_label = int(target[b, t, 0])
+                tcls[b, gj, gi] = target[b, t,5:]
+                tconf[b, gj, gi] = 1
+
+                # Calculate iou between ground truth and best matching prediction
+                #dist = bbox_dist(gt_points, (gh+gw)/2.0, pred_point, pred_hw)
+                #dist = 
+                #pred_label = torch.argmax(pred_cls[b, gj, gi])
+                #score = pred_conf[b, gj, gi]
+                #if dist < 0.85 and pred_label == torch.argmax(target[b,t,13:]) and score > 0.0:
+                #    nCorrect += 1
+        #nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tr, tconf, tcls
+        return nGT, mask, conf_mask, tx, ty, th, tr, tconf, tcls

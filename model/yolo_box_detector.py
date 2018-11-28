@@ -229,11 +229,22 @@ class YoloBoxDetector(nn.Module): #BaseModel
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
+        self.numLineParams = 5 #conf,x-off,y-off,h-scale,rot
+
+        self.predPointCount = config['number_of_point_types'] if 'number_of_point_types' in config else 0
+        self.predPixelCount = config['number_of_pixel_types'] if 'number_of_pixel_types' in config else 0
+        self.predLineCount = config['number_of_line_types'] if 'number_of_line_types' in config else 0
+
         with open(config['anchors_file']) as f:
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
         self.numAnchors = len(self.anchors)
-        self.predPointCount = config['number_of_point_types']
-        self.predPixelCount = config['number_of_pixel_types']
+        if self.rotation:
+            self.meanH=48.0046359128
+        else:
+            self.meanH=62.1242376857
+        if self.predLineCount>0:
+            print('Warning, using hardcoded mean H (yolo_box_detector)')
+
         in_ch = 3 if 'color' not in config or config['color'] else 1
         norm = config['norm_type'] if "norm_type" in config else None
         if norm is None:
@@ -345,21 +356,27 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
         offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous()
 
-        #linePreds=[]
-        #for i in range(self.predLineCount):
-        #    offset = i*(5+self.numBBTypes) + self.numAnchors*(self.numBBParams+self.numBBTypes)
-        #    predictions = torch.cat([
-        #        torch.sigmoid(y[:,0+offset:1+offset,:,:]),    #confidence
-        #        y[:,1+offset:2+offset,:,:] + priors_1,        #x-center
-        #        y[:,2+offset:3+offset,:,:] + priors_0,        #y-center
-        #        y[:,3+offset:4+offset,:,:],                   #rotation (radians)
-        #        y[:,4+offset:5+offset,:,:]                    #scale (half-height?),
-        #        
-        #    ], dim=1)
+        linePreds=[]
+        offsetLinePreds=[]
+        for i in range(self.predLineCount):
+            offset = i*(self.numLineParams+self.numBBTypes) + self.numAnchors*(self.numBBParams+self.numBBTypes)
+            stackedPred=[
+                torch.sigmoid(y[:,0+offset:1+offset,:,:]),                          #confidence
+                torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,       #x-center
+                torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,       #y-center
+                (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:]),                 #rotation (radians)
+                torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH/2?                 #scale (half-height?),
+                
+            ]
+            for j in range(self.numBBTypes):
+                stackedPred.append(y[:,5+j+offset:6+j+offset,:,:])         #x. class prediction
 
-        #    predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
-        #    predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
-        #    linePreds.append(predictions)
+            pred_boxes.append(torch.cat(stackedPred, dim=1))
+            predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
+            predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
+            linePreds.append(predictions)
+
+            offsetLinePreds.append(y[:,offset:offset+self.numLineParams+self.numBBTypes,:,:])
 
         pointPreds=[]
         for i in range(self.predPointCount):
@@ -387,7 +404,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
 
 
-        return bbPredictions, offsetPredictions, pointPreds, pixelPreds #, avg_conf_per_anchor
+        return bbPredictions, offsetPredictions, linePreds, offsetLinePreds, pointPreds, pixelPreds #, avg_conf_per_anchor
 
     def summary(self):
         """

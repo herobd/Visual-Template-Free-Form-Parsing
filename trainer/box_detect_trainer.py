@@ -29,10 +29,15 @@ class BoxDetectTrainer(BaseTrainer):
                 rotation=model.rotation, 
                 scale=model.scale,
                 anchors=model.anchors)
+        if self.loss['line'] is not None:
+            self.loss['line'] = self.loss['line'](**self.loss_params['line'], 
+                    num_classes=model.numBBTypes, 
+                    scale=model.scale,
+                    anchors=model.meanH)
         if 'loss_weights' in config:
             self.loss_weight=config['loss_weights']
         else:
-            self.loss_weight={'box':0.7, 'point':0.5, 'pixel':10}
+            self.loss_weight={'box':0.6, 'line': 0.4, 'point':0.4, 'pixel':8}
         self.batch_size = data_loader.batch_size
         self.data_loader = data_loader
         self.data_loader_iter = iter(data_loader)
@@ -57,6 +62,12 @@ class BoxDetectTrainer(BaseTrainer):
         else:
             targetBoxes = None
             targetBoxes_sizes = []
+        if 'line_gt' in instance:
+            targetLines = instance['line_gt']
+            targetLines_sizes = instance['line_label_sizes']
+        else:
+            targetLines = {}
+            targetLines_sizes = {}
         if 'point_gt' in instance:
             targetPoints = instance['point_gt']
             targetPoints_sizes = instance['point_label_sizes']
@@ -85,10 +96,11 @@ class BoxDetectTrainer(BaseTrainer):
             data = data.to(self.gpu)
             if targetBoxes is not None:
                 targetBoxes=targetBoxes.to(self.gpu)
+            targetLines=sendToGPU(targetLines)
             targetPoints=sendToGPU(targetPoints)
             if targetPixels is not None:
                 targetPixels=targetPixels.to(self.gpu)
-        return data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels
+        return data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels
 
     def _eval_metrics(self, typ,name,output, target):
         if len(self.metrics[typ])>0:
@@ -152,8 +164,8 @@ class BoxDetectTrainer(BaseTrainer):
         #    _,lossC=FormsBoxDetect_printer(None,thisInstance,self.model,self.gpu,self._eval_metrics,self.checkpoint_dir,self.iteration,self.loss['box'])
         #    this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         #else:
-        data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
-        outputBoxes, outputOffsets, outputPoints, outputPixels = self.model(data)
+        data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
+        outputBoxes, outputOffsets, outputLines, outputOffsetsLines, outputPoints, outputPixels = self.model(data)
         this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
 
         this_loss*=self.loss_weight['box']
@@ -161,10 +173,19 @@ class BoxDetectTrainer(BaseTrainer):
         losses['box_loss']=this_loss.item()
 
         index=0
+        for name, target in targetLines.items():
+            #print('line')
+            predictions = outputOffsetLines[index]
+            this_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
+            this_loss*=self.loss_weight['line']
+            loss+=this_loss
+            losses[name+'_loss']=this_loss.item()
+            index+=1
+        index=0
         for name, target in targetPoints.items():
             #print('point')
             predictions = outputPoints[index]
-            this_loss = self.loss['point'](predictions,target,targetPoints_sizes[name], **self.loss_params['point'])
+            this_loss, this_position_loss, this_conf_loss, this_class_loss = self.loss['point'](predictions,target,targetPoints_sizes[name], **self.loss_params['point'])
             this_loss*=self.loss_weight['point']
             loss+=this_loss
             losses[name+'_loss']=this_loss.item()
@@ -265,7 +286,7 @@ class BoxDetectTrainer(BaseTrainer):
             for batch_idx, instance in enumerate(self.valid_data_loader):
                 if batch_idx>10:
                     break
-                data, targetBoxes, targetBoxes_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
+                data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
                 #print('data: {}'.format(data.size()))
                 outputBoxes,outputOffsets, outputPoints, outputPixels = self.model(data)
                 #loss = self.loss(output, target)
@@ -292,6 +313,15 @@ class BoxDetectTrainer(BaseTrainer):
                     mAP += np.array(ap_5,dtype=np.float)/len(outputBoxes)
                     mRecall += np.array(recall_5,dtype=np.float)/len(outputBoxes)
                     mPrecision += np.array(prec_5,dtype=np.float)/len(outputBoxes)
+                index=0
+                for name, target in targetLines.items():
+                    #print('line')
+                    predictions = outputOffsetLines[index]
+                    this_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
+                    this_loss*=self.loss_weight['line']
+                    loss+=this_loss
+                    losses['val_'+name+'_loss']=this_loss.item()
+                    index+=1
                 index=0
                 for name, target in targetPoints.items():
                     predictions = outputPoints[index]

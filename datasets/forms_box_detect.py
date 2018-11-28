@@ -9,7 +9,7 @@ import math
 from utils.crop_transform import CropBoxTransform
 from utils import augmentation
 from collections import defaultdict, OrderedDict
-from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints
+from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT
 import timeit
 
 import cv2
@@ -114,6 +114,11 @@ def collate(batch):
         else:
             bb_sizes.append(gt.size(1)) 
             bb_dim=gt.size(2)
+        for name,gt in b['line_gt'].items():
+            if gt is None:
+                line_label_sizes[name].append(0)
+            else:
+                line_label_sizes[name].append(gt.size(1)) 
         for name,gt in b['point_gt'].items():
             if gt is None:
                 point_label_sizes[name].append(0)
@@ -125,6 +130,8 @@ def collate(batch):
     largest_bb_count = max(bb_sizes)
     for name in b['point_gt']:
         largest_point_label[name] = max(point_label_sizes[name])
+    for name in b['line_gt']:
+        largest_line_label[name] = max(line_label_sizes[name])
 
     ##print(' col channels: {}'.format(len(imgs[0].size())))
     batch_size = len(imgs)
@@ -168,6 +175,19 @@ def collate(batch):
             continue
         bbs[i, :bb_sizes[i]] = gt
 
+    line_labels = {}
+    for name,count in largest_line_label.items():
+        if count != 0:
+            line_labels[name] = torch.zeros(batch_size, count, 2)
+        else:
+            line_labels[name]=None
+    for i, b in enumerate(batch):
+        for name,gt in b['line_gt'].items():
+            if line_label_sizes[name][i] == 0:
+                continue
+            #print(line_label_sizes[name][i])
+            #print(gt.shape)
+            line_labels[name][i, :line_label_sizes[name][i]] = gt
     point_labels = {}
     for name,count in largest_point_label.items():
         if count != 0:
@@ -195,6 +215,8 @@ def collate(batch):
         'img': imgs,
         'bb_gt': bbs,
         "bb_sizes": bb_sizes,
+        'line_gt': line_labels,
+        "line_label_sizes": line_label_sizes,
         'point_gt': point_labels,
         "point_label_sizes": point_label_sizes,
         'pixel_gt': pixel_gt,
@@ -409,6 +431,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         bbs = getBBWithPoints(annotations['byId'].values(),s)
         #field_bbs = getBBWithPoints(annotations['fieldBBs'],s)
         #bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
+        start_of_line, end_of_line = getStartEndGT(annotations['byId'].values(),s)
         try:
             table_points, table_pixels = self.getTables(
                     fieldBBs,
@@ -433,6 +456,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             out = self.transform({
                 "img": np_img,
                 "bb_gt": bbs,
+                "line_gt": {
+                    "start_of_line": start_of_line,
+                    "end_of_line": end_of_line
+                    },
                 "point_gt": {
                         "table_points": table_points
                         },
@@ -466,6 +493,9 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         if pixel_gt is not None:
             pixel_gt = pixel_gt.transpose([2,0,1])[None,...]
             pixel_gt = torch.from_numpy(pixel_gt)
+
+        start_of_line = None if start_of_line is None or start_of_line.shape[1] == 0 else torch.from_numpy(start_of_line)
+        end_of_line = None if end_of_line is None or end_of_line.shape[1] == 0 else torch.from_numpy(end_of_line)
         
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
@@ -479,6 +509,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             return {
                 "img": img,
                 "bb_gt": bbs,
+                "line_gt": {
+                    "start_of_line": start_of_line,
+                    "end_of_line": end_of_line
+                    },
                 "point_gt": {
                         "table_points":table_points
                         },
@@ -489,6 +523,22 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         else:
             if 'boxes' not in self.only_types or not self.only_types['boxes']:
                 bbs=None
+            line_gt={}
+            if 'line' in self.only_types:
+                for ent in self.only_types['line']:
+                    if type(ent)==list:
+                        toComb=[]
+                        for inst in ent[1:]:
+                            einst = eval(inst)
+                            if einst is not None:
+                                toComb.append(einst)
+                        if len(toComb)>0:
+                            comb = torch.cat(toComb,dim=1)
+                            line_gt[ent[0]]=comb
+                        else:
+                            line_gt[ent[0]]=None
+                    else:
+                        line_gt[ent]=eval(ent)
             point_gt={}
             if 'point' in self.only_types:
                 for ent in self.only_types['point']:
@@ -520,6 +570,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             return {
                 "img": img,
                 "bb_gt": bbs,
+                "line_gt": line_gt,
                 "point_gt": point_gt,
                 "pixel_gt": pixel_gtR,
                 "imgName": imageName,

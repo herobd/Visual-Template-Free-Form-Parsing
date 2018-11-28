@@ -362,7 +362,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
         ##tic=timeit.default_timer()
         np_img = cv2.imread(imagePath, 1 if self.color else 0)#/255.0
-        if np_img.shape[0]==0:
+        if np_img is None or np_img.shape[0]==0:
             print("ERROR, could not open "+imagePath)
             return self.__getitem__((index+1)%self.__len__())
         ##print('imread: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
@@ -421,7 +421,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 table_points=None
                 table_pixels=None
                 print(inst)
-                print('Table error on: '+imageName)
+                print('Table error on: '+imagePath)
                 self.errors.append(imageName)
 
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))
@@ -630,14 +630,14 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 if bbCol['type'] == 'fieldCol':
                     colOfX[bbCol['poly_points'][0][0]] = bbCol['id']
                     for bbRow in group:
-                        if bbRow['type'] == 'fieldRow' and bbRow['id'] in intersect(bbCol['id']):
+                        if bbRow['type'] == 'fieldRow' and bbRow['id'] in intersect[bbCol['id']]:
                             rowsOfCol[bbCol['id']].append(bbRow['id'])
 
 
 
             if len(rowsOfCol)>4:
                 xs=list(colOfX.keys())
-                sort(xs)
+                xs.sort()
 
                 numColAnchors = math.ceil(len(rowsOfCol)*0.25)
                 leftAnchors=[colOfX[x] for x in xs[0:numColAnchors]]
@@ -650,9 +650,18 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     rightRows+=rowsOfCol[col]
                 leftRows=set(leftRows)
                 rightRows=set(rightRows)
+
+                def addPaired(s,pairs):
+                    for pair in pairs:
+                        if pair[0] in s:
+                            s.add(pair[1])
+                        elif pair[1] in s:
+                            s.add(pair[0])
+                addPaired(leftRows,selfPairs)
+                addPaired(rightRows,selfPairs)
                 
-                intersect = leftRows.intersection(rightRows)
-                if len(intersect)==0:
+                intersected = leftRows.intersection(rightRows)
+                if len(intersected)==0:
                     #split
                     loseRowCounts=defaultdict(lambda:0)
                     leftGroup=[]#list(leftRows)
@@ -790,7 +799,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                     distFromPrev=getWidthFromBB(lineComponent)/2#float('inf')
                 else:
                     distFromPrev=np.linalg.norm(lineComponent[0]-rows[0][j-1][1])
-                if j==len(rows[0]col:
+                if j==len(rows[0])-1:
                     distToNext=getWidthFromBB(lineComponent)/2#float('inf')
                 else:
                     distToNext=np.linalg.norm(lineComponent[1]-rows[0][j+1][0])
@@ -819,6 +828,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 pointsU=[] #points from the bottom line of the BB above the seperator
                 avgHHeight_i=0
                 j=0
+                #get the upper points (bottom of above BB)
                 for lineComponent in rows[i]:
                     ###rint('row U {}, comp:{}'.format(i,j))
                     height = getHeightFromBB(lineComponent)
@@ -850,6 +860,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 pointsL=[] #points from the top line of the BB below the seperator
                 nextInd=0
                 j=0
+                #get lower points (top of below BB)
                 for lineComponent in rows[i+1]:
                     ###rint('row L {}, comp:{}'.format(i,j))
                     height = getHeightFromBB(lineComponent)

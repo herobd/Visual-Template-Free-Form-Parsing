@@ -341,11 +341,31 @@ class CropBoxTransform(object):
             org_img = cv2.warpAffine(org_img,M,(org_img.shape[1],org_img.shape[0]))
             if len(org_img.shape)==2:
                 org_img = org_img[:,:,None]
-            #rotate points
-            points = np.reshape(bb_gt[0,:,0:16],(-1,2)) #reshape all box points to vector of x,y pairs
-            points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)
-            points = M.dot(points.T).T #multiply rot matrix
-            bb_gt[0,:,0:16] = np.reshape(points,(-1,16)) #reshape back to single vector for each bb
+            if pixel_gt is not None:
+                pixel_gt = cv2.warpAffine(pixel_gt,M,(pixel_gt.shape[1],pixel_gt.shape[0]))
+                if len(pixel_gt.shape)==2:
+                    pixel_gt = pixel_gt[:,:,None]
+            #rotate pointsa
+            if bb_gt is not None:
+                points = np.reshape(bb_gt[0,:,0:16],(-1,2)) #reshape all box points to vector of x,y pairs
+                points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)
+                points = M.dot(points.T).T #multiply rot matrix
+                bb_gt[0,:,0:16] = np.reshape(points,(-1,16)) #reshape back to single vector for each bb
+    
+            if point_gts is not None:
+                for name,gt in point_gts.items():
+                    if gt is not None:
+                        points = gt[0,:,0:2]
+                        points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)
+                        points = M.dot(points.T).T #multiply rot matrix
+                        gt[0,:,0:2] = points
+
+            if query_bb is not None:
+                points = np.reshape(query_bb[0:16],(8,2)) #reshape all box points to vector of x,y pairs
+                points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)
+                points = M.dot(points.T).T #multiply rot matrix
+                query_bb[0:16] = np.reshape(points,16) #reshape back to single vector
+
         #page_boundaries =
         pad_params = self.pad_params
         if org_img.shape[0]+pad_params[0][0]+pad_params[0][1] < self.crop_size[0]+1:

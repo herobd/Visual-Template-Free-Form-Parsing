@@ -239,9 +239,9 @@ class YoloBoxDetector(nn.Module): #BaseModel
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
         self.numAnchors = len(self.anchors)
         if self.rotation:
-            self.meanH=48.0046359128
+            self.meanH=48.0046359128/2
         else:
-            self.meanH=62.1242376857
+            self.meanH=62.1242376857/2
         if self.predLineCount>0:
             print('Warning, using hardcoded mean H (yolo_box_detector)')
 
@@ -366,7 +366,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,       #x-center
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,       #y-center
                 (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:]),                 #rotation (radians)
-                torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH/2?                 #scale (half-height?),
+                torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH ?scale                #scale (half-height),
                 
             ]
             for j in range(self.numBBTypes):

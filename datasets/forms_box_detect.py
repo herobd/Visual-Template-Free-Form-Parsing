@@ -499,7 +499,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
-        bbs = convertBBs(bbs,self.rotate,2)
+        numClasses = 3 if self.blank_class else 2
+        bbs = convertBBs(bbs,self.rotate,numClasses)
+        #start_of_line = convertLines(start_of_line,numClasses)
+        #end_of_line = convertLines(end_of_line,numClasses)
 
         if table_points is not None:
             table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)

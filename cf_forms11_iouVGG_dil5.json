@@ -6,7 +6,7 @@
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
-        "data_dir": "/home/ubuntu/brian/data/forms",
+        "data_dir": "../data/forms",
         "batch_size": 2,
         "shuffle": true,
         "num_workers": 2,

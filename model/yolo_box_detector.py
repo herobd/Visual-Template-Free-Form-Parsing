@@ -252,6 +252,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
         dilation = config['dilation'] if 'dilation' in config else 1
         #self.cnn, self.scale = vgg.vgg11_custOut(self.predLineCount*5+self.predPointCount*3,batch_norm=batch_norm, weight_norm=weight_norm)
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
+        self.numOutLine = (self.numBBTypes+self.numLineParams)*self.predLineCount
         self.numOutPoint = self.predPointCount*3
 
         if 'down_layers_cfg' in config:
@@ -266,7 +267,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 self.final_features=output
             self.net_down_modules[-1].register_forward_hook(save_final)
         self.last_channels=down_last_channels
-        self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutPoint, kernel_size=1))
+        self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutLine+self.numOutPoint, kernel_size=1))
         self._hack_down = nn.Sequential(*self.net_down_modules)
         self.scale=1
         for a in layers_cfg:
@@ -372,7 +373,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
             for j in range(self.numBBTypes):
                 stackedPred.append(y[:,5+j+offset:6+j+offset,:,:])         #x. class prediction
 
-            pred_boxes.append(torch.cat(stackedPred, dim=1))
+            predictions = torch.cat(stackedPred, dim=1)
             predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
             predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
             linePreds.append(predictions)

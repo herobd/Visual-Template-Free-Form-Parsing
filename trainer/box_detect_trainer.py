@@ -292,7 +292,7 @@ class BoxDetectTrainer(BaseTrainer):
                     break
                 data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
                 #print('data: {}'.format(data.size()))
-                outputBoxes,outputOffsets, outputPoints, outputPixels = self.model(data)
+                outputBoxes,outputOffsets, outputLines, outputOffsetsLines, outputPoints, outputPixels = self.model(data)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0

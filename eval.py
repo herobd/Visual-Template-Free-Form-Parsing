@@ -254,5 +254,8 @@ if __name__ == '__main__':
         exit()
     if args.index is None and args.imgname is not None:
         index = args.imgname
-
-    main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)
+    if args.gpu is not None:
+        with torch.cuda.device(args.gpu):
+            main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)
+    else:
+        main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)

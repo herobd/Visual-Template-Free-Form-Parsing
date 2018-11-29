@@ -1,8 +1,8 @@
 {
-    "name": "Forms16_dil5_neg10_better14",
+    "name": "Forms16_dil5_neg20_new12",
     "cuda": true,
     "gpu": 0,
-    "super_computer":true,
+    "super_computer":false,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
@@ -68,8 +68,8 @@
         "iterations": 200000,
         "save_dir": "saved/",
         "val_step": 5000,
-        "save_step": 25000,
-        "save_step_minor": 5000,
+        "save_step": 50000,
+        "save_step_minor": 1000,
         "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",

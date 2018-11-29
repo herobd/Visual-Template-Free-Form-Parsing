@@ -1,6 +1,7 @@
 from collections import defaultdict
 import numpy as np
 import torch
+import math
 
 def avg_y(bb):
     points = bb['poly_points']
@@ -370,3 +371,72 @@ def getBBWithPoints(useBBs,s,useBlankClass=False):
             bbs[:,j,18]=1 if blank else 0
         j+=1
     return bbs
+
+def getStartEndGT(useBBs,s,useBlankClass=False):
+
+
+    if useBlankClass:
+        numClasses=3
+    else:
+        numClasses=2
+    start_gt = np.empty((1,len(useBBs), 4+numClasses), dtype=np.float32) #x,y,r,h, x classes
+    end_gt = np.empty((1,len(useBBs), 4+numClasses), dtype=np.float32) #x,y,r,h, x classes
+    j=0
+    for bb in useBBs:
+        tlX = bb['poly_points'][0][0]
+        tlY = bb['poly_points'][0][1]
+        trX = bb['poly_points'][1][0]
+        trY = bb['poly_points'][1][1]
+        brX = bb['poly_points'][2][0]
+        brY = bb['poly_points'][2][1]
+        blX = bb['poly_points'][3][0]
+        blY = bb['poly_points'][3][1]
+
+        field = bb['type'][:4]!='text'
+        if useBlankClass and (bb['isBlank']=='blank' or bb['isBlank']==3):
+            field=False
+            text=False
+            blank=True
+        else:
+            text=not field
+            blank=False
+            
+        lX = (tlX+blX)/2.0
+        lY = (tlY+blY)/2.0
+        rX = (trX+brX)/2.0
+        rY = (trY+brY)/2.0
+        d=math.sqrt((lX-rX)**2 + (lY-rY)**2)
+
+        hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
+        hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
+        h = (hl+hr)/2.0
+
+        tX = lX + h*-(rY-lY)/d
+        tY = lY + h*(rX-lX)/d
+        bX = lX - h*-(rY-lY)/d
+        bY = lY - h*(rX-lX)/d
+        start_gt[:,j,0] = tX*s
+        start_gt[:,j,1] = tY*s
+        start_gt[:,j,2] = bX*s
+        start_gt[:,j,3] = bY*s
+
+        etX =tX + rX-lX
+        etY =tY + rY-lY
+        ebX =bX + rX-lX
+        ebY =bY + rY-lY
+        end_gt[:,j,0] = etX*s
+        end_gt[:,j,1] = etY*s
+        end_gt[:,j,2] = ebX*s
+        end_gt[:,j,3] = ebY*s
+
+        #classes
+        start_gt[:,j,4]=1 if text else 0
+        start_gt[:,j,5]=1 if field else 0
+        if useBlankClass:
+            start_gt[:,j,6]=1 if blank else 0
+        end_gt[:,j,4]=1 if text else 0
+        end_gt[:,j,5]=1 if field else 0
+        if useBlankClass:
+            end_gt[:,j,6]=1 if blank else 0
+        j+=1
+    return start_gt, end_gt

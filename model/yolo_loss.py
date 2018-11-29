@@ -597,8 +597,8 @@ def bbox_dist(box1, box1H, box2, box2H):
 
 class LineLoss (nn.Module):
     def __init__(self, num_classes, scale,  anchor_h,bad_conf_weight=1.25):
-        super(YoloDistLoss, self).__init__()
-        self.ignore_thresh=ignore_thresh
+        super(LineLoss, self).__init__()
+        #self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.scale=scale
         self.bad_conf_weight=bad_conf_weight

@@ -428,7 +428,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
         ##tic=timeit.default_timer()
-        bbs = getBBWithPoints(annotations['byId'].values(),s)
+        bbs = getBBWithPoints(annotations['byId'].values(),s,useBlankClass=(not self.no_blanks))
         #field_bbs = getBBWithPoints(annotations['fieldBBs'],s)
         #bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
         start_of_line, end_of_line = getStartEndGT(annotations['byId'].values(),s)
@@ -499,7 +499,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
-        numClasses = 3 if self.blank_class else 2
+        numClasses = 2 if self.no_blanks else 3
         bbs = convertBBs(bbs,self.rotate,numClasses)
         #start_of_line = convertLines(start_of_line,numClasses)
         #end_of_line = convertLines(end_of_line,numClasses)

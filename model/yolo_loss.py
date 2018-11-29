@@ -605,7 +605,7 @@ class LineLoss (nn.Module):
         self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
         self.bce_loss = nn.BCEWithLogitsLoss(size_average=True)  # Confidence loss
         self.ce_loss = nn.CrossEntropyLoss()  # Class loss
-        self.anchor_h = anchor_h
+        self.anchor_h = anchor_h/scale
 
     def forward(self,prediction, target, target_sizes ):
 

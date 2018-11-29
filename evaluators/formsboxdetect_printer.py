@@ -118,7 +118,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets, outputPoints, outputPixels = model(dataT)
+    outputBBs, outputOffsets, outputLines, outputOffsetLines, outputPoints, outputPixels = model(dataT)
     if outputPixels is not None:
         outputPixels = torch.sigmoid(outputPixels)
     index=0

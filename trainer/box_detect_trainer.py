@@ -29,11 +29,11 @@ class BoxDetectTrainer(BaseTrainer):
                 rotation=model.rotation, 
                 scale=model.scale,
                 anchors=model.anchors)
-        if self.loss['line'] is not None:
+        if 'line' in self.loss and self.loss['line'] is not None:
             self.loss['line'] = self.loss['line'](**self.loss_params['line'], 
                     num_classes=model.numBBTypes, 
                     scale=model.scale,
-                    anchors=model.meanH)
+                    anchor_h=model.meanH)
         if 'loss_weights' in config:
             self.loss_weight=config['loss_weights']
         else:

@@ -327,7 +327,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
                 rot_dif + anchor[i]['rot'],      #3. rotation (radians)
                 torch.exp(y[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
-                torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  
+                torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)   as we scale the anchors in training
             ]
 
             #stackedOffsets = [
@@ -366,7 +366,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,       #x-center
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,       #y-center
                 (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:]),                 #rotation (radians)
-                torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH ?scale                #scale (half-height),
+                torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH                    #scale (half-height),
                 
             ]
             for j in range(self.numBBTypes):

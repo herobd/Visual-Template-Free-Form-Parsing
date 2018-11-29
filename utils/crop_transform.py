@@ -443,7 +443,7 @@ class CropBoxTransform(object):
                     gt[:,:,1] = gt[:,:,1] + pad_params[0][0]
 
 
-        crop_params, org_img, pixel_gt, line_gt, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, line_gt, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
+        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
         #print(crop_params)
         #print(gt_match)
         

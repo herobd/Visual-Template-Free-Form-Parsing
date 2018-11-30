@@ -195,6 +195,18 @@ def inv_tanh(y):
         return 2
     return 0.5*(math.log((1+y)/(1-y)))
 
+def get_closest_anchor_iou(anchors,gh,gw):
+    # Get shape of gt box
+    gt_box = torch.FloatTensor(np.array([0, 0, gw, gh])).unsqueeze(0)
+    # Get shape of anchor box
+    anchor_shapes = torch.FloatTensor(np.concatenate((np.zeros((len(anchors), 2)), np.array(anchors)), 1))
+    # Calculate iou between gt and anchor shapes
+    anch_ious = bbox_iou(gt_box, anchor_shapes) #these are at half their size, but IOU is the same
+    # Find the best matching anchor box
+    best_n = np.argmax(anch_ious)
+
+    return best_n, anch_ious
+
 def build_targets(
     pred_boxes, pred_conf, pred_cls, target, target_sizes, anchors, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale, calcIOUAndDist=False
 ):
@@ -247,16 +259,10 @@ def build_targets(
             # Get grid box indices
             gi = max(min(int(gx),conf_mask.size(3)-1),0)
             gj = max(min(int(gy),conf_mask.size(2)-1),0)
-            # Get shape of gt box
-            gt_box = torch.FloatTensor(np.array([0, 0, gw, gh])).unsqueeze(0)
-            # Get shape of anchor box
-            anchor_shapes = torch.FloatTensor(np.concatenate((np.zeros((len(anchors), 2)), np.array(anchors)), 1))
-            # Calculate iou between gt and anchor shapes
-            anch_ious = bbox_iou(gt_box, anchor_shapes) #these are at half their size, but IOU is the same
+            #Get best matching anchor
+            best_n, anch_ious = get_closest_anchor_iou(anchors,gh,gw)
             # Where the overlap is larger than threshold set mask to zero (ignore)
             conf_mask[b, anch_ious > ignore_thres, gj, gi] = 0
-            # Find the best matching anchor box
-            best_n = np.argmax(anch_ious)
             # Get ground truth box
             gt_box = torch.FloatTensor(np.array([gx, gy, gw, gh])).unsqueeze(0)
             # Get the best prediction
@@ -313,12 +319,12 @@ class YoloDistLoss (nn.Module):
         cos_rot = torch.cos(o_r)
         sin_rot = torch.sin(o_r)
         p_left_x =  -cos_rot*o_w
-        p_left_y =  -sin_rot*o_w
+        p_left_y =  sin_rot*o_w
         p_right_x = cos_rot*o_w
-        p_right_y = sin_rot*o_w
-        p_top_x =   sin_rot*o_h
+        p_right_y = -sin_rot*o_w
+        p_top_x =   -sin_rot*o_h
         p_top_y =   -cos_rot*o_h
-        p_bot_x =   -sin_rot*o_h
+        p_bot_x =   sin_rot*o_h
         p_bot_y =   cos_rot*o_h
         self.anchor_points=torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=1)
         self.anchor_hws= (o_h+o_w)/2.0
@@ -370,12 +376,12 @@ class YoloDistLoss (nn.Module):
         cos_rot = torch.cos(o_r)
         sin_rot = torch.sin(o_r)
         p_left_x = o_x-cos_rot*o_w
-        p_left_y = o_y-sin_rot*o_w
+        p_left_y = o_y+sin_rot*o_w
         p_right_x = o_x+cos_rot*o_w
-        p_right_y = o_y+sin_rot*o_w
-        p_top_x = o_x+sin_rot*o_h
+        p_right_y = o_y-sin_rot*o_w
+        p_top_x = o_x-sin_rot*o_h
         p_top_y = o_y-cos_rot*o_h
-        p_bot_x = o_x-sin_rot*o_h
+        p_bot_x = o_x+sin_rot*o_h
         p_bot_y = o_y+cos_rot*o_h
         pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=4)
 
@@ -454,6 +460,38 @@ class YoloDistLoss (nn.Module):
                 precision,
             )
 
+def get_closest_anchor_dist(anchors,rot,gh,gw):
+    #make points for rect
+    cos_rot = math.cos(rot)
+    sin_rot = math.sin(rot)
+    g_left_x =  -cos_rot*gw
+    g_left_y =  sin_rot*gw
+    g_right_x = cos_rot*gw
+    g_right_y = -sin_rot*gw
+    g_top_x =   -sin_rot*gh
+    g_top_y =   -cos_rot*gh
+    g_bot_x =   sin_rot*gh
+    g_bot_y =   cos_rot*gh
+    gt_points = torch.tensor([g_left_x,g_left_y,g_right_x,g_right_y,g_top_x,g_top_y,g_bot_x,g_bot_y])
+    #make anchor points from anchors
+    o_r = torch.FloatTensor([a['rot'] for a in anchors])
+    o_h = torch.FloatTensor([a['height'] for a in anchors])
+    o_w = torch.FloatTensor([a['width'] for a in anchors])
+    cos_rot = torch.cos(o_r)
+    sin_rot = torch.sin(o_r)
+    p_left_x =  -cos_rot*o_w
+    p_left_y =  sin_rot*o_w
+    p_right_x = cos_rot*o_w
+    p_right_y = -sin_rot*o_w
+    p_top_x =   -sin_rot*o_h
+    p_top_y =   -cos_rot*o_h
+    p_bot_x =   sin_rot*o_h
+    p_bot_y =   cos_rot*o_h
+    self.anchor_points=torch.tensor([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y])
+    self.anchor_hws= (o_h+o_w)/2.0
+    anch_dists = bbox_dist(gt_points, (gh+gw)/2.0, anchor_points, anchor_hws)
+    best_n = np.argmax(anch_ious)
+    return best_n, anch_dists
 
 
 def build_targets_dist(
@@ -632,12 +670,12 @@ class LineLoss (nn.Module):
         o_x = torch.tanh(x)+0.5 + grid_x
         o_y = torch.tanh(y)+0.5 + grid_y
         o_h = torch.exp(h) * self.anchor_h #half
-        o_r =  (math.pi/2)*torch.tanh(r)
+        o_r =  (math.pi)*torch.tanh(r)
 
-        x1 = -o_h*torch.sin(math.pi-o_r) + o_x
-        y1 = o_h*torch.cos(math.pi-o_r) + o_y
-        x2 = o_h*torch.sin(math.pi-o_r) + o_x
-        y2 = -o_h*torch.cos(math.pi-o_r) + o_y
+        x1 = -o_h*torch.sin(o_r) + o_x
+        y1 = -o_h*torch.cos(o_r) + o_y
+        x2 =  o_h*torch.sin(o_r) + o_x
+        y2 =  o_h*torch.cos(o_r) + o_y
 
         pred = torch.stack([o_x,o_y,o_r,o_h],dim=3)
 

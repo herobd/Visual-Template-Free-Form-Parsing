@@ -371,6 +371,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         return len(self.images)
 
     def __getitem__(self,index):
+        return self.getitem(index)
+    def getitem(self,index,scaleP=None,cropX=None,cropY=None):
         ##ticFull=timeit.default_timer()
         imagePath = self.images[index]['imagePath']
         imageName = self.images[index]['imageName']
@@ -399,7 +401,10 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             yb = min(np_img.shape[0]-1,int(rescaled*max(pageCorners['bl'],pageCorners['br'])))
             np_img = np_img[yt:yb+1,xl:xr+1,:]
         #target_dim1 = int(np.random.uniform(self.rescale_range[0], self.rescale_range[1]))
-        s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
+        if scaleP is None:
+            s = np.random.uniform(self.rescale_range[0], self.rescale_range[1])
+        else:
+            s = scaleP
         partial_rescale = s/rescaled
         if self.transform is None: #we're doing the whole image
             #this is a check to be sure we don't send too big images through
@@ -415,6 +420,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 partial_rescale = partial_rescale*(self.max_dim_thresh/max_dim)
                 print('{} exceed thresh: {}: {}, new {}: {}'.format(imageName,s,max_dim,rescaled*partial_rescale,partial_rescale*max(np_img.shape[0],np_img.shape[1])))
                 s = rescaled*partial_rescale
+
         
         
         ##tic=timeit.default_timer()
@@ -463,8 +469,9 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 "point_gt": {
                         "table_points": table_points
                         },
-                "pixel_gt": pixel_gt
-            })
+                "pixel_gt": pixel_gt,
+                
+            }, cropX, cropY)
             np_img = out['img']
             bbs = out['bb_gt']
             if 'table_points' in out['point_gt']:

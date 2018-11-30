@@ -8,17 +8,7 @@ import json
 import numpy as np
 
 
-def offsetFunc(netPred): #this changes the offset prediction from the network
-    #YOLOv2,3 use sigmoid on activation to prevent predicting outside of cell impossible
-    #But this probably makes it hard to predict on the edges?
-    #so just
-    return nn.tanh(netPred)
-    # we offset by 0.5, so the center of a cell is when netPred is 0
-    # tanh allows it to predict all the way to the center of its neighbor cell,
-    # but this only occurs when netPred is +/- inf
 
-def rotFunc(netPred):
-    return math.pi/2 * netPred
 
 class ncReLU(nn.Module):
     def __init__(self):
@@ -237,11 +227,11 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
         with open(config['anchors_file']) as f:
             self.anchors = json.loads(f.read()) #array of objects {rot,height,width}
-        self.numAnchors = len(self.anchors)
         if self.rotation:
             self.meanH=48.0046359128/2
         else:
             self.meanH=62.1242376857/2
+        self.numAnchors = len(self.anchors)
         if self.predLineCount>0:
             print('Warning, using hardcoded mean H (yolo_box_detector)')
 
@@ -366,7 +356,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.sigmoid(y[:,0+offset:1+offset,:,:]),                          #confidence
                 torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,       #x-center
                 torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,       #y-center
-                (math.pi/2)*torch.tanh(y[:,3+offset:4+offset,:,:]),                 #rotation (radians)
+                (math.pi)*torch.tanh(y[:,3+offset:4+offset,:,:]),                 #rotation (radians)
                 torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH                    #scale (half-height),
                 
             ]

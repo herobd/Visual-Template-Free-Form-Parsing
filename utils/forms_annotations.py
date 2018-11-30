@@ -355,14 +355,14 @@ def getBBWithPoints(useBBs,s,useBlankClass=False):
         bbs[:,j,6]=blX*s
         bbs[:,j,7]=blY*s
         #we add these for conveince to crop BBs within window
-        bbs[:,j,8]=s*(tlX+blX)/2
-        bbs[:,j,9]=s*(tlY+blY)/2
-        bbs[:,j,10]=s*(trX+brX)/2
-        bbs[:,j,11]=s*(trY+brY)/2
-        bbs[:,j,12]=s*(tlX+trX)/2
-        bbs[:,j,13]=s*(tlY+trY)/2
-        bbs[:,j,14]=s*(brX+blX)/2
-        bbs[:,j,15]=s*(brY+blY)/2
+        bbs[:,j,8]=s*(tlX+blX)/2.0
+        bbs[:,j,9]=s*(tlY+blY)/2.0
+        bbs[:,j,10]=s*(trX+brX)/2.0
+        bbs[:,j,11]=s*(trY+brY)/2.0
+        bbs[:,j,12]=s*(tlX+trX)/2.0
+        bbs[:,j,13]=s*(tlY+trY)/2.0
+        bbs[:,j,14]=s*(brX+blX)/2.0
+        bbs[:,j,15]=s*(brY+blY)/2.0
 
         #classes
         bbs[:,j,16]=1 if text else 0

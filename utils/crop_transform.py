@@ -18,7 +18,7 @@ def perform_crop(img, gt, crop):
     return scaled_gt_img, scaled_gt
 
 
-def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None, query_bb=None):
+def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None, query_bb=None,cropX=None,cropY=None):
     
     contains_label = np.random.random() < params['prob_label'] if 'prob_label' in params else None
     cs = params['crop_size']
@@ -32,25 +32,28 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
 
     cnt = 0
     while True: #we loop random crops to try and get an instance
-
-        if query_bb is None:
-            dim0 = np.random.randint(0,img.shape[0]-csY)
-            dim1 = np.random.randint(0,img.shape[1]-csX)
+        if cropX is None or cropY is None:
+            if query_bb is None:
+                dim0 = np.random.randint(0,img.shape[0]-csY)
+                dim1 = np.random.randint(0,img.shape[1]-csX)
+            else:
+                #force the random crop to fully contain the query, if it can
+                # otherwise contain part of it
+                minY=int(max(0,query_bb[9]-csY,query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY))
+                maxY=int(min(img.shape[0]-csX,query_bb[9]+1,query_bb[11]+1,query_bb[13]+1,query_bb[15]+1))
+                if minY>=maxY:
+                    minY=int(max(0,min(query_bb[9],query_bb[11],query_bb[13],query_bb[15])))
+                    maxY=int(min(img.shape[0]-csY,1+max(query_bb[9]-csY,query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY)))
+                minX=int(max(0,query_bb[8]-csX,query_bb[10]-csX,query_bb[12]-csX,query_bb[14]-csX))
+                maxX=int(min(img.shape[1]-csY,query_bb[8]+1,query_bb[10]+1,query_bb[12]+1,query_bb[14]+1))
+                if minX>=maxX:
+                    minX=int(max(0,min(query_bb[8],query_bb[10],query_bb[12],query_bb[14])))
+                    maxX=int(min(img.shape[1]-csY,1+max(query_bb[8]-csY,query_bb[10]-csY,query_bb[12]-csY,query_bb[14]-csY)))
+                dim0 = np.random.randint(minY,maxY)
+                dim1 = np.random.randint(minX,maxX)
         else:
-            #force the random crop to fully contain the query, if it can
-            # otherwise contain part of it
-            minY=int(max(0,query_bb[9]-csY,query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY))
-            maxY=int(min(img.shape[0]-csX,query_bb[9]+1,query_bb[11]+1,query_bb[13]+1,query_bb[15]+1))
-            if minY>=maxY:
-                minY=int(max(0,min(query_bb[9],query_bb[11],query_bb[13],query_bb[15])))
-                maxY=int(min(img.shape[0]-csY,1+max(query_bb[9]-csY,query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY)))
-            minX=int(max(0,query_bb[8]-csX,query_bb[10]-csX,query_bb[12]-csX,query_bb[14]-csX))
-            maxX=int(min(img.shape[1]-csY,query_bb[8]+1,query_bb[10]+1,query_bb[12]+1,query_bb[14]+1))
-            if minX>=maxX:
-                minX=int(max(0,min(query_bb[8],query_bb[10],query_bb[12],query_bb[14])))
-                maxX=int(min(img.shape[1]-csY,1+max(query_bb[8]-csY,query_bb[10]-csY,query_bb[12]-csY,query_bb[14]-csY)))
-            dim0 = np.random.randint(minY,maxY)
-            dim1 = np.random.randint(minX,maxX)
+            dim0=cropY
+            dim1=cropX
 
         crop = {
             "dim0": [dim0, dim0+csY],
@@ -164,6 +167,8 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
             point_gt_match=None
         
         if (
+            (cropX is not None and cropY is not None)
+            or
             (
             query_bb is not None and (
                 got_all or
@@ -336,7 +341,7 @@ class CropBoxTransform(object):
             else:
                 self.degree_std_dev = 1
 
-    def __call__(self, sample):
+    def __call__(self, sample,cropX=None,cropY=None):
         org_img = sample['img']
         bb_gt = sample['bb_gt']
         line_gts = sample['line_gt'] if 'line_gt' in sample else None
@@ -446,7 +451,7 @@ class CropBoxTransform(object):
                     gt[:,:,1] = gt[:,:,1] + pad_params[0][0]
 
 
-        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb)
+        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb, cropX=cropX,cropY=cropY)
         #print(crop_params)
         #print(gt_match)
         

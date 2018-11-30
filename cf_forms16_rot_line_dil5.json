@@ -1,0 +1,97 @@
+{
+    "name": "Forms16_rot_line_dil5",
+    "cuda": true,
+    "gpu": 0,
+    "save_mode": "state_dict",
+    "super_computer":true,
+    "override": true,
+    "data_loader": {
+        "data_set_name": "FormsBoxDetect",
+        "data_dir": "../data/forms",
+        "batch_size": 2,
+        "shuffle": true,
+        "num_workers": 2,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.4,0.65],
+        "crop_params": {
+            "crop_size":[652,1608],
+            "pad":0
+        },
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "cache_resized_images": true,
+        "only_types": {
+            "boxes":true,
+            "lines": ["start_of_line","end_of_line"]
+        },
+        "rotation": true
+
+
+    },
+    "validation": {
+        "shuffle": false,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.52,0.52],
+        "only_types": {
+            "boxes":true,
+            "lines": ["start_of_line","end_of_line"]
+        },
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "batch_size": 1,
+        "rotation": true
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.01,
+        "weight_decay": 0
+    },
+    "loss": {
+        "box":"YoloDistLoss",
+        "line":"LineLoss"
+    },
+    "loss_params": {
+        "box": {
+            "ignore_thresh": 0.5,
+            "bad_conf_weight": 20.0
+        }
+    },
+    "loss_weights":{"box":0.5, "line":0.5},
+    "metrics": [],
+    "trainer": {
+        "class": "BoxDetectTrainer",
+        "iterations": 200000,
+        "save_dir": "saved/",
+        "val_step": 5000,
+        "save_step": 50000,
+        "save_step_minor":500,
+        "log_step": 500,
+        "verbosity": 1,
+        "monitor": "loss",
+        "monitor_mode": "none",
+        "warmup_steps": 3000,
+        "thresh_conf":0.88,
+        "thresh_intersect":0.4
+    },
+    "arch": "YoloBoxDetector", 
+    "model": {
+        "color":false,
+        "number_of_box_types": 2,
+        "number_of_point_types": 0,
+        "number_of_pixel_types": 0,
+        "norm_type": "group_norm",
+        "dilation": 5,
+        "down_layers_cfg": [1,64, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024", 1024, 1024],
+        "up_layers_cfg":[],
+        "anchors_file": "anchors_rot_23.json",
+        "rotation":true
+    }
+}

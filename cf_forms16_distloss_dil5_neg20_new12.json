@@ -1,7 +1,8 @@
 {
-    "name": "forms11_iouVGG_dil5",
+    "name": "Forms16_distloss_dil5_neg20_new12",
     "cuda": true,
     "gpu": 0,
+    "super_computer":true,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
@@ -14,7 +15,8 @@
         "color":false,
         "rescale_range": [0.4,0.65],
         "crop_params": {
-            "crop_size":1024
+            "crop_size":[652,1608],
+            "pad":0
         },
         "no_blanks": true,
         "swap_circle":true,
@@ -51,11 +53,12 @@
         "weight_decay": 0
     },
     "loss": {
-        "box":"YoloLoss"
+        "box":"YoloDistLoss"
     },
     "loss_params": {
         "box": {
-            "ignore_thresh": 0.5
+            "ignore_thresh": 0.5,
+            "bad_conf_weight": 20.0
         }
     },
     "loss_weights":{"box":1.0},
@@ -65,7 +68,8 @@
         "iterations": 200000,
         "save_dir": "saved/",
         "val_step": 5000,
-        "save_step": 10000,
+        "save_step": 50000,
+        "save_step_minor": 500,
         "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
@@ -84,7 +88,7 @@
         "dilation": 5,
         "down_layers_cfg": [1,64, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024", 1024, 1024],
         "up_layers_cfg":[],
-        "anchors_file": "anchors_noRot_12.json",
+        "anchors_file": "anchors_noRot_new_12.json",
         "rotation":false
     }
 }

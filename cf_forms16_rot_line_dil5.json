@@ -1,8 +1,9 @@
 {
-    "name": "forms11_iouVGG_dil5",
+    "name": "Forms16_rot_line_dil5",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
+    "super_computer":true,
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
@@ -14,16 +15,18 @@
         "color":false,
         "rescale_range": [0.4,0.65],
         "crop_params": {
-            "crop_size":1024
+            "crop_size":[652,1608],
+            "pad":0
         },
         "no_blanks": true,
         "swap_circle":true,
         "no_graphics":true,
         "cache_resized_images": true,
         "only_types": {
-            "boxes":true
+            "boxes":true,
+            "lines": ["start_of_line","end_of_line"]
         },
-        "rotation": false
+        "rotation": true
 
 
     },
@@ -33,13 +36,14 @@
         "color":false,
         "rescale_range": [0.52,0.52],
         "only_types": {
-            "boxes":true
+            "boxes":true,
+            "lines": ["start_of_line","end_of_line"]
         },
         "no_blanks": true,
         "swap_circle":true,
         "no_graphics":true,
         "batch_size": 1,
-        "rotation": false
+        "rotation": true
     },
 
     
@@ -51,21 +55,24 @@
         "weight_decay": 0
     },
     "loss": {
-        "box":"YoloLoss"
+        "box":"YoloDistLoss",
+        "line":"LineLoss"
     },
     "loss_params": {
         "box": {
-            "ignore_thresh": 0.5
+            "ignore_thresh": 0.5,
+            "bad_conf_weight": 20.0
         }
     },
-    "loss_weights":{"box":1.0},
+    "loss_weights":{"box":0.5, "line":0.5},
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
         "val_step": 5000,
-        "save_step": 10000,
+        "save_step": 50000,
+        "save_step_minor":500,
         "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
@@ -84,7 +91,7 @@
         "dilation": 5,
         "down_layers_cfg": [1,64, "M", "W128", 128, "M", "W256", 256, "M", "W512", 512, "M", "W1024", 1024, 1024],
         "up_layers_cfg":[],
-        "anchors_file": "anchors_noRot_12.json",
-        "rotation":false
+        "anchors_file": "anchors_rot_23.json",
+        "rotation":true
     }
 }

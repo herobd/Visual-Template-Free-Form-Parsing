@@ -252,10 +252,6 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
         self.net_down_modules, down_last_channels = make_layers(layers_cfg, dilation,norm)
         self.final_features=None 
-        if self.forPairing:
-            def save_final(module,input,output):
-                self.final_features=output
-            self.net_down_modules[-1].register_forward_hook(save_final)
         self.last_channels=down_last_channels
         self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutLine+self.numOutPoint, kernel_size=1))
         self._hack_down = nn.Sequential(*self.net_down_modules)
@@ -405,3 +401,9 @@ class YoloBoxDetector(nn.Module): #BaseModel
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         params = sum([np.prod(p.size()) for p in model_parameters])
         print('Trainable parameters: {}'.format(params))
+
+    def setForPairing(self):
+        self.forPairing=True
+        def save_final(module,input,output):
+            self.final_features=output
+        self.net_down_modules[-2].register_forward_hook(save_final)

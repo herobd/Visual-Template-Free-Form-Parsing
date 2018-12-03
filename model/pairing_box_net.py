@@ -61,13 +61,13 @@ class PairingBoxNet(nn.Module):
 
         detect_ch_after_up = config['up_sample_ch'] if 'up_sample_ch' in config else 256
 
-        if 'up_sample_relu' not in config or config['up_sample_relu']:
-            self.up_sample = nn.Sequential(
+        #if 'up_sample_relu' not in config or config['up_sample_relu']:
+        self.up_sample = nn.Sequential(
                     nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=detect_scale//down1scale,stride=detect_scale//down1scale),
                     nn.ReLU(inplace=True)
                     )
-        else:
-            self.up_sample = nn.ConvTranspose2d(detect_ch,detect_ch,kernel_size=detect_scale,stride=detect_scale)
+        #else:
+        #    self.up_sample = nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=detect_scale,stride=detect_scale)
 
         if 'down2_layers_cfg' in config:
             layers_cfg_down2 = config['down2_layers_cfg']

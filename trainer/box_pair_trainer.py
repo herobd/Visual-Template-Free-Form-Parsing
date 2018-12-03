@@ -38,13 +38,14 @@ class BoxPairTrainer(BaseTrainer):
         #self.log_step = int(np.sqrt(self.batch_size))
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
-        warmup_steps = config['warmup_steps'] if 'warmup_steps' in config else 1000
+        warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
         lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
         self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
-        self.unfreeze_detector = config['unfreeze_detector'] if 'unfreeze_detector' in config else None
+        self.unfreeze_detector = config['trainer']['unfreeze_detector'] if 'unfreeze_detector' in config['trainer'] else None
 
-        self.thresh_conf = config['thresh_conf'] if 'thresh_conf' in config else 0.92
-        self.thresh_intersect = config['thresh_intersect'] if 'thresh_intersect' in config else 0.4
+        self.thresh_conf = config['trainer']['thresh_conf'] if 'thresh_conf' in config['trainer'] else 0.92
+        self.thresh_intersect = config['trainer']['thresh_intersect'] if 'thresh_intersect' in config['trainer'] else 0.4
+        self.from_gt = config['trainer']['from_gt'] if 'from_gt' in config['trainer'] else False
 
     def _to_tensor(self, instance):
         data = instance['img']
@@ -140,7 +141,13 @@ class BoxPairTrainer(BaseTrainer):
         #    loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         #else:
         image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(thisInstance)
-        outputBoxes, outputOffsets = self.model(image,queryMask)
+        if self.from_gt:
+            outputBoxes, outputOffsets = self.model(image,queryMask,
+                    imageName=thisInstance['imgName'], 
+                    scale=thisInstance['scale'],
+                    cropPoint=thisInstance['cropPoint'])
+        else:
+            outputBoxes, outputOffsets = self.model(image,queryMask)
         loss, position_loss, conf_loss, class_loss, recall, precision = self.loss(outputOffsets,targetBoxes,targetBoxes_sizes)
 
         ##toc=timeit.default_timer()
@@ -247,7 +254,13 @@ class BoxPairTrainer(BaseTrainer):
 
                 image, queryMask, targetBoxes, targetBoxes_sizes = self._to_tensor(instance)
 
-                outputBoxes,outputOffsets = self.model(image,queryMask,instance['imgName'])
+                if self.from_gt:
+                    outputBoxes, outputOffsets = self.model(image,queryMask,
+                            imageName=instance['imgName'], 
+                            scale=instance['scale'],
+                            cropPoint=instance['cropPoint'])
+                else:
+                    outputBoxes, outputOffsets = self.model(image,queryMask)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0

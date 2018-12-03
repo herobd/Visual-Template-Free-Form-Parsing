@@ -34,6 +34,7 @@ def collate(batch):
     batch_size = len(batch)
     imageNames=[]
     scales=[]
+    cropPoint=[]
     imgs = []
     queryMask=[]
     max_h=0
@@ -45,6 +46,7 @@ def collate(batch):
             continue
         imageNames.append(b['imgName'])
         scales.append(b['scale'])
+        cropPoint.append(b['cropPoint'])
         imgs.append(b["img"])
         queryMask.append(b['queryMask'])
         max_h = max(max_h,b["img"].size(2))
@@ -118,7 +120,8 @@ def collate(batch):
         "responseBB_sizes": bb_sizes,
         'queryMask': queryMask,
         "imgName": imageNames,
-        "scale": scales
+        "scale": scales,
+        "cropPoint": cropPoint
     }
 
 class FormsBoxPair(torch.utils.data.Dataset):
@@ -184,7 +187,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         #self.fixedDetectorCheckpoint = config['detector_checkpoint'] if 'detector_checkpoint' in config else None
         crop_params=config['crop_params'] if 'crop_params' in config else None
         if crop_params is not None:
-            self.transform = CropBoxTransform(crop_params)
+            self.transform = CropBoxTransform(crop_params,self.rotate)
         else:
             self.transform = None
         if instances is not None:
@@ -336,7 +339,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         #imageWithQuery = np.append(1-np_img/128.0,queryMask[:,:,None]),axis=2)
         #sample = self.cropResize(imageWithQuery, responseMask, xQueryC,yQueryC,reach,x0,y0,x1,y1)
         if self.transform is not None:
-            out = self.transform({
+            out,cropPoint = self.transform({
                 "img": np_img,
                 "bb_gt": response_bbs,
                 "query_bb":query_bb,
@@ -349,7 +352,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
                 np_img = augmentation.apply_random_color_rotation(np_img)
             np_img = augmentation.apply_tensmeyer_brightness(np_img)
             queryMask = out['pixel_gt']
-            #TODO rotate?
+        else:
+            cropPoint=None
 
         t_response_bbs = convertBBs(response_bbs,self.rotate,2)
         if t_response_bbs is not None and (torch.isnan(t_response_bbs).any() or (float('inf')==t_response_bbs).any()):
@@ -367,7 +371,8 @@ class FormsBoxPair(torch.utils.data.Dataset):
                 'imgName':imageName,
                 'queryMask':t_queryMask,
                 'scale': scale,
-                'responseBBs':t_response_bbs
+                'responseBBs':t_response_bbs,
+                'cropPoint':cropPoint,
                 }
 
         #def getBBGT(self,useBBs,s):

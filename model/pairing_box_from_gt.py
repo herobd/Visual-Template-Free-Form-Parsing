@@ -2,21 +2,26 @@ from base import BaseModel
 import torch
 from .pairing_box_net import PairingBoxNet #, YoloBoxDetector
 from model import *
+from model.yolo_loss import inv_tanh, get_closest_anchor_iou, get_closest_anchor_dist
+import json
+from datasets.forms_box_detect import FormsBoxDetect
+import math
 
 
 class PairingBoxFromGT(BaseModel):
     def __init__(self, config):
         super(PairingBoxFromGT, self).__init__(config)
-        with open(detector_config['anchors_file']) as f:
+        with open(config['anchors_file']) as f:
             numAnchors=len(json.load(f))
         numBBParams=6 #conf,x-off,y-off,rot-off,h-scale,w-scale
         numBBTypes=config['number_of_box_types']
-
+        #config['up_sample_ch'] = (numBBParams+numBBTypes)*numAnchors
+        self.detect_scale=16
         self.pairer = PairingBoxNet(
                 config,
                 config,
                 numAnchors*(numBBParams+numBBTypes),
-                config['detector_scale'])
+                self.detect_scale)
 
         self.numBBTypes = self.pairer.numBBTypes
         self.numBBParams = self.pairer.numBBParams
@@ -24,29 +29,57 @@ class PairingBoxFromGT(BaseModel):
         self.anchors = self.pairer.anchors
         self.rotation = self.pairer.rotation
 
-        self.preparedAnchors=[]
-        for anchor in self.anchors:
-            dgsdfg
+        if self.rotation:
+            o_r = torch.FloatTensor([a['rot'] for a in self.anchors])
+            o_h = torch.FloatTensor([a['height'] for a in self.anchors])
+            o_w = torch.FloatTensor([a['width'] for a in self.anchors])
+            cos_rot = torch.cos(o_r)
+            sin_rot = torch.sin(o_r)
+            p_left_x =  -cos_rot*o_w
+            p_left_y =  sin_rot*o_w
+            p_right_x = cos_rot*o_w
+            p_right_y = -sin_rot*o_w
+            p_top_x =   -sin_rot*o_h
+            p_top_y =   -cos_rot*o_h
+            p_bot_x =   sin_rot*o_h
+            p_bot_y =   cos_rot*o_h
+            anchor_points=torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y], dim=1)
+            anchor_hws= (o_h+o_w)/2.0
+            self.preparedAnchors=(anchor_points,anchor_hws)
+            self.get_closest_anchor = lambda r,h,w: get_closest_anchor_dist(self.preparedAnchors,r,h,w)
+        else:
+            self.preparedAnchors=[[a['width'], a['height']] for a in self.anchors]
+            self.get_closest_anchor = lambda r,h,w: get_closest_anchor_iou(self.preparedAnchors,h,w)
+                
 
         self.dataset_train = FormsBoxDetect(dirPath=config['data_loader_detect']['data_dir'],split='train', config=config['data_loader_detect'])
+        del config['data_loader_detect']['crop_params']
         self.dataset_valid = FormsBoxDetect(dirPath=config['data_loader_detect']['data_dir'],split='valid', config=config['data_loader_detect'])
 
         #create a look up
-        dataLookUp={}
-        for index,instance in enumerate(dataset_train):
-            dataLookUp[instance['imgName']] = (self.dataset_train,index)
-        for index,instance in enumerate(dataset_valid):
-            dataLookUp[instance['imgName']] = (self.dataset_valid,index)
+        self.dataLookUp={}
+        for index,instance in enumerate(self.dataset_train):
+            self.dataLookUp[instance['imgName']] = (self.dataset_train,index)
+        for index,instance in enumerate(self.dataset_valid):
+            self.dataLookUp[instance['imgName']] = (self.dataset_valid,index)
  
         
 
-    def forward(self, image, queryMask,imageName,scale,cropX=None,cropY=None):
-        for b in len(imagename):
-            d= dataLookup[imageName[b]]
-            instance = d[0].getitem(d[1],scale,cropX,cropY)
-            offset = self.create_offsets(instance)
+    def forward(self, image, queryMask,imageName,scale,cropPoint):
+        padH=(self.detect_scale-(image.size(2)%self.detect_scale))%self.detect_scale
+        padW=(self.detect_scale-(image.size(3)%self.detect_scale))%self.detect_scale
+        if padH!=0 or padW!=0:
+            padder = torch.nn.ZeroPad2d((0,padW,0,padH))
+            image = padder(image)
+            queryMask = padder(queryMask)
+        offsets=[]
+        for b in range(len(imageName)):
+            d= self.dataLookUp[imageName[b]]
+            instance = d[0].getitem(d[1],scale[b],cropPoint[b])
+            offset = self.create_offsets(instance,image.size(2),image.size(3))
             offsets.append(offset)
         offsets = torch.cat(offsets,dim=0)
+        offsets = offsets.to(image.device)
         bbPredictions, offsetPredictions = self.pairer( image,
                                                         queryMask,
                                                         offsets, 
@@ -55,37 +88,30 @@ class PairingBoxFromGT(BaseModel):
         return bbPredictions, offsetPredictions
 
 
-    def create_offsets(self,gt):
+    def create_offsets(self,gt,imgH,imgW):
         #create what the detector network would have produced for the gt
-        H=imgH/self.scale
-        W=imgW/self.scale
-        offset = torch.normal((1,(self.numBBParams+self.numBBTypes)*len(self.anchors),H,W),mu=0,sigma=0.1)
+        #imgH = gt['img'].size(2) # we take the padded version
+        #imgW = gt['img'].size(3)
+        H=int(imgH/self.detect_scale)
+        W=int(imgW/self.detect_scale)
+        offset = torch.empty((1,(self.numBBParams+self.numBBTypes)*len(self.anchors),H,W)).normal_(mean=0,std=0.1)
         #set all conf to zero
         for a in range(len(self.anchors)):
             offset[:,a*(self.numBBParams+self.numBBTypes),:,:]=0
 
-        priors_0 = torch.arange(0,y.size(2)).type_as(img.data)[None,:,None]
-        priors_0 = (priors_0 + 0.5) * self.scale #self.base_0
-        priors_0 = priors_0.expand(y.size(0), priors_0.size(1), y.size(3))
-        priors_0 = priors_0[:,None,:,:]#.to(img.device)
-
-        priors_1 = torch.arange(0,y.size(3)).type_as(img.data)[None,None,:]
-        priors_1 = (priors_1 + 0.5) * self.scale #elf.base_1
-        priors_1 = priors_1.expand(y.size(0), y.size(2), priors_1.size(2))
-        priors_1 = priors_1[:,None,:,:]#.to(img.device)
-
-        for bb in bb_gt:
-            if self.rotation
-                a,_ = get_closest_anchor_iou(self.prepredAnchors,bb[3],bb[4])
-            else:
-                a,_ = get_closest_anchor_dist(self.prepredAnchors,bb[2],bb[3],bb[4])
-            cellX = bb[0]//self.scale
-            cellY = bb[1]//self.scale
-            offset[0,0,cellY,cellX]=1 #conf to one
-            offset[0,1,cellY,cellX]= inv_tanh((bb[0]-priors_1)/self.scale) #x
-            offset[0,2,cellY,cellX]= inv_tanh((bb[1]-priors_0)/self.scale) #y
-            offset[0,3,cellY,cellX]= inv_tanh( (bb[2]-self.anchor[a]['rot'])/(math.pi/2) )
-            offset[0,4,cellY,cellX]= torch.log(bb[3]/anchor[a]['height'])
-            offset[0,5,cellY,cellX]= torch.log(bb[4]/anchor[a]['width'])
-            offset[0,6:,cellY,cellX]= bb[5:] #class
+        for i in range(gt['bb_gt'].size(1)):
+            bb=gt['bb_gt'][0,i]
+            a,_ = self.get_closest_anchor(bb[2],bb[3],bb[4])
+            index=(self.numBBParams+self.numBBTypes)*a
+            cellX = int(bb[0].item()//self.scale)
+            cellY = int(bb[1].item()//self.scale)
+            priorX = cellX*self.scale + 0.5
+            priorY = cellY*self.scale + 0.5
+            offset[0,index+0,cellY,cellX]=1 #conf to one
+            offset[0,index+1,cellY,cellX]= inv_tanh((bb[0]-priorX)/self.scale) #x
+            offset[0,index+2,cellY,cellX]= inv_tanh((bb[1]-priorY)/self.scale) #y
+            offset[0,index+3,cellY,cellX]= inv_tanh( (bb[2]-self.anchors[a]['rot'])/(math.pi/2) )
+            offset[0,index+4,cellY,cellX]= torch.log(bb[3]/self.anchors[a]['height'])
+            offset[0,index+5,cellY,cellX]= torch.log(bb[4]/self.anchors[a]['width'])
+            offset[0,index+6:(index+6+self.numBBTypes),cellY,cellX]= bb[13:13+self.numBBTypes] #class
         return offset

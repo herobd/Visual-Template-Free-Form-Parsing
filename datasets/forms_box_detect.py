@@ -372,7 +372,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
     def __getitem__(self,index):
         return self.getitem(index)
-    def getitem(self,index,scaleP=None,cropX=None,cropY=None):
+    def getitem(self,index,scaleP=None,cropPoint=None):
         ##ticFull=timeit.default_timer()
         imagePath = self.images[index]['imagePath']
         imageName = self.images[index]['imageName']
@@ -459,7 +459,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
 
         ##ticTr=timeit.default_timer()
         if self.transform is not None:
-            out = self.transform({
+            out, cropPoint = self.transform({
                 "img": np_img,
                 "bb_gt": bbs,
                 "line_gt": {
@@ -471,7 +471,7 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                         },
                 "pixel_gt": pixel_gt,
                 
-            }, cropX, cropY)
+            }, cropPoint)
             np_img = out['img']
             bbs = out['bb_gt']
             if 'table_points' in out['point_gt']:
@@ -528,7 +528,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                         },
                 "pixel_gt": pixel_gt,
                 "imgName": imageName,
-                "scale": s
+                "scale": s,
+                "cropPoint": cropPoint
                 }
         else:
             if 'boxes' not in self.only_types or not self.only_types['boxes']:
@@ -584,7 +585,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                 "point_gt": point_gt,
                 "pixel_gt": pixel_gtR,
                 "imgName": imageName,
-                "scale": s
+                "scale": s,
+                "cropPoint": cropPoint
                 }
 
 

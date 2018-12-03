@@ -36,8 +36,8 @@ class PairingBoxNet(nn.Module):
         #self.predPixelCount = config['number_of_pixel_types']
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
         #self.numOutPoint = self.predPointCount*3
-        maskSize = 1+(config['num_dist_masks'] if 'num_dist_masks' in config else 0)
-        im_ch = maskSize+( 3 if 'color' not in detector_config or detector_config['color'] else 1 ) #+1 for query mask
+        maskSize = 1+(config['num_dist_masks'] if 'num_dist_masks' in config else 0) #+1 for query mask
+        im_ch = maskSize+( 3 if 'color' not in detector_config or detector_config['color'] else 1 )
         norm = config['norm_type'] if "norm_type" in config else None
         if norm is None:
             print('Warning: PairingBoxNet has no normalization!')
@@ -48,8 +48,8 @@ class PairingBoxNet(nn.Module):
         else:
             layers_cfg_down1=[32, 'M']
 
-        if type(layers_cfg_down1[0])==str or layers_cfg_down1[0]>4:
-            layers_cfg_down1 = [im_ch]+layers_cfg_down1
+        #if type(layers_cfg_down1[0])==str or layers_cfg_down1[0]>4:
+        layers_cfg_down1 = [im_ch]+layers_cfg_down1
         down1_modules, down1_last_ch = make_layers(layers_cfg_down1, dilation,norm)
         self.net_down1 = nn.Sequential(*down1_modules)
         down1scale=1

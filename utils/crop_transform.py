@@ -18,7 +18,7 @@ def perform_crop(img, gt, crop):
     return scaled_gt_img, scaled_gt
 
 
-def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None, query_bb=None,cropX=None,cropY=None):
+def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None, query_bb=None,cropPoint=None):
     
     contains_label = np.random.random() < params['prob_label'] if 'prob_label' in params else None
     cs = params['crop_size']
@@ -32,7 +32,7 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
 
     cnt = 0
     while True: #we loop random crops to try and get an instance
-        if cropX is None or cropY is None:
+        if cropPoint is None:
             if query_bb is None:
                 dim0 = np.random.randint(0,img.shape[0]-csY)
                 dim1 = np.random.randint(0,img.shape[1]-csX)
@@ -52,8 +52,8 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                 dim0 = np.random.randint(minY,maxY)
                 dim1 = np.random.randint(minX,maxX)
         else:
-            dim0=cropY
-            dim1=cropX
+            dim0=cropPoint[1]
+            dim1=cropPoint[0]
 
         crop = {
             "dim0": [dim0, dim0+csY],
@@ -167,7 +167,7 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
             point_gt_match=None
         
         if (
-            (cropX is not None and cropY is not None)
+            (cropPoint is not None)
             or
             (
             query_bb is not None and (
@@ -247,7 +247,7 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                 if point_gts is not None:
                     for name in point_gt_match:
                         point_gt_match[name] = np.where(point_gt_match[name]!=0)
-                return crop, cropped_gt_img, cropped_pixel_gt, line_gt_match, point_gt_match, bb_gt
+                return crop, cropped_gt_img, cropped_pixel_gt, line_gt_match, point_gt_match, bb_gt, (dim1,dim0)
 
         cnt += 1
 
@@ -290,7 +290,7 @@ class CropTransform(object):
             gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
             gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 
-        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, _ = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params)
+        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, _ , cropPoint = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params)
         #print(crop_params)
         #print(gt_match)
         
@@ -341,7 +341,7 @@ class CropBoxTransform(object):
             else:
                 self.degree_std_dev = 1
 
-    def __call__(self, sample,cropX=None,cropY=None):
+    def __call__(self, sample,cropPoint=None):
         org_img = sample['img']
         bb_gt = sample['bb_gt']
         line_gts = sample['line_gt'] if 'line_gt' in sample else None
@@ -451,7 +451,7 @@ class CropBoxTransform(object):
                     gt[:,:,1] = gt[:,:,1] + pad_params[0][0]
 
 
-        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb, cropX=cropX,cropY=cropY)
+        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt , cropPoint = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb, cropPoint=cropPoint)
         #print(crop_params)
         #print(gt_match)
         
@@ -489,10 +489,10 @@ class CropBoxTransform(object):
             #    for j in range(min(10,gt.size(1))):
             #        ##print('a {},{}   {},{}'.format(gt[:,j,0],gt[:,j,1],gt[:,j,2],gt[:,j,3]))
 
-        return {
+        return ({
             "img": org_img,
             "bb_gt": new_bb_gt,
             "line_gt": new_line_gts,
             "point_gt": new_point_gts,
             "pixel_gt": pixel_gt
-        }
+        }, cropPoint)

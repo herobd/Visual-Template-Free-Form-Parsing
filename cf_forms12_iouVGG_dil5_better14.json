@@ -70,7 +70,7 @@
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
-        "warmup_steps": 3000,
+        "warmup_steps": 1000,
         "thresh_conf":0.92,
         "thresh_intersect":0.4
     },

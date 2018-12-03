@@ -189,7 +189,7 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
     return iou
 
 def inv_tanh(y):
-    if y<=-1:
+    if y<=-1: #implicit gradient clipping done here
         return -2
     elif y >=1:
         return 2
@@ -197,7 +197,7 @@ def inv_tanh(y):
 
 def get_closest_anchor_iou(anchors,gh,gw):
     # Get shape of gt box
-    gt_box = torch.FloatTensor(np.array([0, 0, gw, gh])).unsqueeze(0)
+    gt_box = torch.FloatTensor([0, 0, gw, gh]).unsqueeze(0)
     # Get shape of anchor box
     anchor_shapes = torch.FloatTensor(np.concatenate((np.zeros((len(anchors), 2)), np.array(anchors)), 1))
     # Calculate iou between gt and anchor shapes
@@ -473,24 +473,11 @@ def get_closest_anchor_dist(anchors,rot,gh,gw):
     g_bot_x =   sin_rot*gh
     g_bot_y =   cos_rot*gh
     gt_points = torch.tensor([g_left_x,g_left_y,g_right_x,g_right_y,g_top_x,g_top_y,g_bot_x,g_bot_y])
-    #make anchor points from anchors
-    o_r = torch.FloatTensor([a['rot'] for a in anchors])
-    o_h = torch.FloatTensor([a['height'] for a in anchors])
-    o_w = torch.FloatTensor([a['width'] for a in anchors])
-    cos_rot = torch.cos(o_r)
-    sin_rot = torch.sin(o_r)
-    p_left_x =  -cos_rot*o_w
-    p_left_y =  sin_rot*o_w
-    p_right_x = cos_rot*o_w
-    p_right_y = -sin_rot*o_w
-    p_top_x =   -sin_rot*o_h
-    p_top_y =   -cos_rot*o_h
-    p_bot_x =   sin_rot*o_h
-    p_bot_y =   cos_rot*o_h
-    self.anchor_points=torch.tensor([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y])
-    self.anchor_hws= (o_h+o_w)/2.0
+
+    anchor_points=anchors[0]
+    anchor_hws= anchors[1]
     anch_dists = bbox_dist(gt_points, (gh+gw)/2.0, anchor_points, anchor_hws)
-    best_n = np.argmax(anch_ious)
+    best_n = np.argmin(anch_dists)
     return best_n, anch_dists
 
 

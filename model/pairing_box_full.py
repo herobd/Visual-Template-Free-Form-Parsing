@@ -15,7 +15,7 @@ class PairingBoxFull(BaseModel):
             self.detector.load_state_dict(checkpoint['state_dict'])
         else:
             self.detector = checkpoint['model']
-        self.detector.forPairing=True
+        self.detector.setForPairing()
         for param in self.detector.parameters(): 
             param.will_use_grad=param.requires_grad 
             param.requires_grad=False 

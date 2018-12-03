@@ -184,7 +184,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         #self.fixedDetectorCheckpoint = config['detector_checkpoint'] if 'detector_checkpoint' in config else None
         crop_params=config['crop_params'] if 'crop_params' in config else None
         if crop_params is not None:
-            self.transform = CropBoxTransform(crop_params)
+            self.transform = CropBoxTransform(crop_params,self.rotate)
         else:
             self.transform = None
         if instances is not None:

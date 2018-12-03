@@ -12,6 +12,8 @@ class PairingBoxFromGT(BaseModel):
         numBBParams=6 #conf,x-off,y-off,rot-off,h-scale,w-scale
         numBBTypes=config['number_of_box_types']
 
+        config['up_sample_ch'] = (numBBParams+numBBTypes)*numAnchors
+
         self.pairer = PairingBoxNet(
                 config,
                 config,

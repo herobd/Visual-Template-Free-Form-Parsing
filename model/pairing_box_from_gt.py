@@ -11,17 +11,41 @@ import math
 class PairingBoxFromGT(BaseModel):
     def __init__(self, config):
         super(PairingBoxFromGT, self).__init__(config)
-        with open(config['anchors_file']) as f:
-            numAnchors=len(json.load(f))
-        numBBParams=6 #conf,x-off,y-off,rot-off,h-scale,w-scale
-        numBBTypes=config['number_of_box_types']
-        #config['up_sample_ch'] = (numBBParams+numBBTypes)*numAnchors
-        self.detect_scale=16
-        self.pairer = PairingBoxNet(
-                config,
-                config,
-                numAnchors*(numBBParams+numBBTypes),
-                self.detect_scale)
+        #if (not config['net_features']) if 'net_features' in config else True:
+        if 'detector_checkpoint' not in config:
+            with open(config['anchors_file']) as f:
+                numAnchors=len(json.load(f))
+            numBBParams=6 #conf,x-off,y-off,rot-off,h-scale,w-scale
+            numBBTypes=config['number_of_box_types']
+            #config['up_sample_ch'] = (numBBParams+numBBTypes)*numAnchors
+            self.detect_scale=16
+            self.pairer = PairingBoxNet(
+                    config,
+                    config,
+                    numAnchors*(numBBParams+numBBTypes),
+                    self.detect_scale)
+            self.detector=None
+        else:
+            checkpoint = torch.load(config['detector_checkpoint'])
+            detector_config = config['detector_config'] if 'detector_config' in config else checkpoint['config']['model']
+            if 'state_dict' in checkpoint:
+                self.detector = eval(checkpoint['config']['arch'])(detector_config)
+                self.detector.load_state_dict(checkpoint['state_dict'])
+            else:
+                self.detector = checkpoint['model']
+            self.detector.setForPairing()
+            for param in self.detector.parameters():
+                param.will_use_grad=param.requires_grad
+                param.requires_grad=False
+            self.detector_frozen=True
+
+            self.pairer = PairingBoxNet(
+                    config['pairer_config'],
+                    detector_config,
+                    self.detector.last_channels,
+                    self.detector.scale)
+            self.storedImageName=None
+            self.detect_scale=self.detector.scale
 
         self.numBBTypes = self.pairer.numBBTypes
         self.numBBParams = self.pairer.numBBParams
@@ -62,6 +86,8 @@ class PairingBoxFromGT(BaseModel):
             self.dataLookUp[instance['imgName']] = (self.dataset_train,index)
         for index,instance in enumerate(self.dataset_valid):
             self.dataLookUp[instance['imgName']] = (self.dataset_valid,index)
+
+        self.no_final_features = config['no_final_features'] if 'no_final_features' in config else False
  
         
 
@@ -80,9 +106,33 @@ class PairingBoxFromGT(BaseModel):
             offsets.append(offset)
         offsets = torch.cat(offsets,dim=0)
         offsets = offsets.to(image.device)
+        if self.detector is None:
+            final_features = offsets
+        else:
+            if not self.training and self.storedImageName is not None and imageName==self.storedImageName:
+                offsetPredictionsD=self.storedOffsetPredictionsD
+                final_features=self.storedFinal_features
+            else:
+                save=not self.training
+                self.storedOffsetPredictionsD=None
+                self.storedFinal_features=None
+                self.storedImageName=None
+                offsetPredictionsD = self.detector(image)
+                final_features=self.detector.final_features
+                self.detector.final_features=None
+
+                if save:
+                    self.storedOffsetPredictionsD=offsetPredictionsD
+                    self.storedFinal_features=final_features
+                    self.storedImageName=imageName
+                    #print('size {}'.format(image.size()))
+            if final_features is None:
+                import pdb;pdb.set_trace()
+        if self.no_final_features:
+            final_features[...]=0
         bbPredictions, offsetPredictions = self.pairer( image,
                                                         queryMask,
-                                                        offsets, 
+                                                        final_features, 
                                                         offsets)
 
         return bbPredictions, offsetPredictions

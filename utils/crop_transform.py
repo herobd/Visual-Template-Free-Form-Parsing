@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import timeit
 import warnings
+import random
 
 def perform_crop(img, gt, crop):
     #csX,csY = crop['crop_size']
@@ -42,15 +43,31 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                 minY=int(max(0,query_bb[9]-csY,query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY))
                 maxY=int(min(img.shape[0]-csY,query_bb[9]+1,query_bb[11]+1,query_bb[13]+1,query_bb[15]+1))
                 if minY>=maxY:
-                    minY=int(max(0,min(query_bb[9],query_bb[11],query_bb[13],query_bb[15])))
-                    maxY=int(min(img.shape[0]-csY,1+max(query_bb[9]-csY,query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY)))
+                    minY= random.choice([query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY])
+                    maxY= random.choice([query_bb[9]+1,query_bb[11]+1,query_bb[13]+1,query_bb[15]+1])
+                    if minY>=maxY:
+                        dim0 = random.choice([minY,maxY])
+                    else:
+                        dim0 = np.random.randint(minY,maxY)
+                    dim0 = int(min(img.shape[0]-csY,max(0,dim0)))
+                    #minY=int(max(0,min(query_bb[9],query_bb[11],query_bb[13],query_bb[15])))
+                    #maxY=int(min(img.shape[0]-csY,1+max(query_bb[9]-csY,query_bb[11]-csY,query_bb[13]-csY,query_bb[15]-csY)))
+                else:
+                    dim0 = np.random.randint(minY,maxY)
                 minX=int(max(0,query_bb[8]-csX,query_bb[10]-csX,query_bb[12]-csX,query_bb[14]-csX))
                 maxX=int(min(img.shape[1]-csX,query_bb[8]+1,query_bb[10]+1,query_bb[12]+1,query_bb[14]+1))
                 if minX>=maxX:
-                    minX=int(max(0,min(query_bb[8],query_bb[10],query_bb[12],query_bb[14])))
-                    maxX=int(min(img.shape[1]-csX,1+max(query_bb[8]-csX,query_bb[10]-csX,query_bb[12]-csX,query_bb[14]-csY)))
-                dim0 = np.random.randint(minY,maxY)
-                dim1 = np.random.randint(minX,maxX)
+                    minX= random.choice([query_bb[8]-csY,query_bb[10]-csX,query_bb[12]-csX,query_bb[14]-csX])
+                    maxX= random.choice([query_bb[8]+1,query_bb[10]+1,query_bb[12]+1,query_bb[14]+1])
+                    if minX>=maxX:
+                        dim1 = random.choice([minX,maxX])
+                    else:
+                        dim1 = np.random.randint(minX,maxX)
+                    dim1 = int(min(img.shape[1]-csX,max(0,dim1)))
+                    #minX=int(max(0,min(query_bb[8],query_bb[10],query_bb[12],query_bb[14])))
+                    #maxX=int(min(img.shape[1]-csX,1+max(query_bb[8]-csX,query_bb[10]-csX,query_bb[12]-csX,query_bb[14]-csY)))
+                else:
+                    dim1 = np.random.randint(minX,maxX)
         else:
             dim0=cropPoint[1]
             dim1=cropPoint[0]

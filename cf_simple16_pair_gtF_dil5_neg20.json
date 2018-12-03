@@ -77,10 +77,7 @@
     },
     "arch": "PairingBoxFromGT", 
     "model": {
-        "number_of_box_types":2,
-        "anchors_file": "anchors_noRot_new_12.json",
-        "rotation":false,
-        "color":false,
+        "detector_checkpoint": "saved/Forms16_dil5_neg20_new12/checkpoint-iteration200000.pth.tar",
 
         "num_dist_masks": 3,
         "norm_type": "group_norm",

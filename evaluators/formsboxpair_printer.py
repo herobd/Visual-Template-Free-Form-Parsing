@@ -125,12 +125,21 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
     maxConf = outputBBs[:,:,0].max().item()
     threshConf = max(maxConf*0.99,0.5)
     #print("maxConf:{}, threshConf:{}".format(maxConf,threshConf))
-    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
+    if model.rotation:
+        outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,0.4)
+    else:
+        outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
     #aps_3=[]
     aps_5=[]
+    apsDiff_5=[]
+    apsSame_5=[]
     #aps_7=[]
     recalls_5=[]
+    recallsDiff_5=[]
+    recallsSame_5=[]
     precs_5=[]
+    precsDiff_5=[]
+    precsSame_5=[]
     bestBBIdx=[]
     secondBBIdx=[]
     for b in range(batchSize):
@@ -138,7 +147,12 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
             target_for_b = torch.empty(0)
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=True)
+        if model.rotation:
+            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.5,ignoreClasses=True)
+            apCls_5, precCls_5, recallCls_5 =AP_dist(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
+        else:
+            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=True)
+            apCls_5, precCls_5, recallCls_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
         #ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
         #ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
 
@@ -147,6 +161,15 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
         precs_5.append(prec_5)
+        for classIdx in range(len(apCls5)):
+            if classIdx == instance['queryClass']:
+                apsSame.append(apCls_5[classIdx])
+                precsSame.append(precCls_5[classIdx])
+                recallsSame.append(recallCls_5[classIdx])
+            else:
+                apsDiff.append(apCls_5[classIdx])
+                precsDiff.append(precCls_5[classIdx])
+                recallsDiff.append(recallCls_5[classIdx])
         #for b in range(len(outputBBs)):
         outputBBs[b] = outputBBs[b].data.numpy()
         if outputBBs[b].shape[0]>0:
@@ -280,6 +303,14 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
                #'ap_7':aps_7,
                'recall':recalls_5,
                'prec':precs_5,
+
+               'apSame_5':apsSame_5,
+               'recallSame':recallsSame_5,
+               'precSame':precsSame_5,
+
+               'apDiff_5':apsDiff_5,
+               'recallDiff':recallsDiff_5,
+               'precDiff':precsDiff_5,
              }, 
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)
             )

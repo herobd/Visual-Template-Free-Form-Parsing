@@ -146,7 +146,10 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     maxConf = outputBBs[:,:,0].max().item()
     threshConf = max(maxConf*THRESH,0.5)
     #print("threshConf:{}".format(threshConf))
-    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
+    if model.rotation:
+        outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,0.4)
+    else:
+        outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
     aps_3=[]
     aps_5=[]
     aps_7=[]
@@ -157,9 +160,15 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
             target_for_b = torch.empty(0)
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,model.numBBTypes)
-        ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
-        ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
+        if model.rotation:
+            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.5,model.numBBTypes)
+            ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],0.3,model.numBBTypes)
+            ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.7,model.numBBTypes)
+        else:
+            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,model.numBBTypes)
+            ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
+            ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
+
 
         aps_5.append(ap_5 )
         aps_3.append(ap_3 )

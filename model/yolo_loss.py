@@ -112,7 +112,7 @@ class YoloLoss (nn.Module):
             loss_w = self.mse_loss(w[mask], tw[mask])
             loss_h = self.mse_loss(h[mask], th[mask])
             if self.multiclass:
-                loss_cls = self.bce_loss(pred_cls[mask], tcls[mask])
+                loss_cls = self.bce_loss(pred_cls[mask], tcls[mask].float())
             else:
                 loss_cls =  self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1)) *(1 / nB) #this multiply is erronous
             loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
@@ -445,7 +445,7 @@ class YoloDistLoss (nn.Module):
             loss_h = self.mse_loss(h[mask], th[mask])
             loss_r = self.mse_loss(r[mask], tr[mask])
             if self.multiclass:
-                loss_cls = self.bce_loss(pred_cls[mask], tcls[mask])
+                loss_cls = self.bce_loss(pred_cls[mask], tcls[mask].float())
             else:
                 loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
             loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])

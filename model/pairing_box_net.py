@@ -5,8 +5,7 @@ import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
 import math
 import json
-from .yolo_box_detector import make_layers
-
+from .net_builder import make_layers
 
 def offsetFunc(netPred): #this changes the offset prediction from the network
     #YOLOv2,3 use sigmoid on activation to prevent predicting outside of cell impossible

@@ -67,7 +67,7 @@
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 50000,
-        "save_step_minor": 1000,
+        "save_step_minor": 500,
         "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",

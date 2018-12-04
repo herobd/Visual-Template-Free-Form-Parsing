@@ -6,7 +6,7 @@ import math
 from utils.yolo_tools import allIOU, allDist
 
 class YoloLoss (nn.Module):
-    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,use_special_loss=False,bad_conf_weight=1.25):
+    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,use_special_loss=False,bad_conf_weight=1.25, multiclass=False):
         super(YoloLoss, self).__init__()
         self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
@@ -14,11 +14,12 @@ class YoloLoss (nn.Module):
         self.scale=scale
         self.use_special_loss=use_special_loss
         self.bad_conf_weight=bad_conf_weight
+        self.multiclass=multiclass
         self.anchors=anchors
         self.num_anchors=len(anchors)
-        self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
-        self.bce_loss = nn.BCEWithLogitsLoss(size_average=True)  # Confidence loss
-        self.ce_loss = nn.CrossEntropyLoss()  # Class loss
+        self.mse_loss = nn.MSELoss(reduction='elementwise_mean')  # Coordinate loss
+        self.bce_loss = nn.BCEWithLogitsLoss(reduction='elementwise_mean')  # Confidence loss
+        self.ce_loss = nn.CrossEntropyLoss(reduction='elementwise_mean')  # Class loss
 
     def forward(self,prediction, target, target_sizes ):
 
@@ -110,7 +111,10 @@ class YoloLoss (nn.Module):
             loss_y = self.mse_loss(y[mask], ty[mask])
             loss_w = self.mse_loss(w[mask], tw[mask])
             loss_h = self.mse_loss(h[mask], th[mask])
-            loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
+            if self.multiclass:
+                loss_cls = self.bce_loss(pred_cls[mask], tcls[mask])
+            else:
+                loss_cls =  self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1)) *(1 / nB) #this multiply is erronous
             loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
             loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
             return (
@@ -299,18 +303,19 @@ def build_targets(
 
 
 class YoloDistLoss (nn.Module):
-    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,bad_conf_weight=1.25):
+    def __init__(self, num_classes, rotation, scale, anchors, ignore_thresh=0.5,bad_conf_weight=1.25, multiclass=False):
         super(YoloDistLoss, self).__init__()
         self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.rotation=rotation
         self.scale=scale
         self.bad_conf_weight=bad_conf_weight
+        self.multiclass=multiclass
         self.anchors=anchors
         self.num_anchors=len(anchors)
-        self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
-        self.bce_loss = nn.BCEWithLogitsLoss(size_average=True)  # Confidence loss
-        self.ce_loss = nn.CrossEntropyLoss()  # Class loss
+        self.mse_loss = nn.MSELoss(reduction='elementwise_mean')  # Coordinate loss
+        self.bce_loss = nn.BCEWithLogitsLoss(reduction='elementwise_mean')  # Confidence loss
+        self.ce_loss = nn.CrossEntropyLoss(reduction='elementwise_mean')  # Class loss
 
         #make anchor points from anchors
         o_r = torch.FloatTensor([a['rot'] for a in anchors])
@@ -439,7 +444,10 @@ class YoloDistLoss (nn.Module):
             loss_w = self.mse_loss(w[mask], tw[mask])
             loss_h = self.mse_loss(h[mask], th[mask])
             loss_r = self.mse_loss(r[mask], tr[mask])
-            loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
+            if self.multiclass:
+                loss_cls = self.bce_loss(pred_cls[mask], tcls[mask])
+            else:
+                loss_cls = (1 / nB) * self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1))
             loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
             loss = loss_x + loss_y + loss_w + loss_h + loss_r + loss_conf + loss_cls
             return (

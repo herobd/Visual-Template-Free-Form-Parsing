@@ -40,7 +40,7 @@ class PairingBoxFromGT(BaseModel):
             self.detector_frozen=True
 
             self.pairer = PairingBoxNet(
-                    config['pairer_config'],
+                    config,
                     detector_config,
                     self.detector.last_channels,
                     self.detector.scale)

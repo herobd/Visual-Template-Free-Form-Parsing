@@ -104,13 +104,16 @@ def fixAnnotations(this,annotations):
                     bb['type'] == 'fieldCol' or
                     bb['type'] == 'fieldRegion'
                 )
+
+
     #restructure
     annotations['byId']={}
     for bb in annotations['textBBs']:
         annotations['byId'][bb['id']]=bb
     for bb in annotations['fieldBBs']:
         annotations['byId'][bb['id']]=bb
-    annotations['pairs']+=annotations['samePairs']
+    if not this.only_opposite_pairs:
+        annotations['pairs']+=annotations['samePairs']
 
     toAdd=[]
     idsToRemove=set()
@@ -267,6 +270,8 @@ def fixAnnotations(this,annotations):
     #first identify groups
     circleGroups={}
     circleGroupId=0
+    #also find text-field pairings
+    paired = set()
     for pair in annotations['pairs']:
         if pair[0] in circleIds and pair[1] in circleIds:
             group0=None
@@ -287,6 +292,12 @@ def fixAnnotations(this,annotations):
             else:
                 circleGroups[circleGroupId] = pair
                 circleGroupId+=1
+
+        cls0 = annotations['byId'][pair[0]]['type'][:4]=='text'
+        cls1 = annotations['byId'][pair[1]]['type'][:4]=='text'
+        if cls0!=cls1:
+            paired.add(pair[0])
+            paired.add(pair[1])
 
     #what pairs to each group?
     groupPairedTo=defaultdict(list)
@@ -315,15 +326,27 @@ def fixAnnotations(this,annotations):
         if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
              annotations['pairs'].append(pair)
 
+    #mark each bb that is chained to a cross-class pairing
+    while True:
+        size = len(paired)
+        for pair in annotations['pairs']:
+            if pair[0] in paired:
+                paired.add(pair[1])
+            elif pair[1] in paired:
+                paired.add(pair[0])
+        if len(paired)<=size:
+            break #at the end of every chain
+    for id in paired:
+        annotations['byId'][id]['paired']=True
 
 
-def getBBWithPoints(useBBs,s,useBlankClass=False):
+def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):
 
-
+    numClasses=2
     if useBlankClass:
-        numClasses=3
-    else:
-        numClasses=2
+        numClasses+=1
+    if usePairedClass:
+        numClasses+=1
     bbs = np.empty((1,len(useBBs), 8+8+numClasses), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
     j=0
     for bb in useBBs:
@@ -336,14 +359,6 @@ def getBBWithPoints(useBBs,s,useBlankClass=False):
         blX = bb['poly_points'][3][0]
         blY = bb['poly_points'][3][1]
 
-        field = bb['type'][:4]!='text'
-        if useBlankClass and (bb['isBlank']=='blank' or bb['isBlank']==3):
-            field=False
-            text=False
-            blank=True
-        else:
-            text=not field
-            blank=False
             
 
         bbs[:,j,0]=tlX*s
@@ -365,10 +380,19 @@ def getBBWithPoints(useBBs,s,useBlankClass=False):
         bbs[:,j,15]=s*(brY+blY)/2.0
 
         #classes
+        field = bb['type'][:4]!='text'
+        text=not field
         bbs[:,j,16]=1 if text else 0
         bbs[:,j,17]=1 if field else 0
+        index = 18
         if useBlankClass:
-            bbs[:,j,18]=1 if blank else 0
+            blank = (bb['isBlank']=='blank' or bb['isBlank']==3) if 'isBlank' in bb else False
+            bbs[:,j,index]=1 if blank else 0
+            index+=1
+        if usePairedClass:
+            paired = bb['paired'] if 'paired' in bb else False
+            bbs[:,j,index]=1 if paired else 0
+            index+=1
         j+=1
     return bbs
 

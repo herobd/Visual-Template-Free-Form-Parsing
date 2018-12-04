@@ -354,15 +354,14 @@ class FormsBoxDetect(torch.utils.data.Dataset):
                         #    #startCount=len(self.instances)
                         #    for bb in annotations['textBBs']:
         
-        if 'no_blanks' in config:
-            self.no_blanks = config['no_blanks']
-        else:
-            self.no_blanks = False
+        self.no_blanks = config['no_blanks'] if 'no_blanks' in config else False
+        self.use_paired_class = config['use_paired_class'] if 'use_paired_class' in config else False
         if 'no_print_fields' in config:
             self.no_print_fields = config['no_print_fields']
         else:
             self.no_print_fields = False
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
+        self.only_opposite_pairs = config['only_opposite_pairs'] if 'only_opposite_pairs' in config else False
         self.errors=[]
 
 
@@ -434,7 +433,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
         ##tic=timeit.default_timer()
-        bbs = getBBWithPoints(annotations['byId'].values(),s,useBlankClass=(not self.no_blanks))
+        bbs = getBBWithPoints(annotations['byId'].values(),s,useBlankClass=(not self.no_blanks),usePairedClass=self.use_paired_class)
+        numClasses = bbs.shape[2]-16
         #field_bbs = getBBWithPoints(annotations['fieldBBs'],s)
         #bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
         start_of_line, end_of_line = getStartEndGT(annotations['byId'].values(),s)
@@ -506,7 +506,6 @@ class FormsBoxDetect(torch.utils.data.Dataset):
         
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
-        numClasses = 2 if self.no_blanks else 3
         bbs = convertBBs(bbs,self.rotate,numClasses)
         #start_of_line = convertLines(start_of_line,numClasses)
         #end_of_line = convertLines(end_of_line,numClasses)

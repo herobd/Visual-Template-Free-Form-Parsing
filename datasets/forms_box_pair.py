@@ -270,6 +270,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
         imageName = self.instances[index]['imageName']
         queryBB = self.instances[index]['queryBB']
         assert(queryBB['type']!='fieldCol')
+        queryClassIndex = 0 if queryBB['type'][:4]=='text' else 1
         responseBBList = self.instances[index]['responseBBList']
         rescaled = self.instances[index]['rescaled']
         #xQueryC,yQueryC,reach,x0,y0,x1,y1 = self.instances[index]['helperStats'
@@ -370,6 +371,7 @@ class FormsBoxPair(torch.utils.data.Dataset):
                 'img':t_img,
                 'imgName':imageName,
                 'queryMask':t_queryMask,
+                'queryClass':queryClassIndex,
                 'scale': scale,
                 'responseBBs':t_response_bbs,
                 'cropPoint':cropPoint,

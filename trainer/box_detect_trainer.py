@@ -288,8 +288,8 @@ class BoxDetectTrainer(BaseTrainer):
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
-                if batch_idx>10:
-                    break
+                #if batch_idx>10:
+                #    break
                 data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
                 #print('data: {}'.format(data.size()))
                 outputBoxes,outputOffsets, outputLines, outputOffsetsLines, outputPoints, outputPixels = self.model(data)
@@ -308,15 +308,16 @@ class BoxDetectTrainer(BaseTrainer):
                 outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,self.thresh_intersect)
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
-                for b in range(len(outputBoxes)):
+                batchSize = len(outputBoxes)
+                for b in range(batchSize):
                     if targetBoxes is not None:
                         target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
                     else:
                         target_for_b = torch.empty(0)
                     ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
-                    mAP += np.array(ap_5,dtype=np.float)/len(outputBoxes)
-                    mRecall += np.array(recall_5,dtype=np.float)/len(outputBoxes)
-                    mPrecision += np.array(prec_5,dtype=np.float)/len(outputBoxes)
+                    mAP += np.array(ap_5,dtype=np.float)#/len(outputBoxes)
+                    mRecall += np.array(recall_5,dtype=np.float)#/len(outputBoxes)
+                    mPrecision += np.array(prec_5,dtype=np.float)#/len(outputBoxes)
                 index=0
                 for name, target in targetLines.items():
                     #print('line')
@@ -354,9 +355,9 @@ class BoxDetectTrainer(BaseTrainer):
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
-            'val_recall':(mRecall/len(self.valid_data_loader)).tolist(),
-            'val_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
-            'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
+            'val_recall':(mRecall/(batchSize*len(self.valid_data_loader))).tolist(),
+            'val_precision':(mPrecision/(batchSize*len(self.valid_data_loader))).tolist(),
+            'val_mAP':(mAP/(batchSize*len(self.valid_data_loader))).tolist(),
             'val_position_loss':total_position_loss / len(self.valid_data_loader),
             'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
             'val_class_loss':tota_class_loss / len(self.valid_data_loader),

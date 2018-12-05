@@ -10,7 +10,7 @@
         "data_dir": "../data/forms",
         "batch_size": 2,
         "shuffle": true,
-        "num_workers": 0,
+        "num_workers": 2,
         "crop_to_page":false,
         "color":false,
         "rescale_range": [0.4,0.65],

@@ -293,11 +293,12 @@ def fixAnnotations(this,annotations):
                 circleGroups[circleGroupId] = pair
                 circleGroupId+=1
 
-        cls0 = annotations['byId'][pair[0]]['type'][:4]=='text'
-        cls1 = annotations['byId'][pair[1]]['type'][:4]=='text'
-        if cls0!=cls1:
-            paired.add(pair[0])
-            paired.add(pair[1])
+        if pair[0] in annotations['byId'] and pair[1] in annotations['byId']:
+            cls0 = annotations['byId'][pair[0]]['type'][:4]=='text'
+            cls1 = annotations['byId'][pair[1]]['type'][:4]=='text'
+            if cls0!=cls1:
+                paired.add(pair[0])
+                paired.add(pair[1])
 
     #what pairs to each group?
     groupPairedTo=defaultdict(list)
@@ -337,7 +338,8 @@ def fixAnnotations(this,annotations):
         if len(paired)<=size:
             break #at the end of every chain
     for id in paired:
-        annotations['byId'][id]['paired']=True
+        if id in annotations['byId']:
+            annotations['byId'][id]['paired']=True
 
 
 def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):

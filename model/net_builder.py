@@ -16,7 +16,7 @@ class ncReLU(nn.Module):
 #ResNet block based on:
  #No projection in the residual network https://link.springer.com/content/pdf/10.1007%2Fs10586-017-1389-z.pdf
 class ResBlock(nn.Module):
-    def __init__(self,in_ch,out_ch,dilation=1,norm='',downsample=False, dropout=None):
+    def __init__(self,in_ch,out_ch,dilation=1,norm='',downsample=False, dropout=None, secondKernel=3):
         super(ResBlock, self).__init__()
         layers=[]
         skipFirstReLU=False
@@ -55,11 +55,12 @@ class ResBlock(nn.Module):
             layers.append(nn.GroupNorm(8,out_ch))
         layers.append(nn.ReLU(inplace=True)) 
         if dropout is not None:
-            if dropout==True or dropout=='normal':
-                layers.append(nn.Dropout(p=0.1),inplace=True)
-            elif dropout=='2d':
+            if dropout==True or dropout=='2d':
                 layers.append(nn.Dropout2d(p=0.1),inplace=True)
-        conv2=nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1)
+            elif dropout=='normal':
+                layers.append(nn.Dropout2d(p=0.1),inplace=True)
+        assert(secondKernel%2 == 1)
+        conv2=nn.Conv2d(out_ch, out_ch, kernel_size=secondKernel, padding=(secondKernel-1)//2)
         if norm=='weight_norm':
             layers.append(weight_norm(conv2))
         else:
@@ -87,10 +88,10 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
     else:
         layers = [conv2d, nn.ReLU(inplace=True)]
     if dropout is not None:
-        if dropout==True or dropout=='normal':
-            layers.append(nn.Dropout(p=0.1),inplace=False)
-        elif dropout=='2d':
+        if dropout==True or dropout=='2d':
             layers.append(nn.Dropout2d(p=0.1),inplace=False)
+        elif dropout=='normal':
+            layers.append(nn.Dropout(p=0.1),inplace=False)
     return layers
 
 def make_layers(cfg, dilation=1, norm=None, dropout=None):
@@ -179,6 +180,13 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             dilate=int(v[1:div])
             outCh=int(v[div+1:])
             layers.append(ResBlock(in_channels[-1],outCh,dilate,norm,dropout=dropout))
+            layerCodes.append(v)
+            in_channels.append(outCh)
+        elif type(v)==str and v[:4] == 'wave': #Res layer that is dilated in first conv and second conv is 1x1
+            div = v.find('-')
+            dilate=int(v[4:div])
+            outCh=int(v[div+1:])
+            layers.append(ResBlock(in_channels[-1],outCh,dilate,norm,dropout=dropout,secondKernel=1))
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str:

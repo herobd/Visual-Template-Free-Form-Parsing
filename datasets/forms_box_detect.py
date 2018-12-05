@@ -99,6 +99,7 @@ def collate(batch):
     largest_point_label = {}
     bb_sizes=[]
     bb_dim=None
+    line_dim=None
     for b in batch:
         if b is None:
             continue
@@ -119,6 +120,7 @@ def collate(batch):
                 line_label_sizes[name].append(0)
             else:
                 line_label_sizes[name].append(gt.size(1)) 
+                line_dim = gt.size(2)
         for name,gt in b['point_gt'].items():
             if gt is None:
                 point_label_sizes[name].append(0)
@@ -178,7 +180,7 @@ def collate(batch):
     line_labels = {}
     for name,count in largest_line_label.items():
         if count != 0:
-            line_labels[name] = torch.zeros(batch_size, count, 2)
+            line_labels[name] = torch.zeros(batch_size, count, line_dim)
         else:
             line_labels[name]=None
     for i, b in enumerate(batch):
@@ -479,6 +481,8 @@ class FormsBoxDetect(torch.utils.data.Dataset):
             else:
                 table_points=None
             pixel_gt = out['pixel_gt']
+            start_of_line = out['line_gt']['start_of_line']
+            end_of_line = out['line_gt']['end_of_line']
 
             ##tic=timeit.default_timer()
             if np_img.shape[2]==3:

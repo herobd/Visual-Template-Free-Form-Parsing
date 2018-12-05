@@ -366,6 +366,7 @@ class CropBoxTransform(object):
         pixel_gt = sample['pixel_gt'] if 'pixel_gt' in sample else None
         query_bb = sample['query_bb'] if 'query_bb' in sample else None
 
+        #rotation
         if self.rotate:
             amount = np.random.normal(0,self.degree_std_dev)
             M = cv2.getRotationMatrix2D((org_img.shape[1]/2,org_img.shape[0]/2),amount,1)
@@ -377,12 +378,20 @@ class CropBoxTransform(object):
                 pixel_gt = cv2.warpAffine(pixel_gt,M,(pixel_gt.shape[1],pixel_gt.shape[0]))
                 if len(pixel_gt.shape)==2:
                     pixel_gt = pixel_gt[:,:,None]
-            #rotate pointsa
+            #rotate points
             if bb_gt is not None:
                 points = np.reshape(bb_gt[0,:,0:16],(-1,2)) #reshape all box points to vector of x,y pairs
                 points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)
                 points = M.dot(points.T).T #multiply rot matrix
                 bb_gt[0,:,0:16] = np.reshape(points,(-1,16)) #reshape back to single vector for each bb
+
+            if line_gts is not None:
+                for name,gt in line_gts.items():
+                    if gt is not None:
+                        points = np.reshape(gt[0,:,0:4],(-1,2)) #reshape all line points to vector of x,y pairs
+                        points = np.append(points,np.ones((points.shape[0],1)),axis=1) #append 1 to make homogeneous (x,y,1)
+                        points = M.dot(points.T).T #multiply rot matrix
+                        gt[0,:,0:4] = np.reshape(points,(-1,4)) #reshape back to single vector for each line
     
             if point_gts is not None:
                 for name,gt in point_gts.items():
@@ -466,6 +475,8 @@ class CropBoxTransform(object):
                 if gt is not None:
                     gt[:,:,0] = gt[:,:,0] + pad_params[1][0]
                     gt[:,:,1] = gt[:,:,1] + pad_params[0][0]
+                    gt[:,:,2] = gt[:,:,2] + pad_params[1][0]
+                    gt[:,:,3] = gt[:,:,3] + pad_params[0][0]
 
 
         crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt , cropPoint = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb, cropPoint=cropPoint)
@@ -499,6 +510,8 @@ class CropBoxTransform(object):
                     gt = gt[line_gt_match[name]][None,...] #add batch dim (?)
                     gt[...,0] = gt[...,0] - crop_params['dim1'][0]
                     gt[...,1] = gt[...,1] - crop_params['dim0'][0]
+                    gt[...,2] = gt[...,2] - crop_params['dim1'][0]
+                    gt[...,3] = gt[...,3] - crop_params['dim0'][0]
                     new_line_gts[name]=gt
         ##print('pad-minus: {}'.format(timeit.default_timer()-##tic))
 

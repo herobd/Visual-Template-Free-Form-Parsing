@@ -37,6 +37,7 @@ def collate(batch):
     cropPoint=[]
     imgs = []
     queryMask=[]
+    queryClass=[]
     max_h=0
     max_w=0
     bb_sizes=[]
@@ -49,6 +50,7 @@ def collate(batch):
         cropPoint.append(b['cropPoint'])
         imgs.append(b["img"])
         queryMask.append(b['queryMask'])
+        queryClass.append(b['queryClass'])
         max_h = max(max_h,b["img"].size(2))
         max_w = max(max_w,b["img"].size(3))
         gt = b['responseBBs']
@@ -119,6 +121,7 @@ def collate(batch):
         'responseBBs': bbs,
         "responseBB_sizes": bb_sizes,
         'queryMask': queryMask,
+        'queryClass':queryClass,
         "imgName": imageNames,
         "scale": scales,
         "cropPoint": cropPoint

@@ -63,7 +63,7 @@ def convertBBs(bbs,rotate,numClasses):
 
     cX = (lX+rX)/2.0
     cY = (lY+rY)/2.0
-    rot = np.arctan2((rY-lY),rX-lX)
+    rot = np.arctan2(-(rY-lY),rX-lX)
     height = np.abs(h)    #this is half height
     width = d/2.0 #and half width
 

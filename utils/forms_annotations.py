@@ -95,6 +95,8 @@ def convertBBs(bbs,rotate,numClasses):
 
     return torch.from_numpy(new_bbs)
 
+
+#This annotation corrects assumptions made during GTing, modifies the annotations for the current parameterization, and slightly changes the format
 def fixAnnotations(this,annotations):
     def isSkipField(this,bb):
         return (    (this.no_blanks and (bb['isBlank']=='blank' or bb['isBlank']==3)) or

@@ -102,7 +102,14 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets = model(imageT,queryMaskT,imageNameP)
+    from_gt = config['trainer']['from_gt'] if 'from_gt' in config['trainer'] else False
+    if from_gt:
+        outputBBs, outputOffsets = model(imageT,queryMaskT,
+                imageName,
+                scale=instance['scale'],
+                cropPoint=instance['cropPoint'])
+    else:
+        outputBBs, outputOffsets = model(imageT,queryMaskT,imageNameP)
     
     index=0
     loss=0

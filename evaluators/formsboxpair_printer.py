@@ -10,6 +10,8 @@ from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou
 
+#THRESH=0.75
+THRESH=0.92
 
 def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
     def plotRect(img,color,xyrhw):
@@ -100,7 +102,14 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets = model(imageT,queryMaskT,imageNameP)
+    from_gt = config['trainer']['from_gt'] if 'from_gt' in config['trainer'] else False
+    if from_gt:
+        outputBBs, outputOffsets = model(imageT,queryMaskT,
+                imageName,
+                scale=instance['scale'],
+                cropPoint=instance['cropPoint'])
+    else:
+        outputBBs, outputOffsets = model(imageT,queryMaskT,imageNameP)
     
     index=0
     loss=0
@@ -123,7 +132,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         outputBBs[b,i,0]=temp
     image = image.cpu().data.numpy()
     maxConf = outputBBs[:,:,0].max().item()
-    threshConf = max(maxConf*0.99,0.5)
+    threshConf = max(maxConf*THRESH,0.5)
     #print("maxConf:{}, threshConf:{}".format(maxConf,threshConf))
     if model.rotation:
         outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,0.4)
@@ -131,15 +140,15 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
     #aps_3=[]
     aps_5=[]
-    apsDiff_5=[]
-    apsSame_5=[]
+    apsDiff=[]
+    apsSame=[]
     #aps_7=[]
     recalls_5=[]
-    recallsDiff_5=[]
-    recallsSame_5=[]
+    recallsDiff=[]
+    recallsSame=[]
     precs_5=[]
-    precsDiff_5=[]
-    precsSame_5=[]
+    precsDiff=[]
+    precsSame=[]
     bestBBIdx=[]
     secondBBIdx=[]
     for b in range(batchSize):
@@ -161,8 +170,9 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
         precs_5.append(prec_5)
-        for classIdx in range(len(apCls5)):
-            if classIdx == instance['queryClass']:
+        for classIdx in range(len(apCls_5)):
+            #print('{} == {}'.format(classIdx,instance['queryClass']))
+            if classIdx == instance['queryClass'][b]:
                 apsSame.append(apCls_5[classIdx])
                 precsSame.append(precCls_5[classIdx])
                 recallsSame.append(recallCls_5[classIdx])
@@ -304,13 +314,13 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
                'recall':recalls_5,
                'prec':precs_5,
 
-               'apSame_5':apsSame_5,
-               'recallSame':recallsSame_5,
-               'precSame':precsSame_5,
+               'apSame':apsSame,
+               'recallSame':recallsSame,
+               'precSame':precsSame,
 
-               'apDiff_5':apsDiff_5,
-               'recallDiff':recallsDiff_5,
-               'precDiff':precsDiff_5,
+               'apDiff':apsDiff,
+               'recallDiff':recallsDiff,
+               'precDiff':precsDiff,
              }, 
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)
             )

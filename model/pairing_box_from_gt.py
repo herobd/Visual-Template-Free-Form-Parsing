@@ -77,7 +77,8 @@ class PairingBoxFromGT(BaseModel):
                 
 
         self.dataset_train = FormsBoxDetect(dirPath=config['data_loader_detect']['data_dir'],split='train', config=config['data_loader_detect'])
-        del config['data_loader_detect']['crop_params']
+        if 'crop_params' in config['data_loader_detect']:
+            del config['data_loader_detect']['crop_params']
         self.dataset_valid = FormsBoxDetect(dirPath=config['data_loader_detect']['data_dir'],split='valid', config=config['data_loader_detect'])
 
         #create a look up

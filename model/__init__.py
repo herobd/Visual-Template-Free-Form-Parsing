@@ -9,3 +9,4 @@ from model.pairing_box_full import PairingBoxFull
 from model.pairing_box_net import PairingBoxNet
 from model.pairing_box_from_gt import PairingBoxFromGT
 from model.line_follower import LineFollower
+from model.simpleNN import SimpleNN

@@ -22,6 +22,8 @@ def collate(batch):
 
     ##tic=timeit.default_timer()
     batch_size = len(batch)
+    if batch_size==1 and 'imgPath' in batch[0]:
+        return batch[0]#special evaluation mode that puts a whole image in a batch
     imageNames=[]
     data=[]
     labels=torch.ByteTensor(batch_size)
@@ -87,6 +89,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
 
         self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
         self.balance = config['balance'] if 'balance' in config else False
+
+        self.eval = config['eval'] if 'eval' in config else False
         
 
         #width_mean=400.006887263
@@ -150,17 +154,38 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                         yDiff /= yScale #math.log( (yDiff+0.375*yDiffScale)/yDiffScale ) 
                                         xDiff /= xScale #math.log( (xDiff+0.375*xDiffScale)/xDiffScale ) 
                                         pair = id2 in responseIds
-                                        if pair:
+                                        if pair or self.eval:
                                             instances = pair_instances
                                         else:
                                             instances = notpair_instances
                                         instances.append( {
                                             'data': torch.tensor([ [qH,qW,qR,qIsText, iH,iW,iR,iIsText, xDiff, yDiff] ]),
                                             'label': pair,
-                                            'imgName': imageName
+                                            'imgName': imageName,
+                                            'qXY' : (qX,qY),
+                                            'iXY' : (iX,iY)
                                             } )
+                        if self.eval:
+                            datas=[]
+                            labels=[]
+                            qXYs=[]
+                            iXYs=[]
+                            for inst in pair_instances:
+                                datas.append(inst['data'])
+                                labels.append(inst['label'])
+                                qXYs.append(inst['qXY'])
+                                iXYs.append(inst['iXY'])
+                            notpair_instances.append( {
+                                'data': torch.cat(datas,dim=0),
+                                'label': torch.ByteTensor(labels),
+                                'imgName': imageName,
+                                'imgPath' : path,
+                                'qXY' : qXYs,
+                                'iXY' : iXYs
+                                } )
+                            pair_instances=[]
             self.instances = notpair_instances
-            if self.balance:
+            if self.balance and not self.eval:
                 dif = len(notpair_instances)/float(len(pair_instances))
                 print('not: {}, pair: {}. Adding {}x'.format(len(notpair_instances),len(pair_instances),math.floor(dif)))
                 for i in range(math.floor(dif)):

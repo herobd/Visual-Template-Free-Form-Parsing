@@ -157,10 +157,10 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         else:
             target_for_b = torch.empty(0)
         if model.rotation:
-            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.5,ignoreClasses=True)
+            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
             apCls_5, precCls_5, recallCls_5 =AP_dist(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
         else:
-            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=True)
+            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
             apCls_5, precCls_5, recallCls_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
         #ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
         #ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)

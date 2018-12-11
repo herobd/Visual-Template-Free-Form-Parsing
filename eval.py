@@ -32,6 +32,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
     config['data_loader']['shuffle']=shuffle
     #config['data_loader']['rot']=False
     config['validation']['shuffle']=shuffle
+    config['data_loader']['eval']=True
+    config['validation']['eval']=True
     #config['validation']
 
     if config['data_loader']['data_set_name']=='FormsDetect':
@@ -41,7 +43,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
 
     #print(config['data_loader'])
     if setBatch is not None:
-        #config['data_loader']['batch_size']=setBatch
+        config['data_loader']['batch_size']=setBatch
         config['validation']['batch_size']=setBatch
     batchSize = config['data_loader']['batch_size']
     if 'batch_size' in config['validation']:
@@ -78,7 +80,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
     step=5
 
     #numberOfImages = numberOfImages//config['data_loader']['batch_size']
-    #print(len(data_loader))
+    print(len(data_loader))
     train_iter = iter(data_loader)
     valid_iter = iter(valid_data_loader)
 

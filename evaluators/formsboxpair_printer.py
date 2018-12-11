@@ -10,8 +10,6 @@ from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou
 
-#THRESH=0.75
-THRESH=0.92
 
 def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
     def plotRect(img,color,xyrhw):
@@ -69,6 +67,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         return data, queryMask, targetBoxes, targetBoxes_sizes
 
 
+    THRESH = config['THRESH'] if 'THRESH' in config else 0.92
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)

@@ -9,6 +9,8 @@ from datasets import forms_box_detect
 from datasets.forms_box_detect import FormsBoxDetect
 from datasets import forms_box_pair
 from datasets.forms_box_pair import FormsBoxPair
+from datasets.forms_feature_pair import FormsFeaturePair
+from datasets import forms_feature_pair
 from datasets.forms_pair import FormsPair
 from datasets.forms_lf import FormsLF
 #from torchvision import datasets, transforms
@@ -86,6 +88,8 @@ def getDataLoader(config,split):
             return withCollate(FormsBoxDetect,forms_box_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsBoxPair':
             return withCollate(FormsBoxPair,forms_box_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
+        elif data_set_name=='FormsFeaturePair':
+            return withCollate(FormsFeaturePair,forms_feature_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsPair':
             return basic(FormsPair,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsLF':
@@ -98,6 +102,9 @@ def getDataLoader(config,split):
                 validData = CancerDataset(data_dir, train=False)
                 validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
                 return trainLoader, validLoader
+        else:
+            print('Error, no set for {}'.format(data_set_name))
+            exit()
 
 
 

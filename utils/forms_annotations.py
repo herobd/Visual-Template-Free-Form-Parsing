@@ -468,3 +468,51 @@ def getStartEndGT(useBBs,s,useBlankClass=False):
             end_gt[:,j,6]=1 if blank else 0
         j+=1
     return start_gt, end_gt
+
+def getBBInfo(bb,rotate,useBlankClass=False):
+
+    tlX = bb['poly_points'][0][0]
+    tlY = bb['poly_points'][0][1]
+    trX = bb['poly_points'][1][0]
+    trY = bb['poly_points'][1][1]
+    brX = bb['poly_points'][2][0]
+    brY = bb['poly_points'][2][1]
+    blX = bb['poly_points'][3][0]
+    blY = bb['poly_points'][3][1]
+
+    if not rotate:
+        tlX = np.minimum.reduce((tlX,blX,trX,brX))
+        tlY = np.minimum.reduce((tlY,trY,blY,brY))
+        trX = np.maximum.reduce((tlX,blX,trX,brX))
+        trY = np.minimum.reduce((tlY,trY,blY,brY))
+        brX = np.maximum.reduce((tlX,blX,trX,brX))
+        brY = np.maximum.reduce((tlY,trY,blY,brY))
+        blX = np.minimum.reduce((tlX,blX,trX,brX))
+        blY = np.maximum.reduce((tlY,trY,blY,brY))
+
+    field = bb['type'][:4]!='text'
+    if useBlankClass and (bb['isBlank']=='blank' or bb['isBlank']==3):
+        field=False
+        text=False
+        blank=True
+    else:
+        text=not field
+        blank=False
+        
+    lX = (tlX+blX)/2.0
+    lY = (tlY+blY)/2.0
+    rX = (trX+brX)/2.0
+    rY = (trY+brY)/2.0
+    d=math.sqrt((lX-rX)**2 + (lY-rY)**2)
+
+    hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
+    hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
+    h = (hl+hr)/2.0
+
+    cX = (lX+rX)/2.0
+    cY = (lY+rY)/2.0
+    rot = np.arctan2(-(rY-lY),rX-lX)
+    height = np.abs(h)*2
+    width = d
+
+    return cX,cY,height,width,rot,text

@@ -16,7 +16,7 @@ from datasets import forms_detect
 logging.basicConfig(level=logging.INFO, format='')
 
 
-def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None):
+def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None, thresh=None):
     np.random.seed(1234)
     torch.manual_seed(1234)
     #if gpu is None:
@@ -26,12 +26,18 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         config = checkpoint['config']
     else:
         config = json.load(open(config))
+
+    if thresh is not None:
+        config['THRESH'] = thresh
+        print('Threshold at {}'.format(thresh))
         
     #config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
     
     config['data_loader']['shuffle']=shuffle
     #config['data_loader']['rot']=False
     config['validation']['shuffle']=shuffle
+    config['data_loader']['eval']=True
+    config['validation']['eval']=True
     #config['validation']
 
     if config['data_loader']['data_set_name']=='FormsDetect':
@@ -41,7 +47,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
 
     #print(config['data_loader'])
     if setBatch is not None:
-        #config['data_loader']['batch_size']=setBatch
+        config['data_loader']['batch_size']=setBatch
         config['validation']['batch_size']=setBatch
     batchSize = config['data_loader']['batch_size']
     if 'batch_size' in config['validation']:
@@ -78,7 +84,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
     step=5
 
     #numberOfImages = numberOfImages//config['data_loader']['batch_size']
-    #print(len(data_loader))
+    print(len(data_loader))
     train_iter = iter(data_loader)
     valid_iter = iter(valid_data_loader)
 
@@ -240,6 +246,8 @@ if __name__ == '__main__':
                         help='config override')
     parser.add_argument('-m', '--imgname', default=None, type=str,
                         help='specify image')
+    parser.add_argument('-t', '--thresh', default=None, type=float,
+                        help='Confidence threshold for detections')
 
     args = parser.parse_args()
 
@@ -256,6 +264,6 @@ if __name__ == '__main__':
         index = args.imgname
     if args.gpu is not None:
         with torch.cuda.device(args.gpu):
-            main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)
+            main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh)
     else:
-        main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config)
+        main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh)

@@ -2,7 +2,7 @@
     "name": "Forms16_resQ2dil1_neg20_new12",
     "cuda": true,
     "gpu": 0,
-    "super_computer":false,
+    "super_computer":true,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {
@@ -65,7 +65,7 @@
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
-        "iterations": 300000,
+        "iterations": 400000,
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 50000,

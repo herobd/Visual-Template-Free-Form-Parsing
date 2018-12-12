@@ -3,6 +3,10 @@ import torch
 import math
 
 def non_max_sup_iou(pred_boxes,thresh_conf=0.5, thresh_inter=0.5):
+    return non_max_sup_(pred_boxes,thresh_conf, thresh_inter, max_intersection)
+def non_max_sup_dist(pred_boxes,thresh_conf=0.5, thresh_dist=0.9):
+    return non_max_sup_(pred_boxes,thresh_conf, thresh_dist*-1, dist_neg)
+def non_max_sup_(pred_boxes,thresh_conf, thresh_loc, loc_metric):
     #rearr = [0,1,2,5,4,3]
     #for i in range(6,pred_boxes.shape[2]):
     #    rearr.append(i)
@@ -19,13 +23,13 @@ def non_max_sup_iou(pred_boxes,thresh_conf=0.5, thresh_inter=0.5):
         li = 0
         while li<len(above_thresh)-1:
             i=above_thresh[li][1]
-            intersections = max_intersection(pred_boxes[b,i,1:6],pred_boxes[b,[x[1] for x in above_thresh[li+1:]],1:6])
+            loc_measures = loc_metric(pred_boxes[b,i,1:6],pred_boxes[b,[x[1] for x in above_thresh[li+1:]],1:6])
             #ious = bbox_iou(pred_boxes[b,i:i+1,1:5],pred_boxes[b,[x[1] for x in above_thresh[li+1:]],1:5], x1y1x2y2=False)
             to_remove=[]
             for lj in range(len(above_thresh)-1,li,-1):
                 j=above_thresh[lj][1]
                 #if bbox_iou( pred_boxes[b,i:i+1,1:5], pred_boxes[b,j:j+1,1:5], x1y1x2y2=False) > thresh_iou:
-                if intersections[lj-(li+1)] > thresh_inter:
+                if loc_measures[lj-(li+1)] > thresh_loc:
                     to_remove.append(lj)
             #to_remove.reverse()
             for index in to_remove:
@@ -57,6 +61,50 @@ def max_intersection(query_box, candidate_boxes):
     #import pdb; pdb.set_trace()
 
     return inter_area/min_area
+
+def dist_neg(query_box, candidate_boxes):
+    #convert boxes to points
+    sin_r = torch.sin(query_box[2])
+    cos_r = torch.cos(query_box[2])
+    qlx = query_box[0] - cos_r*query_box[4]
+    qly = query_box[1] + sin_r*query_box[3]
+    qrx = query_box[0] + cos_r*query_box[4]
+    qry = query_box[1] - sin_r*query_box[3]
+    qtx = query_box[0] - cos_r*query_box[4]
+    qty = query_box[1] - sin_r*query_box[3]
+    qbx = query_box[0] + cos_r*query_box[4]
+    qby = query_box[1] + sin_r*query_box[3]
+    query_points = torch.tensor([[qlx,qly,qrx,qry,qtx,qty,qbx,qby]])
+    queryHW = (query_box[4]+query_box[3])/2
+    #queryHW = torch.min(query_box[3:5])
+
+    query_points = query_points.expand(candidate_boxes.size(0),8)
+    queryHW = queryHW.expand(candidate_boxes.size(0))
+
+    sin_r = torch.sin(candidate_boxes[:,2])
+    cos_r = torch.cos(candidate_boxes[:,2])
+    clx = candidate_boxes[:,0] - cos_r*candidate_boxes[:,4]
+    cly = candidate_boxes[:,1] + sin_r*candidate_boxes[:,3]
+    crx = candidate_boxes[:,0] + cos_r*candidate_boxes[:,4]
+    cry = candidate_boxes[:,1] - sin_r*candidate_boxes[:,3]
+    ctx = candidate_boxes[:,0] - cos_r*candidate_boxes[:,4]
+    cty = candidate_boxes[:,1] - sin_r*candidate_boxes[:,3]
+    cbx = candidate_boxes[:,0] + cos_r*candidate_boxes[:,4]
+    cby = candidate_boxes[:,1] + sin_r*candidate_boxes[:,3]
+    cand_points = torch.stack([clx,cly,crx,cry,ctx,cty,cbx,cby],dim=1)
+    candHW = (candidate_boxes[:,4]+candidate_boxes[:,3])/2
+    #candHW,_ = torch.min(candidate_boxes[:,3:5],dim=1)
+    #compute distances
+    normalization = (queryHW+candHW)/2.0
+
+    deltas = query_points - cand_points
+    dist = ((
+            torch.norm(deltas[:,0:2],2,1) +
+            torch.norm(deltas[:,2:4],2,1) +
+            torch.norm(deltas[:,4:6],2,1) +
+            torch.norm(deltas[:,6:8],2,1)
+           )/normalization)**2
+    return dist*-1
 
 def allIOU(boxes1,boxes2, boxes1XYWH=[0,1,4,3]):
     b1_x1, b1_x2 = boxes1[:,boxes1XYWH[0]]-boxes1[:,boxes1XYWH[2]], boxes1[:,boxes1XYWH[0]]+boxes1[:,boxes1XYWH[2]]

@@ -306,6 +306,10 @@ class BoxDetectTrainer(BaseTrainer):
                 
                 threshConf = max(self.thresh_conf*outputBoxes[:,:,0].max().item(),0.5)
                 outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,self.thresh_intersect)
+                if self.model.rotation:
+                    outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,1.2/self.thresh_intersect)
+                else:
+                    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,self.thresh_intersect)
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
                 batchSize = len(outputBoxes)

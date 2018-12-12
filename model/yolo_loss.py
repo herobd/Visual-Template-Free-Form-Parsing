@@ -604,9 +604,9 @@ def bbox_dist(box1, box1H, box2, box2H):
         deltas = expanded1-expanded2
         dist = ((
                 torch.norm(deltas[:,:,0:2],2,2) +
-                torch.norm(deltas[:,:,0:2],2,2) +
-                torch.norm(deltas[:,:,0:2],2,2) +
-                torch.norm(deltas[:,:,0:2],2,2) 
+                torch.norm(deltas[:,:,2:4],2,2) +
+                torch.norm(deltas[:,:,4:6],2,2) +
+                torch.norm(deltas[:,:,6:8],2,2) 
                )/normalization)**2
         if flat1:
             assert(dist.size(0)==1)

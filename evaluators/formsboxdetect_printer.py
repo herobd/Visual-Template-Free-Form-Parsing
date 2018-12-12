@@ -8,7 +8,7 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou, AP_iou
+from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist
 
 #THRESH=0.5
 
@@ -145,11 +145,12 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     data = data.cpu().data.numpy()
     maxConf = outputBBs[:,:,0].max().item()
     threshConf = max(maxConf*THRESH,0.5)
-    #print("threshConf:{}".format(threshConf))
+
     if model.rotation:
-        outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,0.4)
+        outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,3)
     else:
         outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
+
     aps_3=[]
     aps_5=[]
     aps_7=[]

@@ -151,9 +151,56 @@ def allDist(boxes1,boxes2):
 
     return torch.sqrt( torch.pow(b1_x-b2_x,2) + torch.pow(b1_y-b2_y,2) )
 
+def allBoxDistNeg(boxes1,boxes2):
+    #convert boxes to points
+    sin_r = torch.sin(boxes1[:,2])
+    cos_r = torch.cos(boxes1[:,2])
+    clx = boxes1[:,0] - cos_r*boxes1[:,4]
+    cly = boxes1[:,1] + sin_r*boxes1[:,3]
+    crx = boxes1[:,0] + cos_r*boxes1[:,4]
+    cry = boxes1[:,1] - sin_r*boxes1[:,3]
+    ctx = boxes1[:,0] - cos_r*boxes1[:,4]
+    cty = boxes1[:,1] - sin_r*boxes1[:,3]
+    cbx = boxes1[:,0] + cos_r*boxes1[:,4]
+    cby = boxes1[:,1] + sin_r*boxes1[:,3]
+    boxes1_points = torch.stack([clx,cly,crx,cry,ctx,cty,cbx,cby],dim=1)
+    boxes1HW = (boxes1[:,4]+boxes1[:,3])/2
+
+
+    sin_r = torch.sin(boxes2[:,2])
+    cos_r = torch.cos(boxes2[:,2])
+    clx = boxes2[:,0] - cos_r*boxes2[:,4]
+    cly = boxes2[:,1] + sin_r*boxes2[:,3]
+    crx = boxes2[:,0] + cos_r*boxes2[:,4]
+    cry = boxes2[:,1] - sin_r*boxes2[:,3]
+    ctx = boxes2[:,0] - cos_r*boxes2[:,4]
+    cty = boxes2[:,1] - sin_r*boxes2[:,3]
+    cbx = boxes2[:,0] + cos_r*boxes2[:,4]
+    cby = boxes2[:,1] + sin_r*boxes2[:,3]
+    boxes2_points = torch.stack([clx,cly,crx,cry,ctx,cty,cbx,cby],dim=1)
+    boxes2HW = (boxes2[:,4]+boxes2[:,3])/2
+    #candHW,_ = torch.min(candidate_boxes[:,3:5],dim=1)
+    #compute distances
+    normalization = (boxes1HW+boxes2HW)/2.0
+
+    boxes1_points = boxes1_points[:,None,:].expand(boxes1.size(0),boxes2.size(0),8)
+    boxes2_points = boxes1_points[None,:,:].expand(boxes1.size(0),boxes2.size(0),8)
+
+    deltas = boxes1_points - boxes2_points
+    dist = ((
+        torch.norm(deltas[:,:,0:2],2,1) +
+        torch.norm(deltas[:,:,2:4],2,1) +
+        torch.norm(deltas[:,:,4:6],2,1) +
+        torch.norm(deltas[:,:,6:8],2,1)
+           )/normalization)**2
+    return dist*-1
  
 #input is tensors of shape [instance,(conf,x,y,rot,h,w)]
 def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):
+    return AP_(target,pred,iou_thresh,numClasses,ignoreClasses,allIOU)
+def AP_dist(target,pred,dist_thresh,numClasses=2,ignoreClasses=False):
+    return AP_(target,pred,-dist_thresh,numClasses,ignoreClasses,allBoxDistNeg)
+def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
     #mAP=0.0
     aps=[]
     precisions=[]
@@ -203,7 +250,7 @@ def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):
             else:
                 clsTarg = target[clsTargInd]
                 clsPred = pred[clsPredInd]
-            clsIOUs = allIOU(clsTarg[:,0:],clsPred[:,1:])
+            clsIOUs = getLoc(clsTarg[:,0:],clsPred[:,1:])
             hits = clsIOUs>iou_thresh
 
             clsIOUs *= hits.float()

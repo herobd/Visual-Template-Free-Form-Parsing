@@ -48,7 +48,14 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     #data, targetBB, targetBBSizes = instance
     imageName = instance['imgName']
     imagePath = instance['imgPath']
-    data = instance['data']
+    data = instance['data'][0]
+    if data.size(0)==0:
+        return (
+             { 
+               'recall':[],
+               'prec':[],
+             }, 
+             (1, 1))
     qXY = instance['qXY']
     iXY = instance['iXY']
     label = instance['label']
@@ -59,15 +66,17 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     
     #ossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
     image = cv2.imread(imagePath,1)
+    #image[40:50,40:50,0]=255
+    #image[50:60,50:60,1]=255
     assert(image.shape[2]==3)
     batchSize = data.size(0)
     #draw GT
     for b in range(batchSize):
         x,y = qXY[b]
-        r = data[b,2].item()
-        h = data[b,0].item()
-        w = data[b,1].item()
-        plotRect(image,(0,0,1),(x,y,r,h,w))
+        r = data[b,2].item()*math.pi
+        h = data[b,0].item()*50/2
+        w = data[b,1].item()*400/2
+        plotRect(image,(0,0,255),(x,y,r,h,w))
 
         x2,y2 = iXY[b]
         #r = data[b,2].item()
@@ -75,8 +84,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         #w = data[b,1].item()
         #plotRect(image,(1,0,0),(x,y,r,h,w))
 
-        #if label[b].item()> 0:
-        #    cv2.line(image,(int(x),int(y)),(int(x2),int(y2)),(0,1,0),1)
+        if label[b].item()> 0:
+           cv2.line(image,(int(x),int(y)),(int(x2),int(y2)),(0,255,0),1)
 
 
     totalPreds=0
@@ -89,7 +98,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             totalPreds+=1
             if label[b].item()>0:
                 truePs+=1
-            cv2.line(image,(int(x),int(y+3)),(int(x2),int(y2-3)),(1,0,0),1)
+            color = int(255*(pred[b].item()-THRESH)/(1-THRESH))
+            cv2.line(image,(int(x),int(y+3)),(int(x2),int(y2-3)),(color,0,0),1)
         if label[b].item()>0:
             totalGTs+=1
     
@@ -104,8 +114,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     if outDir is not None:
         saveName = '{}_r:{:.4f}_p:{:.4f}_.png'.format(imageName,recall,prec)
         cv2.imwrite(os.path.join(outDir,saveName),image)
-        cv2.imshow('dfsdf',image)
-        cv2.waitkey()
+        #cv2.imshow('dfsdf',image)
+        #cv2.waitKey()
 
         
     #return metricsOut

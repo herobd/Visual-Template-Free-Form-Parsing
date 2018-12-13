@@ -56,12 +56,19 @@ class YoloBoxDetector(nn.Module): #BaseModel
         self.last_channels=down_last_channels
         self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutLine+self.numOutPoint, kernel_size=1))
         self._hack_down = nn.Sequential(*self.net_down_modules)
-        self.scale=1
+        scaleX=1
+        scaleY=1
         for a in layers_cfg:
             if a=='M' or (type(a) is str and a[0]=='D'):
-                self.scale*=2
+                scaleX*=2
+                scaleY*=2
             elif type(a) is str and a[0]=='U':
-                self.scale/=2
+                scaleX/=2
+                scaleY/=2
+            elif type(a) is str and a[0:4]=='long': #long pool
+                scaleX*=3
+                scaleY*=2
+        self.scale=(scaleX,scaleY)
 
         if self.predPixelCount>0:
             if 'up_layers_cfg' in config:
@@ -88,13 +95,13 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
         #priors_0 = Variable(torch.arange(0,y.size(2)).type_as(img.data), requires_grad=False)[None,:,None]
         priors_0 = torch.arange(0,y.size(2)).type_as(img.data)[None,:,None]
-        priors_0 = (priors_0 + 0.5) * self.scale #self.base_0
+        priors_0 = (priors_0 + 0.5) * self.scale[1] #self.base_0
         priors_0 = priors_0.expand(y.size(0), priors_0.size(1), y.size(3))
         priors_0 = priors_0[:,None,:,:].to(img.device)
 
         #priors_1 = Variable(torch.arange(0,y.size(3)).type_as(img.data), requires_grad=False)[None,None,:]
         priors_1 = torch.arange(0,y.size(3)).type_as(img.data)[None,None,:]
-        priors_1 = (priors_1 + 0.5) * self.scale #elf.base_1
+        priors_1 = (priors_1 + 0.5) * self.scale[0] #elf.base_1
         priors_1 = priors_1.expand(y.size(0), y.size(2), priors_1.size(2))
         priors_1 = priors_1[:,None,:,:].to(img.device)
 
@@ -111,8 +118,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
             stackedPred = [
                 torch.sigmoid(y[:,0+offset:1+offset,:,:]),                #0. confidence
-                torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
-                torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
+                torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale[0] + priors_1,        #1. x-center
+                torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale[1] + priors_0,        #2. y-center
                 rot_dif + anchor[i]['rot'],      #3. rotation (radians)
                 torch.exp(y[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
                 torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)   as we scale the anchors in training
@@ -151,8 +158,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
             offset = i*(self.numLineParams+self.numBBTypes) + self.numAnchors*(self.numBBParams+self.numBBTypes)
             stackedPred=[
                 torch.sigmoid(y[:,0+offset:1+offset,:,:]),                          #confidence
-                torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale + priors_1,       #x-center
-                torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale + priors_0,       #y-center
+                torch.tanh(y[:,1+offset:2+offset,:,:])*self.scale[0] + priors_1,       #x-center
+                torch.tanh(y[:,2+offset:3+offset,:,:])*self.scale[1] + priors_0,       #y-center
                 (math.pi)*torch.tanh(y[:,3+offset:4+offset,:,:]),                 #rotation (radians)
                 torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH                    #scale (half-height),
                 

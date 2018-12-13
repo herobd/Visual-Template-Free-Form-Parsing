@@ -318,7 +318,10 @@ class BoxDetectTrainer(BaseTrainer):
                         target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
                     else:
                         target_for_b = torch.empty(0)
-                    ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
+                    if self.model.rotation:
+                        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
+                    else:
+                        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.9,self.model.numBBTypes)
                     mAP += np.array(ap_5,dtype=np.float)#/len(outputBoxes)
                     mRecall += np.array(recall_5,dtype=np.float)#/len(outputBoxes)
                     mPrecision += np.array(prec_5,dtype=np.float)#/len(outputBoxes)

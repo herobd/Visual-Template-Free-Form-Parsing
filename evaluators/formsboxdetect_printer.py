@@ -8,7 +8,7 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist
+from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist
 
 #THRESH=0.5
 
@@ -161,7 +161,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
             target_for_b = torch.empty(0)
-        if model.rotation:
+        if model.rotation or True:
             ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.5,model.numBBTypes)
             ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],0.3,model.numBBTypes)
             ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.7,model.numBBTypes)

@@ -190,10 +190,10 @@ def allBoxDistNeg(boxes1,boxes2):
 
     deltas = boxes1_points - boxes2_points
     dist = ((
-        torch.norm(deltas[:,:,0:2],2,1) +
-        torch.norm(deltas[:,:,2:4],2,1) +
-        torch.norm(deltas[:,:,4:6],2,1) +
-        torch.norm(deltas[:,:,6:8],2,1)
+        torch.norm(deltas[:,:,0:2],2,2) +
+        torch.norm(deltas[:,:,2:4],2,2) +
+        torch.norm(deltas[:,:,4:6],2,2) +
+        torch.norm(deltas[:,:,6:8],2,2)
            )/normalization)**2
     return dist*-1
  

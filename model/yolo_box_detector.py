@@ -40,6 +40,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
         if norm is None:
             print('Warning: YoloBoxDetector has no normalization!')
         dilation = config['dilation'] if 'dilation' in config else 1
+        dropout = config['dropout'] if 'dropout' in config else None
         #self.cnn, self.scale = vgg.vgg11_custOut(self.predLineCount*5+self.predPointCount*3,batch_norm=batch_norm, weight_norm=weight_norm)
         self.numOutBB = (self.numBBTypes+self.numBBParams)*self.numAnchors
         self.numOutLine = (self.numBBTypes+self.numLineParams)*self.predLineCount
@@ -50,7 +51,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
         else:
             layers_cfg=[in_ch,64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512]
 
-        self.net_down_modules, down_last_channels = make_layers(layers_cfg, dilation,norm)
+        self.net_down_modules, down_last_channels = make_layers(layers_cfg, dilation,norm,dropout=dropout)
         self.final_features=None 
         self.last_channels=down_last_channels
         self.net_down_modules.append(nn.Conv2d(down_last_channels, self.numOutBB+self.numOutLine+self.numOutPoint, kernel_size=1))
@@ -67,7 +68,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 up_layers_cfg =  config['up_layers_cfg']
             else:
                 up_layers_cfg=[512, 'U+512', 256, 'U+256', 128, 'U+128', 64, 'U+64']
-            self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, 1, norm)
+            self.net_up_modules, up_last_channels = make_layers(up_layers_cfg, 1, norm,dropout=dropout)
             self.net_up_modules.append(nn.Conv2d(up_last_channels, self.predPixelCount, kernel_size=1))
             self._hack_up = nn.Sequential(*self.net_up_modules)
 

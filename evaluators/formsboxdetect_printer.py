@@ -161,10 +161,10 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
             target_for_b = torch.empty(0)
-        if model.rotation or True:
-            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.5,model.numBBTypes)
-            ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],0.3,model.numBBTypes)
-            ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.7,model.numBBTypes)
+        if model.rotation:
+            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.9,model.numBBTypes)
+            ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],1.3,model.numBBTypes)
+            ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.5,model.numBBTypes)
         else:
             ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,model.numBBTypes)
             ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)

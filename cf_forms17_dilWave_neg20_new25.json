@@ -65,7 +65,7 @@
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
-        "iterations": 200000,
+        "iterations": 250000,
         "save_dir": "saved/",
         "val_step": 10000,
         "save_step": 50000,

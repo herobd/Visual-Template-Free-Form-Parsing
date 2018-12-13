@@ -85,7 +85,8 @@
         "number_of_point_types": 0,
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
-        "down_layers_cfg": [1,"k5-64", "M", "d1-128", 128, "drop0.1", "M", "d2-256", 256, "drop0.1", "M", "d4-512", 512, "drop0.1", "M", "d8-1024", "drop0.1", 1024, "drop0.1", 1024, "drop0.1"],
+        "dropout":true,
+        "down_layers_cfg": [1,"k5-64", "M", "d1-128", 128,  "M", "d2-256", 256,  "M", "d4-512", 512,  "M", "d8-1024",  1024,  1024],
         "up_layers_cfg":[],
         "anchors_file": "anchors_noRot_new_25.json",
         "rotation":false

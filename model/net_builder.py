@@ -82,21 +82,22 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
     #if i == len(cfg)-1:
     #    layers += [conv2d]
     #    break
-    if norm=='batch_norm':
-        layers = [conv2d, nn.BatchNorm2d(out_ch), nn.ReLU(inplace=True)]
-    elif norm=='instance_norm':
-        layers = [conv2d, nn.InstanceNorm2d(out_ch), nn.ReLU(inplace=True)]
-    elif norm=='group_norm':
-        layers = [conv2d, nn.GroupNorm(8,out_ch), nn.ReLU(inplace=True)]
-    elif norm=='weight_norm':
-        layers = [weight_norm(conv2d), nn.ReLU(inplace=True)]
+    if norm=='weight_norm':
+        layers = [weight_norm(conv2d)]
     else:
-        layers = [conv2d, nn.ReLU(inplace=True)]
+        layers = [conv2d]
+    if norm=='batch_norm':
+        layers.append(nn.BatchNorm2d(out_ch))
+    elif norm=='instance_norm':
+        layers.append(nn.InstanceNorm2d(out_ch))
+    elif norm=='group_norm':
+        layers.append(nn.GroupNorm(8,out_ch))
     if dropout is not None:
         if dropout==True or dropout=='2d':
-            layers.append(nn.Dropout2d(p=0.1),inplace=False)
+            layers.append(nn.Dropout2d(p=0.1,inplace=True))
         elif dropout=='normal':
-            layers.append(nn.Dropout(p=0.1),inplace=False)
+            layers.append(nn.Dropout(p=0.1,inplace=True))
+    layers += [nn.ReLU(inplace=True)]
     return layers
 
 def make_layers(cfg, dilation=1, norm=None, dropout=None):
@@ -122,7 +123,7 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
                 amount = float(v[ind:])
             else:
                 amount = 0.5
-            layers.append(torch.nn.Dropout2d(p=amount, inplace=False))
+            layers.append(torch.nn.Dropout2d(p=amount, inplace=True))
             layerCodes.append(v)
         elif type(v)==str and v[:2] == 'U+':
             if len(layers)>0:

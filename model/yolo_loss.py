@@ -43,7 +43,7 @@ class YoloLoss (nn.Module):
 
         grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor).to(prediction.device)
         grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor).to(prediction.device)
-        scaled_anchors = FloatTensor([(a['width'] / stride, a['height']/ stride) for a in self.anchors])
+        scaled_anchors = FloatTensor([(a['width'] / stride[0], a['height']/ stride[1]) for a in self.anchors])
         anchor_w = scaled_anchors[:, 0:1].view((1, nA, 1, 1)).to(prediction.device)
         anchor_h = scaled_anchors[:, 1:2].view((1, nA, 1, 1)).to(prediction.device)
 
@@ -55,7 +55,8 @@ class YoloLoss (nn.Module):
         pred_boxes[..., 3] = torch.exp(h.data) * anchor_h
 
         if target is not None:
-            target[:,:,[0,1,3,4]] /= self.scale
+            target[:,:,[0,4]] /= self.scale[0]
+            target[:,:,[1,3]] /= self.scale[1]
 
         nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, distances, ious = build_targets(
             pred_boxes=pred_boxes.cpu().data,
@@ -308,6 +309,7 @@ class YoloDistLoss (nn.Module):
         self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.rotation=rotation
+        assert(scale[0]==scale[1]) #arrggh, acounting for rotation is a real pain.
         self.scale=scale
         self.bad_conf_weight=bad_conf_weight
         self.multiclass=multiclass
@@ -318,21 +320,23 @@ class YoloDistLoss (nn.Module):
         self.ce_loss = nn.CrossEntropyLoss(reduction='elementwise_mean')  # Class loss
 
         #make anchor points from anchors
+        self.scaled_anchors = torch.FloatTensor([(a['width'] / scale[0], a['height']/ scale[1], a['rot']) for a in self.anchors])
+
         o_r = torch.FloatTensor([a['rot'] for a in anchors])
         o_h = torch.FloatTensor([a['height'] for a in anchors])
         o_w = torch.FloatTensor([a['width'] for a in anchors])
         cos_rot = torch.cos(o_r)
         sin_rot = torch.sin(o_r)
-        p_left_x =  -cos_rot*o_w
-        p_left_y =  sin_rot*o_w
-        p_right_x = cos_rot*o_w
-        p_right_y = -sin_rot*o_w
-        p_top_x =   -sin_rot*o_h
-        p_top_y =   -cos_rot*o_h
-        p_bot_x =   sin_rot*o_h
-        p_bot_y =   cos_rot*o_h
-        self.anchor_points=torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=1)
-        self.anchor_hws= (o_h+o_w)/2.0
+        p_left_x =  -cos_rot*o_w /scale[0]
+        p_left_y =  sin_rot*o_w /scale[1]
+        p_right_x = cos_rot*o_w /scale[0]
+        p_right_y = -sin_rot*o_w /scale[1]
+        p_top_x =   -sin_rot*o_h /scale[0]
+        p_top_y =   -cos_rot*o_h /scale[1]
+        p_bot_x =   sin_rot*o_h /scale[0]
+        p_bot_y =   cos_rot*o_h /scale[1]
+        self.scaled_anchor_points=torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=1)
+        self.scaled_anchor_hws= (o_h/scale[1]+o_w/scale[0])/2.0
 
     def forward(self,prediction, target, target_sizes ):
 
@@ -356,12 +360,13 @@ class YoloDistLoss (nn.Module):
 
         grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor)
         grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor)
-        scaled_anchors = FloatTensor([(a['width'] / stride, a['height']/ stride, a['rot']) for a in self.anchors])
-        scaled_anchor_points = self.anchor_points/stride
-        scaled_anchor_hws = self.anchor_hws/stride
-        anchor_w = scaled_anchors[:, 0:1].view((1, nA, 1, 1)).to(prediction.device)
-        anchor_h = scaled_anchors[:, 1:2].view((1, nA, 1, 1)).to(prediction.device)
-        anchor_r = scaled_anchors[:, 2:3].view((1, nA, 1, 1)).to(prediction.device)
+        #scaled_anchors = FloatTensor([(a['width'] / stride[0], a['height']/ stride[1], a['rot']) for a in self.anchors])
+        #scaled_anchor_points[[0,2,4,6]] = self.anchor_points/stride
+        #scaled_anchor_points = self.anchor_points/stride
+        #scaled_anchor_hws = self.anchor_hws/( (stride[0]+stride[1])/2 )
+        anchor_w = self.scaled_anchors[:, 0:1].view((1, nA, 1, 1)).to(prediction.device)
+        anchor_h = self.scaled_anchors[:, 1:2].view((1, nA, 1, 1)).to(prediction.device)
+        anchor_r = self.scaled_anchors[:, 2:3].view((1, nA, 1, 1)).to(prediction.device)
 
         # Add offset and scale with anchors
         #pred_boxes = FloatTensor(prediction[..., :bbParams].shape)
@@ -391,8 +396,8 @@ class YoloDistLoss (nn.Module):
         pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=4)
 
         if target is not None:
-            target[:,:,[0,1,3,4]] /= self.scale
-            target[:,:,5:13] /= self.scale
+            target[:,:,[0,1,3,4]] /= self.scale[0]
+            target[:,:,5:13] /= self.scale[0]
 
         nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tr, tconf, tcls = build_targets_dist(
             pred_points=pred_points.cpu().data,
@@ -401,9 +406,9 @@ class YoloDistLoss (nn.Module):
             pred_cls=pred_cls.cpu().data,
             target=target.cpu().data if target is not None else None,
             target_sizes=target_sizes,
-            anchors=scaled_anchors.cpu().data,
-            anchor_points=scaled_anchor_points.cpu().data,
-            anchor_hws=scaled_anchor_hws.cpu().data,
+            anchors=self.scaled_anchors.cpu().data,
+            anchor_points=self.scaled_anchor_points.cpu().data,
+            anchor_hws=self.scaled_anchor_hws.cpu().data,
             num_anchors=nA,
             num_classes=self.num_classes,
             grid_sizeH=nH,
@@ -634,11 +639,12 @@ class LineLoss (nn.Module):
         #self.ignore_thresh=ignore_thresh
         self.num_classes=num_classes
         self.scale=scale
+        assert(scale[0]==scale[1])
         self.bad_conf_weight=bad_conf_weight
         self.mse_loss = nn.MSELoss(size_average=True)  # Coordinate loss
         self.bce_loss = nn.BCEWithLogitsLoss(size_average=True)  # Confidence loss
         self.ce_loss = nn.CrossEntropyLoss()  # Class loss
-        self.anchor_h = anchor_h/scale
+        self.anchor_h = anchor_h#/((scale[0]+scale[1])/2)
 
     def forward(self,prediction, target, target_sizes ):
 
@@ -664,18 +670,19 @@ class LineLoss (nn.Module):
         #Create points from predicted boxes
         o_x = torch.tanh(x)+0.5 + grid_x
         o_y = torch.tanh(y)+0.5 + grid_y
-        o_h = torch.exp(h) * self.anchor_h #half
+        o_h = torch.exp(h) * self.anchor_h #half, not scaled
         o_r =  (math.pi)*torch.tanh(r)
 
-        x1 = -o_h*torch.sin(o_r) + o_x
-        y1 = -o_h*torch.cos(o_r) + o_y
-        x2 =  o_h*torch.sin(o_r) + o_x
-        y2 =  o_h*torch.cos(o_r) + o_y
+        x1 = (-o_h*torch.sin(o_r))/self.scale[0] + o_x
+        y1 = (-o_h*torch.cos(o_r))/self.scale[1] + o_y
+        x2 = ( o_h*torch.sin(o_r))/self.scale[0] + o_x
+        y2 = ( o_h*torch.cos(o_r))/self.scale[1] + o_y
 
         pred = torch.stack([o_x,o_y,o_r,o_h],dim=3)
 
         if target is not None: #target is x1,y1,x2,y2
-            target /= self.scale
+            target[[0,2]] /= self.scale[0]
+            target[[1,3]] /= self.scale[1]
 
         nGT, mask, conf_mask, tx1, ty1, tx2, ty2, tconf, tcls = self.build_targets_lines(
             pred=pred.cpu().data,

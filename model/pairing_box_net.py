@@ -52,17 +52,27 @@ class PairingBoxNet(nn.Module):
         down1_modules, down1_last_ch = make_layers(layers_cfg_down1, dilation,norm)
         self.net_down1 = nn.Sequential(*down1_modules)
         down1scale=1
-        for a in layers_cfg_down1:
+        down1scaleX=1
+        down1scaleY=1
+        for a in layers_cfg:
             if a=='M' or (type(a) is str and a[0]=='D'):
-                down1scale*=2
+                down1scaleX*=2
+                down1scaleY*=2
             elif type(a) is str and a[0]=='U':
-                down1scale/=2
+                down1scaleX/=2
+                down1scaleY/=2
+            elif type(a) is str and a[0:4]=='long': #long pool
+                down1scaleX*=3
+                down1scaleY*=2
+        down1scale=(down1scaleX,down1scaleY)
 
         detect_ch_after_up = config['up_sample_ch'] if 'up_sample_ch' in config else 256
 
+        up_sample_size = (detect_scale[0]//down1scale[0], detect_scale[1]//down1scale[1])
+
         #if 'up_sample_relu' not in config or config['up_sample_relu']:
         self.up_sample = nn.Sequential(
-                    nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=detect_scale//down1scale,stride=detect_scale//down1scale),
+                    nn.ConvTranspose2d(detect_ch,detect_ch_after_up,kernel_size=up_sample_size,stride=up_sample_size),
                     nn.ReLU(inplace=True)
                     )
         #else:
@@ -79,9 +89,14 @@ class PairingBoxNet(nn.Module):
         self.scale=down1scale
         for a in layers_cfg_down2:
             if a=='M' or (type(a) is str and a[0]=='D'):
-                self.scale*=2
+                self.scale[0]*=2
+                self.scale[1]*=2
             elif type(a) is str and a[0]=='U':
-                self.scale/=2
+                self.scale[0]/=2
+                self.scale[1]/=2
+            elif type(a) is str and a[0:4]=='long': #long pool
+                self.scale[0]*=3
+                self.scale[1]*=2
         assert(self.scale == detect_scale)
         
         if 'final_layers_cfg' in config:
@@ -126,13 +141,13 @@ class PairingBoxNet(nn.Module):
 
         #priors_0 = Variable(torch.arange(0,y.size(2)).type_as(img.data), requires_grad=False)[None,:,None]
         priors_0 = torch.arange(0,pred.size(2)).type_as(img.data)[None,:,None].to(img.device)
-        priors_0 = (priors_0 + 0.5) * self.scale #self.base_0
+        priors_0 = (priors_0 + 0.5) * self.scale[1] #self.base_0
         priors_0 = priors_0.expand(pred.size(0), priors_0.size(1), pred.size(3))
         priors_0 = priors_0[:,None,:,:]
 
         #priors_1 = Variable(torch.arange(0,y.size(3)).type_as(img.data), requires_grad=False)[None,None,:]
         priors_1 = torch.arange(0,pred.size(3)).type_as(img.data)[None,None,:].to(img.device)
-        priors_1 = (priors_1 + 0.5) * self.scale #elf.base_1
+        priors_1 = (priors_1 + 0.5) * self.scale[0] #elf.base_1
         priors_1 = priors_1.expand(pred.size(0), pred.size(2), priors_1.size(2))
         priors_1 = priors_1[:,None,:,:]
 
@@ -152,8 +167,8 @@ class PairingBoxNet(nn.Module):
 
             stackedPred = [
                 torch.sigmoid(pred[:,0+offset:1+offset,:,:]),                #0. confidence
-                torch.tanh(pred[:,1+offset:2+offset,:,:])*self.scale + priors_1,        #1. x-center
-                torch.tanh(pred[:,2+offset:3+offset,:,:])*self.scale + priors_0,        #2. y-center
+                torch.tanh(pred[:,1+offset:2+offset,:,:])*self.scale[0] + priors_1,        #1. x-center
+                torch.tanh(pred[:,2+offset:3+offset,:,:])*self.scale[1] + priors_0,        #2. y-center
                 rot_dif + anchor[i]['rot'],      #3. rotation (radians)
                 torch.exp(pred[:,4+offset:5+offset,:,:]) * anchor[i]['height'], #4. height (half), I don't think this needs scaled
                 torch.exp(pred[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)  

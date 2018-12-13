@@ -181,10 +181,12 @@ def allBoxDistNeg(boxes1,boxes2):
     boxes2HW = (boxes2[:,4]+boxes2[:,3])/2
     #candHW,_ = torch.min(candidate_boxes[:,3:5],dim=1)
     #compute distances
-    normalization = (boxes1HW+boxes2HW)/2.0
 
     boxes1_points = boxes1_points[:,None,:].expand(boxes1.size(0),boxes2.size(0),8)
-    boxes2_points = boxes1_points[None,:,:].expand(boxes1.size(0),boxes2.size(0),8)
+    boxes2_points = boxes2_points[None,:,:].expand(boxes1.size(0),boxes2.size(0),8)
+    boxes1HW = boxes1HW[:,None].expand(boxes1.size(0),boxes2.size(0))
+    boxes2HW = boxes2HW[None,:].expand(boxes1.size(0),boxes2.size(0))
+    normalization = (boxes1HW+boxes2HW)/2.0
 
     deltas = boxes1_points - boxes2_points
     dist = ((

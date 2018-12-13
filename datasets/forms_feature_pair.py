@@ -175,8 +175,12 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 labels.append(inst['label'])
                                 qXYs.append(inst['qXY'])
                                 iXYs.append(inst['iXY'])
+                            if len(datas)>0:
+                                data = torch.cat(datas,dim=0),
+                            else:
+                                data = torch.FloatTensor((0,10))
                             notpair_instances.append( {
-                                'data': torch.cat(datas,dim=0),
+                                'data': data,
                                 'label': torch.ByteTensor(labels),
                                 'imgName': imageName,
                                 'imgPath' : path,

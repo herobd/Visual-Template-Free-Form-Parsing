@@ -73,25 +73,31 @@ class ResBlock(nn.Module):
         return x+self.side(x)
 
 def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
-    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=dilation*(kernel//2),dilation=dilation)
+    if type(dilation) is int:
+        dilation=(dilation,dilation)
+    if type(kernel) is int:
+        kernel=(kernel,kernel)
+    padding = ( dilation[0]*(kernel[0]//2), dilation[1]*(kernel[1]//2) )
+    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=padding,dilation=dilation)
     #if i == len(cfg)-1:
     #    layers += [conv2d]
     #    break
-    if norm=='batch_norm':
-        layers = [conv2d, nn.BatchNorm2d(out_ch), nn.ReLU(inplace=True)]
-    elif norm=='instance_norm':
-        layers = [conv2d, nn.InstanceNorm2d(out_ch), nn.ReLU(inplace=True)]
-    elif norm=='group_norm':
-        layers = [conv2d, nn.GroupNorm(8,out_ch), nn.ReLU(inplace=True)]
-    elif norm=='weight_norm':
-        layers = [weight_norm(conv2d), nn.ReLU(inplace=True)]
+    if norm=='weight_norm':
+        layers = [weight_norm(conv2d)]
     else:
-        layers = [conv2d, nn.ReLU(inplace=True)]
+        layers = [conv2d]
+    if norm=='batch_norm':
+        layers.append(nn.BatchNorm2d(out_ch))
+    elif norm=='instance_norm':
+        layers.append(nn.InstanceNorm2d(out_ch))
+    elif norm=='group_norm':
+        layers.append(nn.GroupNorm(8,out_ch))
     if dropout is not None:
         if dropout==True or dropout=='2d':
-            layers.append(nn.Dropout2d(p=0.1),inplace=False)
+            layers.append(nn.Dropout2d(p=0.1,inplace=True))
         elif dropout=='normal':
-            layers.append(nn.Dropout(p=0.1),inplace=False)
+            layers.append(nn.Dropout(p=0.1,inplace=True))
+    layers += [nn.ReLU(inplace=True)]
     return layers
 
 def make_layers(cfg, dilation=1, norm=None, dropout=None):
@@ -106,7 +112,8 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             layers = [nn.MaxPool2d(kernel_size=2, stride=2)]
             layerCodes = [v]
         elif type(v)==str and v == 'ReLU':
-            layerCodes.append( nn.ReLU(inplace=True) )
+            layers.append( nn.ReLU(inplace=True) )
+            layerCodes.append(v)
         elif type(v)==str and v[:4]=='drop':
             if len(v)>6 and v[4:7]=='out':
                 ind=8
@@ -116,7 +123,8 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
                 amount = float(v[ind:])
             else:
                 amount = 0.5
-            modules.append(torch.nn.Dropout2d(p=amount, inplace=False))
+            layers.append(torch.nn.Dropout2d(p=amount, inplace=True))
+            layerCodes.append(v)
         elif type(v)==str and v[:2] == 'U+':
             if len(layers)>0:
                 if type(layerCodes[0])==str and layerCodes[0][:2]=='U+':
@@ -173,6 +181,28 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             dilate=int(v[ind:div])
             outCh=int(v[div+1:])
             layers += convReLU(in_channels[-1],outCh,norm,dilate,dropout=dropout)
+            layerCodes.append(outCh)
+            in_channels.append(outCh)
+        elif type(v)==str and v[:2] == 'hd': #horz 1x3 conv layer with custom dilation
+            if v[:4] == 'hdil':
+                ind=5
+            else:
+                ind=2
+            div = v.find('-')
+            dilate=int(v[ind:div])
+            outCh=int(v[div+1:])
+            layers += convReLU(in_channels[-1],outCh,norm,dilate,kernel=(1,3),dropout=dropout)
+            layerCodes.append(outCh)
+            in_channels.append(outCh)
+        elif type(v)==str and v[:2] == 'vd': #vert 3x1 conv layer with custom dilation
+            if v[:4] == 'vdil':
+                ind=5
+            else:
+                ind=2
+            div = v.find('-')
+            dilate=int(v[ind:div])
+            outCh=int(v[div+1:])
+            layers += convReLU(in_channels[-1],outCh,norm,dilate,kernel=(3,1),dropout=dropout)
             layerCodes.append(outCh)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'B': #ResNet layer with custom dilation

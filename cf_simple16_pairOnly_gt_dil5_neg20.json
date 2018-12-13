@@ -1,5 +1,5 @@
 {
-    "name": "Simple16_pair_gt_dil5_neg20",
+    "name": "Simple16_pairOnly_gt_dil5_neg20",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",

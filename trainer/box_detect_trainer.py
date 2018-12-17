@@ -24,11 +24,12 @@ class BoxDetectTrainer(BaseTrainer):
             self.loss_params=config['loss_params']
         else:
             self.loss_params={}
-        self.loss['box'] = self.loss['box'](**self.loss_params['box'], 
-                num_classes=model.numBBTypes, 
-                rotation=model.rotation, 
-                scale=model.scale,
-                anchors=model.anchors)
+        if 'box' in self.loss:
+            self.loss['box'] = self.loss['box'](**self.loss_params['box'], 
+                    num_classes=model.numBBTypes, 
+                    rotation=model.rotation, 
+                    scale=model.scale,
+                    anchors=model.anchors)
         if 'line' in self.loss and self.loss['line'] is not None:
             if 'line' in self.loss_params:
                 params = self.loss_params['line']
@@ -169,21 +170,30 @@ class BoxDetectTrainer(BaseTrainer):
         #    this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         #else:
         data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
-        outputBoxes, outputOffsets, outputLines, outputOffsetsLines, outputPoints, outputPixels = self.model(data)
-        this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+        outputBoxes, outputOffsets, outputLines, outputOffsetLines, outputPoints, outputPixels = self.model(data)
 
-        this_loss*=self.loss_weight['box']
-        loss+=this_loss
-        losses['box_loss']=this_loss.item()
+        if 'box' in self.loss:
+            this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+
+            this_loss*=self.loss_weight['box']
+            loss+=this_loss
+            losses['box_loss']=this_loss.item()
+        else:
+            position_loss=0
+            conf_loss=0
+            class_loss=0
 
         index=0
         for name, target in targetLines.items():
             #print('line')
             predictions = outputOffsetLines[index]
-            this_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
+            this_loss, line_pos_loss, line_conf_loss, line_class_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
             this_loss*=self.loss_weight['line']
             loss+=this_loss
             losses[name+'_loss']=this_loss.item()
+            losses[name+'_pos_loss']=line_pos_loss
+            losses[name+'_conf_loss']=line_conf_loss
+            losses[name+'_class_loss']=line_class_loss
             index+=1
         index=0
         for name, target in targetPoints.items():
@@ -328,10 +338,13 @@ class BoxDetectTrainer(BaseTrainer):
                 for name, target in targetLines.items():
                     #print('line')
                     predictions = outputOffsetLines[index]
-                    this_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
+                    this_loss, line_pos_loss, line_conf_loss, line_class_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
                     this_loss*=self.loss_weight['line']
                     loss+=this_loss
                     losses['val_'+name+'_loss']=this_loss.item()
+                    losses['val_'+name+'_pos_loss']=line_pos_loss
+                    losses['val_'+name+'_conf_loss']=line_conf_loss
+                    losses['val_'+name+'_class_loss']=line_class_loss
                     index+=1
                 index=0
                 for name, target in targetPoints.items():

@@ -56,9 +56,9 @@ class ResBlock(nn.Module):
         layers.append(nn.ReLU(inplace=True)) 
         if dropout is not None:
             if dropout==True or dropout=='2d':
-                layers.append(nn.Dropout2d(p=0.1),inplace=True)
+                layers.append(nn.Dropout2d(p=0.1,inplace=True))
             elif dropout=='normal':
-                layers.append(nn.Dropout2d(p=0.1),inplace=True)
+                layers.append(nn.Dropout2d(p=0.1,inplace=True))
         assert(secondKernel%2 == 1)
         conv2=nn.Conv2d(out_ch, out_ch, kernel_size=secondKernel, padding=(secondKernel-1)//2)
         if norm=='weight_norm':
@@ -110,6 +110,10 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
         if v == 'M':
             modules.append(nn.Sequential(*layers))
             layers = [nn.MaxPool2d(kernel_size=2, stride=2)]
+            layerCodes = [v]
+        elif type(v)==str and v[0:4] == 'long':
+            modules.append(nn.Sequential(*layers))
+            layers = [nn.MaxPool2d(kernel_size=(2,3), stride=(2,3))]
             layerCodes = [v]
         elif type(v)==str and v == 'ReLU':
             layers.append( nn.ReLU(inplace=True) )
@@ -178,7 +182,12 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             else:
                 ind=1
             div = v.find('-')
-            dilate=int(v[ind:div])
+            div0 = v.find(',')
+            if div0==-1:
+                dilate=int(v[ind:div])
+            else:
+                assert(div0<div)
+                dilate=( int(v[ind:div0]), int(v[div0+1:div]) )
             outCh=int(v[div+1:])
             layers += convReLU(in_channels[-1],outCh,norm,dilate,dropout=dropout)
             layerCodes.append(outCh)

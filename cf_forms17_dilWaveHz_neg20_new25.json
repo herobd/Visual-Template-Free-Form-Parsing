@@ -1,5 +1,5 @@
 {
-    "name": "Forms16_resQ2dil1_neg20_new12",
+    "name": "Forms17_dilWaveHz_neg20_new25",
     "cuda": true,
     "gpu": 0,
     "super_computer":true,
@@ -7,10 +7,10 @@
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
-        "data_dir": "../data/forms",
-        "batch_size": 1,
+        "data_dir": "../data/forms17",
+        "batch_size": 2,
         "shuffle": true,
-        "num_workers": 1,
+        "num_workers": 2,
         "crop_to_page":false,
         "color":false,
         "rescale_range": [0.4,0.65],
@@ -65,17 +65,17 @@
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
-        "iterations": 400000,
+        "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 5000,
+        "val_step": 10000,
         "save_step": 50000,
         "save_step_minor": 500,
         "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
-        "warmup_steps": 3000,
-        "thresh_conf":0.75,
+        "warmup_steps": 1000,
+        "thresh_conf":0.88,
         "thresh_intersect":0.4
     },
     "arch": "YoloBoxDetector", 
@@ -85,10 +85,10 @@
         "number_of_point_types": 0,
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
-	"dilation": 1,
-        "down_layers_cfg": [1,"C64", "M", "R128", "R128", "R128", "D256", "R256", "R256", "R256", "R256", "D512", "R512", "R512", "R512", "R512", "R512", "D1024", "R1024", "R1024", "R1024", "R1024", "R1024"],
+        "dropout":true,
+        "down_layers_cfg": [1,"k5-64", "M", "d1-128", 128,  "M", "d1,2-256", 256,  "M", "d2,4-512", 512,  "M", "d4,8-1024",  1024,  1024],
         "up_layers_cfg":[],
-        "anchors_file": "anchors_noRot_new_12.json",
+        "anchors_file": "anchors_noRot_new_25.json",
         "rotation":false
     }
 }

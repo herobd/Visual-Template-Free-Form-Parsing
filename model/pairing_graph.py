@@ -179,4 +179,155 @@ class PairingGraph(BaseModel):
         maxX+=maxDim
         minY+=maxDim
 
+
+        sin_r = torh.sin(bb[:,2])
+        cos_r = torh.cos(bb[:,2])
+        lx = bb[:,0] - cos_r*bb[:,4]  - minX
+        ly = bb[:,1] + sin_r*bb[:,3] - minY
+        rx = bb[:,0] + cos_r*bb[:,4]  - minX
+        ry = bb[:,1] - sin_r*bb[:,3] - minY
+        tx = bb[:,0] - cos_r*bb[:,4]  - minX
+        ty = bb[:,1] - sin_r*bb[:,3] - minY
+        bx = bb[:,0] + cos_r*bb[:,4]  - minX
+        by = bb[:,1] + sin_r*bb[:,3] - minY
+        trX = bb[:,4]*cos_r-bb[:,3]*sin_r + bb[:,0]  - minX
+        trY = bb[:,4]*sin_r+bb[:,3]*cos_r + bb[:,1]  - minY
+        tlX = -bb[:,4]*cos_r-bb[:,3]*sin_r + bb[:,0] - minX
+        tlY= -bb[:,4]*sin_r+bb[:,3]*cos_r + bb[:,1]  - minY
+        brX = bb[:,4]*cos_r+bb[:,3]*sin_r + bb[:,0]  - minX
+        brY = bb[:,4]*sin_r-bb[:,3]*cos_r + bb[:,1]  - minY
+        blX = -bb[:,4]*cos_r+bb[:,3]*sin_r + bb[:,0] - minX
+        blY = -bb[:,4]*sin_r-bb[:,3]*cos_r + bb[:,1] - minY 
+
+        scaleCand = 0.5
+        minX*=scaleCand
+        minY*=scaleCand
+        maxX*=scaleCand
+        maxY*=scaleCand
+        lx  *=scaleCand
+        ly  *=scaleCand
+        rx  *=scaleCand
+        ry  *=scaleCand
+        tx  *=scaleCand
+        ty  *=scaleCand
+        bx  *=scaleCand
+        by  *=scaleCand
+        trX *=scaleCand
+        trY *=scaleCand
+        tlX *=scaleCand
+        tlY *=scaleCand
+        brX *=scaleCand
+        brY *=scaleCand
+        blX *=scaleCand
+        blY *=scaleCand
+        h = bb[:,3]*scaleCand
+        w = bb[:,4]*scaleCand
+        r = bb[:,2]
+
+
+
+        boxesDrawn = np.zeros( (maxY-minY,maxX-minX) ,dtype=int)#torch.IntTensor( (maxY-minY,maxX-minX) ).zero_()
+        numBoxes = bbs.size(0)
+        for i in range(numBoxes):
+            
+            cv2.line( boxesDrawn, (int(tlX[i]),int(tlY[i])),(int(trX[i]),int(trY[i])),i,1)
+            cv2.line( boxesDrawn, (int(trX[i]),int(trY[i])),(int(brX[i]),int(brY[i])),i,1)
+            cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(brX[i]),int(brY[i])),i,1)
+            cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(tlX[i]),int(tlY[i])),i,1)
+
         #how to walk?
+        #walk until number found.
+        # if in list, end
+        # else add to list, continue
+        #list is candidates
+        maxDist = 1000*scaleCand
+        minWidth=40
+        minHeight=30
+        numFan=5
+        
+        def pathWalk(myId,startX,startY,angle,distStart=0,splitDist=100):
+            hit=set()
+            lineId = myId+numBoxes
+            if angle<-180:
+                angle+=360
+            if angle>180:
+                angle-=360
+            if (angle>45 and angle<135) or (angle>-135 and angle<-45):
+                #compute slope based on y stepa
+                yStep=-1
+                #if angle==90 or angle==-90:
+
+                xStep=1/math.tan(math.pi*angle/180.0)
+            else:
+                #compute slope based on x step
+                xStep=1
+                yStep=-math.tan(math.pi*angle/180.0)
+            if angle>=135 or angle<-45:
+                xStep*=-1
+                yStep*=-1
+            distSoFar=distStart
+            prev=0
+            numSteps=0
+            while distSoFar<maxDist:
+                x=int(round(startX + numSteps*xStep))
+                y=int(round(startY + numSteps*yStep))
+                numSteps+=1
+                if x<0 or y<0 or x>=boxesDrawn.shape[1] or y>=boxesDrawn.shape[0]:
+                    break
+                here = boxesDrawn[y,x]
+                #print('{} {} {} : {}'.format(x,y,here,len(hit)))
+                if here>0 and here<=numBoxes and here!=myId:
+                    if here in hit and prev!=here:
+                        break
+                    else:
+                        hit.add(here)
+                        #print('hit {} at {}, {}  ({})'.format(here,x,y,len(hit)))
+                        #elif here == lineId or here == myId:
+                        #break
+                else:
+                    boxesDrawn[y,x]=lineId
+                prev=here
+                distSoFar= distStart+math.sqrt((x-startX)**2 + (y-startY)**2)
+
+                #if hitting and maxDist-distSoFar>splitMin and (distSoFar-distStart)>splitDist and len(toSplit)==0:
+                #    #split
+                #    toSplit.append((myId,x,y,angle+45,distSoFar,hit.copy(),splitDist*1.5))
+                #    toSplit.append((myId,x,y,angle-45,distSoFar,hit.copy(),splitDist*1.5))
+
+            return hit
+
+        def fan(boxId,x,y,angle,num,hit):
+            deg = 90/(num+1)
+            curDeg = angle-45+deg
+            for i in range(num):
+                hit.update( pathWalk(boxId,x,y,curDeg) )
+                curDeg+=deg
+
+        candidates=set()
+        for i in range(numBoxes):
+            boxId=i+1
+            toSplit=[]
+            hit = set()
+
+            horzDiv = 1+math.ceil(w[i]/minWidth)
+            vertDiv = 1+math.ceil(h[i]/minHeight)
+
+            for j in range(horzDiv):
+                leftW = 1-j/(horzDiv-1)
+                rightW = j/(horzDiv-1)
+                hit.update( pathWalk(boxId, tlX[i]*leftW+trX[i]*rightW, tlY[i]*leftW+trY[i]*rightW,r[i]+90) )
+                hit.update( pathWalk(boxId, tlX[i]*leftW+trX[i]*rightW, tlY[i]*leftW+trY[i]*rightW,r[i]-90) )
+            for j in range(vertDiv):
+                topW = 1-j/(vertDiv-1)
+                botW = j/(vertDiv-1)
+                hit.update( pathWalk(boxId, tlX[i]*topW+blX[i]*botW, tlY[i]*topW+blY[i]*botW,r[i]+180) )
+                hit.update( pathWalk(boxId, trX[i]*topW+brX[i]*botW, trY[i]*topW+brY[i]*botW,r[i]) )
+            fan(boxId,tlX[i],tlY[i],r[i]+135,numFan,hit)
+            fan(boxId,trX[i],trY[i],r[i]+45,numFan,hit)
+            fan(boxId,blX[i],blY[i],r[i]+225,numFan,hit)
+            fan(boxId,brX[i],brY[i],r[i]+315,numFan,hit)
+
+            for jId in hit:
+                candidates.add( (min(i,jId-1),max(i,jId-1)) )
+
+        return list(candidates)

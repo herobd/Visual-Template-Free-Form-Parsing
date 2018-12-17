@@ -56,9 +56,9 @@ class ResBlock(nn.Module):
         layers.append(nn.ReLU(inplace=True)) 
         if dropout is not None:
             if dropout==True or dropout=='2d':
-                layers.append(nn.Dropout2d(p=0.1),inplace=True)
+                layers.append(nn.Dropout2d(p=0.1,inplace=True))
             elif dropout=='normal':
-                layers.append(nn.Dropout2d(p=0.1),inplace=True)
+                layers.append(nn.Dropout2d(p=0.1,inplace=True))
         assert(secondKernel%2 == 1)
         conv2=nn.Conv2d(out_ch, out_ch, kernel_size=secondKernel, padding=(secondKernel-1)//2)
         if norm=='weight_norm':

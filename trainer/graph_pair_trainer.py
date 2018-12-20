@@ -6,6 +6,7 @@ from utils import util
 from collections import defaultdict
 from evaluators import FormsBoxDetect_printer
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
+import random
 
 
 class GraphPairTrainer(BaseTrainer):
@@ -156,13 +157,13 @@ class GraphPairTrainer(BaseTrainer):
         if len(predPairing.size())>0 and predPairing.size(0)>0:
             edgeLoss = self.loss['edge'](predPairing,gtPairing)
         else:
-            edgeLoss = torch.tensor(0.0).to(image.device)
+            edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
         if not self.model.detector_frozen:
             if targetBoxes is not None:
                 targSize = targetBoxes.size(1)
             else:
                 targSize =0 
-            boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
+            boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets[None,...],targetBoxes,[targSize])
             loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
         else:
             loss = edgeLoss
@@ -319,33 +320,38 @@ class GraphPairTrainer(BaseTrainer):
 
 
     def alignEdgePred(self,targetBoxes,adj,outputBoxes,edgePred):
-        if edgePred is None:
+        if edgePred is None or targetBoxes is None:
             return torch.tensor([]),torch.tensor([])
+        targetBoxes = targetBoxes.cpu()
         #decide which predicted boxes belong to which target boxes
         #should this be the same as AP_?
         numClasses = 2
         if self.model.rotation:
-            targIndex = getTargIndexForPreds_dist(targetBoxes,outputBoxes,0.9,numClasses)
+            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,0.9,numClasses)
         else:
-            targIndex = getTargIndexForPreds_iou(targetBoxes,outputBoxes,0.5,numClasses)
+            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.5,numClasses)
 
         #Create gt vector to match edgePred.values()
 
-        edges = edgePred._indices().cpu()
-        predsAll = edgePred._values()
+        edges = edgePred[0] #edgePred._indices().cpu()
+        predsAll = edgePred[1] #edgePred._values()
         newGT = []#torch.tensor((edges.size(0)))
         preds = []
-        for i in range(edges.size(0)):
-            n0 = edges[i,0]
-            n1 = edges[i,1]
+        #for i in range(edges.size(0)):
+        i=0
+        for n0,n1 in edges:
+            #n0 = edges[i,0]
+            #n1 = edges[i,1]
             t0 = targIndex[n0]
             t1 = targIndex[n1]
             if t0>=0 and t1>=0:
                 newGT.append( int((t0,t1) in adj) )#adjM[ min(t0,t1), max(t0,t1) ])
                 preds.append(predsAll[i])
             #else skip this
-        newGT = torch.tensor(newGT).to(edgePred.device)
-        preds = torch.tensor(preds).to(edgePred.device)
+            i+=1
+        newGT = torch.tensor(newGT).to(edgePred[1].device)
+        preds = torch.stack(preds).to(edgePred[1].device)
+        #assert(preds.requires_grad)
     
         return newGT, preds
 
@@ -353,12 +359,16 @@ class GraphPairTrainer(BaseTrainer):
         if edgePred is None:
             assert(adj is None or len(adj)==0)
             return torch.tensor([]),torch.tensor([])
-        edges = edgePred._indices().cpu().t()
+        edges = edgePred[0] #edgePred._indices().cpu().t()
 
-        gt = torch.empty(edges.size(0))
-        for i in range(edges.size(0)):
-            n0 = edges[i,0]
-            n1 = edges[i,1]
+        gt = torch.empty(len(edges))#edges.size(0))
+        #for i in range(edges.size(0)):
+        i=0
+        for n0,n1 in edges:
+            #n0 = edges[i,0]
+            #n1 = edges[i,1]
             gt[i] = int((n0,n1) in adj) #(adjM[ n0, n1 ])
+            i+=1
     
-        return gt.to(edgePred.device), edgePred._values().view(-1).view(-1)
+        #return gt.to(edgePred.device), edgePred._values().view(-1).view(-1)
+        return gt.to(edgePred[1].device), edgePred[1].view(-1)

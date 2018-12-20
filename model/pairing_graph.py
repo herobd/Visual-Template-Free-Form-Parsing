@@ -81,6 +81,8 @@ class PairingGraph(BaseModel):
         layers, last_ch = make_layers(featurizer_fc,norm=feat_norm) #we just don't dropout here
         self.edgeFeaturizerFC = nn.Sequential(*layers)
 
+
+
         #self.pairer = GraphNet(config['graph_config'])
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
 
@@ -245,12 +247,16 @@ class PairingGraph(BaseModel):
         
         #We're not adding diagonal (self-edges) here!
         #Expecting special handeling during graph conv
-        candidateLocs = torch.LongTensor(candidates).t().to(edgeFeats.device)
-        ones = torch.ones(len(candidates)).to(edgeFeats.device)
-        adjacencyMatrix = torch.sparse.FloatTensor(candidateLocs,ones,torch.Size([bbs.size(0),bbs.size(0)]))
-        edge_features = torch.sparse.FloatTensor(candidateLocs,edgeFeats,torch.Size([bbs.size(0),bbs.size(0),edgeFeats.size(1)]))
+        #candidateLocs = torch.LongTensor(candidates).t().to(edgeFeats.device)
+        #ones = torch.ones(len(candidates)).to(edgeFeats.device)
+        #adjacencyMatrix = torch.sparse.FloatTensor(candidateLocs,ones,torch.Size([bbs.size(0),bbs.size(0)]))
 
+        #assert(edgeFeats.requries_grad)
+        #edge_features = torch.sparse.FloatTensor(candidateLocs,edgeFeats,torch.Size([bbs.size(0),bbs.size(0),edgeFeats.size(1)]))
+        #assert(edge_features.requries_grad)
 
+        edge_features = (candidates,edgeFeats)
+        adjacencyMatrix = None
         node_features = None
         ##print('create graph: {}'.format(timeit.default_timer()-tic))
         return node_features, adjacencyMatrix, edge_features

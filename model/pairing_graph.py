@@ -267,40 +267,48 @@ class PairingGraph(BaseModel):
 
     def selectCandidateEdges(self,bbs):
         #return list of index pairs
-        minX = torch.min(bbs[:,0])
-        maxX = torch.max(bbs[:,0])
-        minY = torch.min(bbs[:,1])
-        maxY = torch.max(bbs[:,1])
-        maxDim = max( torch.max(bbs[:,3]), torch.max(bbs[:,4]) )
-
-        minX-=maxDim
-        minY-=maxDim
-        maxX+=maxDim
-        maxY+=maxDim
-        #minX=int(math.floor(minX))
-        #minY=int(math.floor(minY))
-        #maxX=int(math.ceil(maxX))
-        #maxY=int(math.ceil(maxY))
 
 
         sin_r = torch.sin(bbs[:,2])
         cos_r = torch.cos(bbs[:,2])
-        lx = bbs[:,0] - cos_r*bbs[:,4]  - minX
-        ly = bbs[:,1] + sin_r*bbs[:,3] - minY
-        rx = bbs[:,0] + cos_r*bbs[:,4]  - minX
-        ry = bbs[:,1] - sin_r*bbs[:,3] - minY
-        tx = bbs[:,0] - cos_r*bbs[:,4]  - minX
-        ty = bbs[:,1] - sin_r*bbs[:,3] - minY
-        bx = bbs[:,0] + cos_r*bbs[:,4]  - minX
-        by = bbs[:,1] + sin_r*bbs[:,3] - minY
-        trX = bbs[:,4]*cos_r-bbs[:,3]*sin_r + bbs[:,0]  - minX
-        trY = bbs[:,4]*sin_r+bbs[:,3]*cos_r + bbs[:,1]  - minY
-        tlX = -bbs[:,4]*cos_r-bbs[:,3]*sin_r + bbs[:,0] - minX
-        tlY= -bbs[:,4]*sin_r+bbs[:,3]*cos_r + bbs[:,1]  - minY
-        brX = bbs[:,4]*cos_r+bbs[:,3]*sin_r + bbs[:,0]  - minX
-        brY = bbs[:,4]*sin_r-bbs[:,3]*cos_r + bbs[:,1]  - minY
-        blX = -bbs[:,4]*cos_r+bbs[:,3]*sin_r + bbs[:,0] - minX
-        blY = -bbs[:,4]*sin_r-bbs[:,3]*cos_r + bbs[:,1] - minY 
+        lx = bbs[:,0] - cos_r*bbs[:,4] 
+        ly = bbs[:,1] + sin_r*bbs[:,3]
+        rx = bbs[:,0] + cos_r*bbs[:,4] 
+        ry = bbs[:,1] - sin_r*bbs[:,3]
+        tx = bbs[:,0] - cos_r*bbs[:,4] 
+        ty = bbs[:,1] - sin_r*bbs[:,3]
+        bx = bbs[:,0] + cos_r*bbs[:,4] 
+        by = bbs[:,1] + sin_r*bbs[:,3]
+        brX = bbs[:,4]*cos_r-bbs[:,3]*sin_r + bbs[:,0] 
+        brY = bbs[:,4]*sin_r+bbs[:,3]*cos_r + bbs[:,1] 
+        blX = -bbs[:,4]*cos_r-bbs[:,3]*sin_r + bbs[:,0]
+        blY= -bbs[:,4]*sin_r+bbs[:,3]*cos_r + bbs[:,1] 
+        trX = bbs[:,4]*cos_r+bbs[:,3]*sin_r + bbs[:,0] 
+        trY = bbs[:,4]*sin_r-bbs[:,3]*cos_r + bbs[:,1] 
+        tlX = -bbs[:,4]*cos_r+bbs[:,3]*sin_r + bbs[:,0]
+        tlY = -bbs[:,4]*sin_r-bbs[:,3]*cos_r + bbs[:,1] 
+
+        minX = min( torch.min(trX), torch.min(tlX), torch.min(blX), torch.min(brX) )
+        minY = min( torch.min(trY), torch.min(tlY), torch.min(blY), torch.min(brY) )
+        maxX = max( torch.max(trX), torch.max(tlX), torch.max(blX), torch.max(brX) )
+        maxY = max( torch.max(trY), torch.max(tlY), torch.max(blY), torch.max(brY) )
+
+        lx-=minX 
+        ly-=minY 
+        rx-=minX 
+        ry-=minY 
+        tx-=minX 
+        ty-=minY 
+        bx-=minX 
+        by-=minY 
+        trX-=minX
+        trY-=minY
+        tlX-=minX
+        tlY-=minY
+        brX-=minX
+        brY-=minY
+        blX-=minX
+        blY-=minY
 
         scaleCand = 0.5
         minX*=scaleCand
@@ -327,144 +335,175 @@ class PairingGraph(BaseModel):
         w = bbs[:,4]*scaleCand
         r = bbs[:,2]
 
+        distMul=1.0
+        while distMul>0.2:
 
+            boxesDrawn = np.zeros( (math.ceil(maxY-minY),math.ceil(maxX-minX)) ,dtype=int)#torch.IntTensor( (maxY-minY,maxX-minX) ).zero_()
+            if boxesDrawn.shape[0]==0 or boxesDrawn.shape[1]==0:
+                import pdb;pdb.set_trace()
+            numBoxes = bbs.size(0)
+            for i in range(numBoxes):
+                
+                #cv2.line( boxesDrawn, (int(tlX[i]),int(tlY[i])),(int(trX[i]),int(trY[i])),i,1)
+                #cv2.line( boxesDrawn, (int(trX[i]),int(trY[i])),(int(brX[i]),int(brY[i])),i,1)
+                #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(brX[i]),int(brY[i])),i,1)
+                #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(tlX[i]),int(tlY[i])),i,1)
 
-        boxesDrawn = np.zeros( (math.ceil(maxY-minY),math.ceil(maxX-minX)) ,dtype=int)#torch.IntTensor( (maxY-minY,maxX-minX) ).zero_()
-        numBoxes = bbs.size(0)
-        for i in range(numBoxes):
+                rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])])
+                boxesDrawn[rr,cc]=i+1
+
+            #how to walk?
+            #walk until number found.
+            # if in list, end
+            # else add to list, continue
+            #list is candidates
+            maxDist = 600*scaleCand*distMul
+            maxDistY = 200*scaleCand*distMul
+            minWidth=30
+            minHeight=20
+            numFan=5
             
-            #cv2.line( boxesDrawn, (int(tlX[i]),int(tlY[i])),(int(trX[i]),int(trY[i])),i,1)
-            #cv2.line( boxesDrawn, (int(trX[i]),int(trY[i])),(int(brX[i]),int(brY[i])),i,1)
-            #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(brX[i]),int(brY[i])),i,1)
-            #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(tlX[i]),int(tlY[i])),i,1)
+            def pathWalk(myId,startX,startY,angle,distStart=0,splitDist=100):
+                hit=set()
+                lineId = myId+numBoxes
+                if angle<-180:
+                    angle+=360
+                if angle>180:
+                    angle-=360
+                if (angle>45 and angle<135) or (angle>-135 and angle<-45):
+                    #compute slope based on y stepa
+                    yStep=-1
+                    #if angle==90 or angle==-90:
 
-            rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])])
-            boxesDrawn[rr,cc]=i+1
-
-        #how to walk?
-        #walk until number found.
-        # if in list, end
-        # else add to list, continue
-        #list is candidates
-        maxDist = 1000*scaleCand
-        minWidth=40
-        minHeight=30
-        numFan=5
-        
-        def pathWalk(myId,startX,startY,angle,distStart=0,splitDist=100):
-            hit=set()
-            lineId = myId+numBoxes
-            if angle<-180:
-                angle+=360
-            if angle>180:
-                angle-=360
-            if (angle>45 and angle<135) or (angle>-135 and angle<-45):
-                #compute slope based on y stepa
-                yStep=-1
-                #if angle==90 or angle==-90:
-
-                xStep=1/math.tan(math.pi*angle/180.0)
-            else:
-                #compute slope based on x step
-                xStep=1
-                yStep=-math.tan(math.pi*angle/180.0)
-            if angle>=135 or angle<-45:
-                xStep*=-1
-                yStep*=-1
-            distSoFar=distStart
-            prev=0
-            numSteps=0
-            while distSoFar<maxDist:
-                x=int(round(startX + numSteps*xStep))
-                y=int(round(startY + numSteps*yStep))
-                numSteps+=1
-                if x<0 or y<0 or x>=boxesDrawn.shape[1] or y>=boxesDrawn.shape[0]:
-                    break
-                here = boxesDrawn[y,x]
-                #print('{} {} {} : {}'.format(x,y,here,len(hit)))
-                if here>0 and here<=numBoxes and here!=myId:
-                    if here in hit and prev!=here:
-                        break
-                    else:
-                        hit.add(here)
-                        #print('hit {} at {}, {}  ({})'.format(here,x,y,len(hit)))
-                        #elif here == lineId or here == myId:
-                        #break
+                    xStep=1/math.tan(math.pi*angle/180.0)
                 else:
-                    boxesDrawn[y,x]=lineId
-                prev=here
-                distSoFar= distStart+math.sqrt((x-startX)**2 + (y-startY)**2)
+                    #compute slope based on x step
+                    xStep=1
+                    yStep=-math.tan(math.pi*angle/180.0)
+                if angle>=135 or angle<-45:
+                    xStep*=-1
+                    yStep*=-1
+                distSoFar=distStart
+                prev=0
+                numSteps=0
+                y=startY
+                while distSoFar<maxDist and abs(y-startY)<maxDistY:
+                    x=int(round(startX + numSteps*xStep))
+                    y=int(round(startY + numSteps*yStep))
+                    numSteps+=1
+                    if x<0 or y<0 or x>=boxesDrawn.shape[1] or y>=boxesDrawn.shape[0]:
+                        break
+                    here = boxesDrawn[y,x]
+                    #print('{} {} {} : {}'.format(x,y,here,len(hit)))
+                    if here>0 and here<=numBoxes and here!=myId:
+                        if here in hit and prev!=here:
+                            break
+                        else:
+                            hit.add(here)
+                            #print('hit {} at {}, {}  ({})'.format(here,x,y,len(hit)))
+                            #elif here == lineId or here == myId:
+                            #break
+                    else:
+                        boxesDrawn[y,x]=lineId
+                    prev=here
+                    distSoFar= distStart+math.sqrt((x-startX)**2 + (y-startY)**2)
 
-                #if hitting and maxDist-distSoFar>splitMin and (distSoFar-distStart)>splitDist and len(toSplit)==0:
-                #    #split
-                #    toSplit.append((myId,x,y,angle+45,distSoFar,hit.copy(),splitDist*1.5))
-                #    toSplit.append((myId,x,y,angle-45,distSoFar,hit.copy(),splitDist*1.5))
+                    #if hitting and maxDist-distSoFar>splitMin and (distSoFar-distStart)>splitDist and len(toSplit)==0:
+                    #    #split
+                    #    toSplit.append((myId,x,y,angle+45,distSoFar,hit.copy(),splitDist*1.5))
+                    #    toSplit.append((myId,x,y,angle-45,distSoFar,hit.copy(),splitDist*1.5))
 
-            return hit
+                return hit
 
-        def fan(boxId,x,y,angle,num,hit):
-            deg = 90/(num+1)
-            curDeg = angle-45+deg
-            for i in range(num):
-                hit.update( pathWalk(boxId,x,y,curDeg) )
-                curDeg+=deg
+            def fan(boxId,x,y,angle,num,hit):
+                deg = 90/(num+1)
+                curDeg = angle-45+deg
+                for i in range(num):
+                    hit.update( pathWalk(boxId,x,y,curDeg) )
+                    curDeg+=deg
 
-        def drawIt():
-            rows,cols=boxesDrawn.shape
-            colorMap = [(0,0,0)]
+            def drawIt():
+                x = bbs[:,0]*scaleCand - minX
+                y = bbs[:,1]*scaleCand - minY
+                drawn = np.zeros( (math.ceil(maxY-minY),math.ceil(maxX-minX),3))#torch.IntTensor( (maxY-minY,maxX-minX) ).zero_()
+                numBoxes = bbs.size(0)
+                for a,b in candidates:
+                    cv2.line( drawn, (int(x[a]),int(y[a])),(int(x[b]),int(y[b])),(random.random()*0.5,random.random()*0.5,random.random()*0.5),1)
+                for i in range(numBoxes):
+                    
+                    #cv2.line( boxesDrawn, (int(tlX[i]),int(tlY[i])),(int(trX[i]),int(trY[i])),i,1)
+                    #cv2.line( boxesDrawn, (int(trX[i]),int(trY[i])),(int(brX[i]),int(brY[i])),i,1)
+                    #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(brX[i]),int(brY[i])),i,1)
+                    #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(tlX[i]),int(tlY[i])),i,1)
+
+                    rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])])
+                    drawn[rr,cc]=(random.random()*0.8+.2,random.random()*0.8+.2,random.random()*0.8+.2)
+                cv2.imshow('res',drawn)
+                #cv2.waitKey()
+
+                rows,cols=boxesDrawn.shape
+                colorMap = [(0,0,0)]
+                for i in range(numBoxes):
+                    colorMap.append((random.random()*0.8+.2,random.random()*0.8+.2,random.random()*0.8+.2))
+                for i in range(numBoxes):
+                    colorMap.append( (colorMap[i+1][0]/3,colorMap[i+1][1]/3,colorMap[i+1][2]/3) )
+                draw2 = np.zeros((rows,cols,3))
+                for r in range(rows):
+                    for c in range(cols):
+                        draw2[r,c] = colorMap[int(round(boxesDrawn[r,c]))]
+                        #draw[r,c] = (255,255,255) if boxesDrawn[r,c]>0 else (0,0,0)
+
+                cv2.imshow('d',draw2)
+                cv2.waitKey()
+
+
+            candidates=set()
             for i in range(numBoxes):
-                colorMap.append((random.random()*0.8+.2,random.random()*0.8+.2,random.random()*0.8+.2))
-            for i in range(numBoxes):
-                colorMap.append( (colorMap[i+1][0]/2,colorMap[i+1][1]/2,colorMap[i+1][2]/2) )
-            draw = np.zeros((rows,cols,3))
-            for r in range(rows):
-                for c in range(cols):
-                    draw[r,c] = colorMap[int(round(boxesDrawn[r,c]))]
-                    #draw[r,c] = (255,255,255) if boxesDrawn[r,c]>0 else (0,0,0)
+                boxId=i+1
+                toSplit=[]
+                hit = set()
 
-            cv2.imshow('res',draw)
-            cv2.waitKey()
+                horzDiv = 1+math.ceil(w[i]/minWidth)
+                vertDiv = 1+math.ceil(h[i]/minHeight)
 
-
-        candidates=set()
-        for i in range(numBoxes):
-            boxId=i+1
-            toSplit=[]
-            hit = set()
-
-            horzDiv = 1+math.ceil(w[i]/minWidth)
-            vertDiv = 1+math.ceil(h[i]/minHeight)
-
-            if horzDiv==1:
-                leftW=0.5
-                rightW=0.5
-                hit.update( pathWalk(boxId, tlX[i].item()*leftW+trX[i].item()*rightW, tlY[i].item()*leftW+trY[i].item()*rightW,r[i].item()+90) )
-                hit.update( pathWalk(boxId, tlX[i].item()*leftW+trX[i].item()*rightW, tlY[i].item()*leftW+trY[i].item()*rightW,r[i].item()-90) )
-            else:
-                for j in range(horzDiv):
-                    leftW = 1-j/(horzDiv-1)
-                    rightW = j/(horzDiv-1)
+                if horzDiv==1:
+                    leftW=0.5
+                    rightW=0.5
                     hit.update( pathWalk(boxId, tlX[i].item()*leftW+trX[i].item()*rightW, tlY[i].item()*leftW+trY[i].item()*rightW,r[i].item()+90) )
                     hit.update( pathWalk(boxId, tlX[i].item()*leftW+trX[i].item()*rightW, tlY[i].item()*leftW+trY[i].item()*rightW,r[i].item()-90) )
+                else:
+                    for j in range(horzDiv):
+                        leftW = 1-j/(horzDiv-1)
+                        rightW = j/(horzDiv-1)
+                        hit.update( pathWalk(boxId, tlX[i].item()*leftW+trX[i].item()*rightW, tlY[i].item()*leftW+trY[i].item()*rightW,r[i].item()+90) )
+                        hit.update( pathWalk(boxId, tlX[i].item()*leftW+trX[i].item()*rightW, tlY[i].item()*leftW+trY[i].item()*rightW,r[i].item()-90) )
 
-            if vertDiv==1:
-                topW=0.5
-                botW=0.5
-                hit.update( pathWalk(boxId, tlX[i].item()*topW+blX[i].item()*botW, tlY[i].item()*topW+blY[i].item()*botW,r[i].item()+180) )
-                hit.update( pathWalk(boxId, trX[i].item()*topW+brX[i].item()*botW, trY[i].item()*topW+brY[i].item()*botW,r[i].item()) )
-            else:
-                for j in range(vertDiv):
-                    topW = 1-j/(vertDiv-1)
-                    botW = j/(vertDiv-1)
+                if vertDiv==1:
+                    topW=0.5
+                    botW=0.5
                     hit.update( pathWalk(boxId, tlX[i].item()*topW+blX[i].item()*botW, tlY[i].item()*topW+blY[i].item()*botW,r[i].item()+180) )
                     hit.update( pathWalk(boxId, trX[i].item()*topW+brX[i].item()*botW, trY[i].item()*topW+brY[i].item()*botW,r[i].item()) )
-            fan(boxId,tlX[i].item(),tlY[i].item(),r[i].item()+135,numFan,hit)
-            fan(boxId,trX[i].item(),trY[i].item(),r[i].item()+45,numFan,hit)
-            fan(boxId,blX[i].item(),blY[i].item(),r[i].item()+225,numFan,hit)
-            fan(boxId,brX[i].item(),brY[i].item(),r[i].item()+315,numFan,hit)
+                else:
+                    for j in range(vertDiv):
+                        topW = 1-j/(vertDiv-1)
+                        botW = j/(vertDiv-1)
+                        hit.update( pathWalk(boxId, tlX[i].item()*topW+blX[i].item()*botW, tlY[i].item()*topW+blY[i].item()*botW,r[i].item()+180) )
+                        hit.update( pathWalk(boxId, trX[i].item()*topW+brX[i].item()*botW, trY[i].item()*topW+brY[i].item()*botW,r[i].item()) )
+                fan(boxId,tlX[i].item(),tlY[i].item(),r[i].item()+135,numFan,hit)
+                fan(boxId,trX[i].item(),trY[i].item(),r[i].item()+45,numFan,hit)
+                fan(boxId,blX[i].item(),blY[i].item(),r[i].item()+225,numFan,hit)
+                fan(boxId,brX[i].item(),brY[i].item(),r[i].item()+315,numFan,hit)
 
-            for jId in hit:
-                candidates.add( (min(i,jId-1),max(i,jId-1)) )
-            drawIt()
-
-        return list(candidates)
+                for jId in hit:
+                    candidates.add( (min(i,jId-1),max(i,jId-1)) )
+            
+            #print('candidates:{}'.format(len(candidates)))
+            #if len(candidates)>1:
+            #    drawIt()
+            if len(candidates)<1000:
+                return list(candidates)
+            else:
+                distMul*=0.8
+        #This is a problem, we couldn't prune down enough
+        print("ERROR: could not prune number of candidates down: {}".format(len(candidates)))
+        return candidates[:999]

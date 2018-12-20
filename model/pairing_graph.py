@@ -10,7 +10,9 @@ from model.net_builder import make_layers
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist
 import math
 import random
+
 import timeit
+import cv2
 
 
 class PairingGraph(BaseModel):
@@ -408,6 +410,7 @@ class PairingGraph(BaseModel):
                 curDeg+=deg
 
         def drawIt():
+            rows,cols=boxesDrawn.shape
             colorMap = [(0,0,0)]
             for i in range(numBoxes):
                 colorMap.append((random.random()*0.8+.2,random.random()*0.8+.2,random.random()*0.8+.2))

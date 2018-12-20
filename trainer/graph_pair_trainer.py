@@ -163,7 +163,7 @@ class GraphPairTrainer(BaseTrainer):
                 targSize = targetBoxes.size(1)
             else:
                 targSize =0 
-            boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets[None,...],targetBoxes,[targSize])
+            boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
             loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
         else:
             loss = edgeLoss
@@ -350,7 +350,7 @@ class GraphPairTrainer(BaseTrainer):
             #else skip this
             i+=1
         newGT = torch.tensor(newGT).to(edgePred[1].device)
-        preds = torch.stack(preds).to(edgePred[1].device)
+        preds = torch.cat(preds).to(edgePred[1].device)
         #assert(preds.requires_grad)
     
         return newGT, preds

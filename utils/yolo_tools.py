@@ -322,7 +322,7 @@ def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses):
     return getTargIndexForPreds(target,pred,iou_thresh,numClasses,allBoxDistNeg)
 
 def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
-    targIndex = torch.IntTensor((pred.size(0)))
+    targIndex = torch.LongTensor((pred.size(0)))
     #mAP=0.0
     aps=[]
     precisions=[]
@@ -347,11 +347,11 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if  clsPredInd.size(0)>0:
-            if notClsTargInd.size()>0:
-                clsIOUs[notClsTargInd,clsPredInd]=0 #we do this to maintain target index integrity
-            val,targIndex[clsPredInd] = torch.max(clsIOUs[:,clsPredInd],dim=0)
+            clsIOUs[notClsTargInd][:,clsPredInd]=0 #we do this to maintain target index integrity
+            targIndexes = targIndex[clsPredInd]
+            val,targIndexes = torch.max(clsIOUs[:,clsPredInd],dim=0)
 
             #assign -1 index to places that don't really have a match
-            targIndex[clsPredInd] = torch.where(val==0,-1,targIndex[clsPredInd])
+            targIndexes = torch.where(val==0,-torch.ones_like(targIndexes),targIndexes)
 
     return targIndex

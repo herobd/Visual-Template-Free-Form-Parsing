@@ -94,22 +94,26 @@ class PairingGraph(BaseModel):
         self.detector_frozen=False
         
 
-    def forward(self, image, gtBBs=None):
-        tic=timeit.default_timer()
+    def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None):
+        ##tic=timeit.default_timer()
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
         final_features=self.detector.final_features
         self.detector.final_features=None
-        print('detector: {}'.format(timeit.default_timer()-tic))
+        ##print('detector: {}'.format(timeit.default_timer()-tic))
 
         if final_features is None:
             print('ERROR:no final features!')
             import pdb;pdb.set_trace()
 
         
-        tic=timeit.default_timer()
+        ##tic=timeit.default_timer()
         maxConf = bbPredictions[:,:,0].max().item()
-        threshConf = max(maxConf*self.confThresh,0.5)
+        if otherThreshIntur is None:
+            confThreshMul = self.confThresh
+        else:
+            confThreshMul = self.confThresh*(1-otherThreshIntur) + otherThresh*otherThreshIntur
+        threshConf = max(maxConf*confThreshMul,0.5)
         if self.rotation:
             bbPredictions = non_max_sup_dist(bbPredictions.cpu(),threshConf,2.5)
         else:
@@ -117,7 +121,7 @@ class PairingGraph(BaseModel):
         #I'm assuming batch size of one
         assert(len(bbPredictions)==1)
         bbPredictions=bbPredictions[0]
-        print('process boxes: {}'.format(timeit.default_timer()-tic))
+        ##print('process boxes: {}'.format(timeit.default_timer()-tic))
         #bbPredictions should be switched for GT for training? Then we can easily use BCE loss. 
         #Otherwise we have to to alignment first
         if gtBBs is None:
@@ -130,9 +134,9 @@ class PairingGraph(BaseModel):
             useBBs = gtBBs[0]
         if useBBs.size(0)>0:
             node_features, adjacencyMatrix, edge_features = self.createGraph(useBBs,final_features)
-            tic=timeit.default_timer()
+            ##tic=timeit.default_timer()
             nodeOuts, edgeOuts = self.pairer(node_features, adjacencyMatrix, edge_features)
-            print('pairer: {}'.format(timeit.default_timer()-tic))
+            ##print('pairer: {}'.format(timeit.default_timer()-tic))
 
             #adjacencyMatrix = torch.zeros((bbPredictions.size(1),bbPredictions.size(1)))
             #for edge in edgeOuts:
@@ -143,12 +147,12 @@ class PairingGraph(BaseModel):
             return bbPredictions, offsetPredictions, None
 
     def createGraph(self,bbs,features):
-        tic=timeit.default_timer()
+        ##tic=timeit.default_timer()
         candidates = self.selectCandidateEdges(bbs)
-        print('  candidate: {}'.format(timeit.default_timer()-tic))
+        ##print('  candidate: {}'.format(timeit.default_timer()-tic))
         if len(candidates)==0:
             return None,None,None
-        tic=timeit.default_timer()
+        ##tic=timeit.default_timer()
 
         #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.edgeWindowSize,self.edgeWindowSize)).to(features.device())
 
@@ -248,7 +252,7 @@ class PairingGraph(BaseModel):
 
 
         node_features = None
-        print('create graph: {}'.format(timeit.default_timer()-tic))
+        ##print('create graph: {}'.format(timeit.default_timer()-tic))
         return node_features, adjacencyMatrix, edge_features
 
 

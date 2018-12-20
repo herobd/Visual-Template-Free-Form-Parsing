@@ -2,11 +2,11 @@ import torch
 #from model.yolo_loss import bbox_iou
 import math
 
-def non_max_sup_iou(pred_boxes,thresh_conf=0.5, thresh_inter=0.5):
-    return non_max_sup_(pred_boxes,thresh_conf, thresh_inter, max_intersection)
-def non_max_sup_dist(pred_boxes,thresh_conf=0.5, thresh_dist=0.9):
-    return non_max_sup_(pred_boxes,thresh_conf, thresh_dist*-1, dist_neg)
-def non_max_sup_(pred_boxes,thresh_conf, thresh_loc, loc_metric):
+def non_max_sup_iou(pred_boxes,thresh_conf=0.5, thresh_inter=0.5, hard_limit=300):
+    return non_max_sup_(pred_boxes,thresh_conf, thresh_inter, max_intersection, hard_limit)
+def non_max_sup_dist(pred_boxes,thresh_conf=0.5, thresh_dist=0.9, hard_limit=300):
+    return non_max_sup_(pred_boxes,thresh_conf, thresh_dist*-1, dist_neg, hard_limit)
+def non_max_sup_(pred_boxes,thresh_conf, thresh_loc, loc_metric, hard_limit):
     #rearr = [0,1,2,5,4,3]
     #for i in range(6,pred_boxes.shape[2]):
     #    rearr.append(i)
@@ -20,6 +20,7 @@ def non_max_sup_(pred_boxes,thresh_conf, thresh_loc, loc_metric):
             if pred_boxes[b,i,0]>thresh_conf:
                 above_thresh.append( (pred_boxes[b,i,0], i) )
         above_thresh.sort(key=lambda a: a[0], reverse=True)
+        above_thresh = above_thresh[:hard_limit]
         li = 0
         while li<len(above_thresh)-1:
             i=above_thresh[li][1]
@@ -346,8 +347,9 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
             clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
-        if  clsPredInd.size(0)>0:
-            clsIOUs[notClsTargInd][:,clsPredInd]=0 #we do this to maintain target index integrity
+        if  clsPredInd.any():
+            if notClsTargInd.any():
+                clsIOUs[notClsTargInd][:,clsPredInd]=0 #we do this to maintain target index integrity
             targIndexes = targIndex[clsPredInd]
             val,targIndexes = torch.max(clsIOUs[:,clsPredInd],dim=0)
 

@@ -57,6 +57,9 @@ class GraphPairTrainer(BaseTrainer):
         self.conf_thresh_init = config['trainer']['conf_thresh_init'] if 'conf_thresh_init' in config['trainer'] else 0.9
         self.conf_thresh_change_iters = config['trainer']['conf_thresh_change_iters'] if 'conf_thresh_change_iters' in config['trainer'] else 5000
 
+        self.train_hard_detect_limit = config['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
+        self.val_hard_detect_limit = config['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
+
     def _to_tensor(self, instance):
         image = instance['img']
         bbs = instance['bb_gt']
@@ -147,12 +150,12 @@ class GraphPairTrainer(BaseTrainer):
         image, targetBoxes, adj = self._to_tensor(thisInstance)
         if self.useGT(iteration):
             outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
-                    otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur)
+                    otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
             gtPairing,predPairing = self.prealignedEdgePred(adj,edgePred)
         else:
             outputBoxes, outputOffsets, edgePred = self.model(image,
-                    otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur)
+                    otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
         if len(predPairing.size())>0 and predPairing.size(0)>0:
             edgeLoss = self.loss['edge'](predPairing,gtPairing)
@@ -264,7 +267,7 @@ class GraphPairTrainer(BaseTrainer):
 
                 image, targetBoxes, adjM = self._to_tensor(instance)
 
-                outputBoxes, outputOffsets, edgePred = self.model(image)
+                outputBoxes, outputOffsets, edgePred = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
@@ -349,7 +352,7 @@ class GraphPairTrainer(BaseTrainer):
                 preds.append(predsAll[i])
             #else skip this
             i+=1
-        newGT = torch.tensor(newGT).to(edgePred[1].device)
+        newGT = torch.tensor(newGT).float().to(edgePred[1].device)
         preds = torch.cat(preds).to(edgePred[1].device)
         #assert(preds.requires_grad)
     

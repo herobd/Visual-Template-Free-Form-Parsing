@@ -96,7 +96,7 @@ class PairingGraph(BaseModel):
         self.detector_frozen=False
         
 
-    def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None):
+    def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
         ##tic=timeit.default_timer()
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
@@ -117,9 +117,9 @@ class PairingGraph(BaseModel):
             confThreshMul = self.confThresh*(1-otherThreshIntur) + otherThresh*otherThreshIntur
         threshConf = max(maxConf*confThreshMul,0.5)
         if self.rotation:
-            bbPredictions = non_max_sup_dist(bbPredictions.cpu(),threshConf,2.5)
+            bbPredictions = non_max_sup_dist(bbPredictions.cpu(),threshConf,2.5,hard_detect_limit)
         else:
-            bbPredictions = non_max_sup_iou(bbPredictions.cpu(),threshConf,0.4)
+            bbPredictions = non_max_sup_iou(bbPredictions.cpu(),threshConf,0.4,hard_detect_limit)
         #I'm assuming batch size of one
         assert(len(bbPredictions)==1)
         bbPredictions=bbPredictions[0]

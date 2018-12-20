@@ -407,6 +407,22 @@ class PairingGraph(BaseModel):
                 hit.update( pathWalk(boxId,x,y,curDeg) )
                 curDeg+=deg
 
+        def drawIt():
+            colorMap = [(0,0,0)]
+            for i in range(numBoxes):
+                colorMap.append((random.random()*0.8+.2,random.random()*0.8+.2,random.random()*0.8+.2))
+            for i in range(numBoxes):
+                colorMap.append( (colorMap[i+1][0]/2,colorMap[i+1][1]/2,colorMap[i+1][2]/2) )
+            draw = np.zeros((rows,cols,3))
+            for r in range(rows):
+                for c in range(cols):
+                    draw[r,c] = colorMap[int(round(boxesDrawn[r,c]))]
+                    #draw[r,c] = (255,255,255) if boxesDrawn[r,c]>0 else (0,0,0)
+
+            cv2.imshow('res',draw)
+            cv2.waitKey()
+
+
         candidates=set()
         for i in range(numBoxes):
             boxId=i+1
@@ -446,5 +462,6 @@ class PairingGraph(BaseModel):
 
             for jId in hit:
                 candidates.add( (min(i,jId-1),max(i,jId-1)) )
+            drawIt()
 
         return list(candidates)

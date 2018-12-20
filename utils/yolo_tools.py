@@ -316,3 +316,42 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
     return aps, precisions, recalls
 
 
+def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,allIOU)
+def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,allBoxDistNeg)
+
+def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
+    targIndex = torch.IntTensor((pred.size(0)))
+    #mAP=0.0
+    aps=[]
+    precisions=[]
+    recalls=[]
+
+    if len(target.size())<=1:
+        return None
+
+    #by class
+    #import pdb; pdb.set_trace()
+    clsIOUs = getLoc(target[:,0:],pred[:,1:])
+    hits = clsIOUs>iou_thresh
+    clsIOUs *= hits.float()
+
+    for cls in range(numClasses):
+        scores=[]
+        clsTargInd = target[:,cls+13]==1
+        notClsTargInd = target[:,cls+13]!=1
+        if len(pred.size())>1 and pred.size(0)>0:
+            #print(pred.size())
+            clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
+        else:
+            clsPredInd = torch.empty(0,dtype=torch.uint8)
+        if  clsPredInd.size(0)>0:
+            if notClsTargInd.size()>0:
+                clsIOUs[notClsTargInd,clsPredInd]=0 #we do this to maintain target index integrity
+            val,targIndex[clsPredInd] = torch.max(clsIOUs[:,clsPredInd],dim=0)
+
+            #assign -1 index to places that don't really have a match
+            targIndex[clsPredInd] = torch.where(val==0,-1,targIndex[clsPredInd])
+
+    return targIndex

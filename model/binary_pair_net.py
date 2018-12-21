@@ -1,11 +1,11 @@
 import torch
 from torch import nn
-from base import BaseModel
+#from base import BaseModel
 import torch.nn.functional as F
-from torch.nn.utils.weight_norm import weight_norm
+#from torch.nn.utils.weight_norm import weight_norm
 import math
 import json
-from .net_builder import make_layers
+#from .net_builder import make_layers
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 

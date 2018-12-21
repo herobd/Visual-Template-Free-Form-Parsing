@@ -142,15 +142,19 @@ class YoloBoxDetector(nn.Module): #BaseModel
             #pred_offsets.append(torch.cat(stackedOffsets, dim=1))
             pred_offsets.append(y[:,offset:offset+self.numBBParams+self.numBBTypes,:,:])
 
-        bbPredictions = torch.stack(pred_boxes, dim=1)
-        offsetPredictions = torch.stack(pred_offsets, dim=1)
-        
-        bbPredictions = bbPredictions.transpose(2,4).contiguous()#from [batch, anchors, channel, rows, cols] to [batch, anchros, cols, rows, channels]
-        bbPredictions = bbPredictions.view(bbPredictions.size(0),bbPredictions.size(1),-1,bbPredictions.size(4))#flatten to [batch, anchors, instances, channel]
-        #avg_conf_per_anchor = bbPredictions[:,:,:,0].mean(dim=0).mean(dim=1)
-        bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3)) #[batch, instances+anchors, channel]
+        if len(pred_boxes)>0:
+            bbPredictions = torch.stack(pred_boxes, dim=1)
+            offsetPredictions = torch.stack(pred_offsets, dim=1)
+            
+            bbPredictions = bbPredictions.transpose(2,4).contiguous()#from [batch, anchors, channel, rows, cols] to [batch, anchros, cols, rows, channels]
+            bbPredictions = bbPredictions.view(bbPredictions.size(0),bbPredictions.size(1),-1,bbPredictions.size(4))#flatten to [batch, anchors, instances, channel]
+            #avg_conf_per_anchor = bbPredictions[:,:,:,0].mean(dim=0).mean(dim=1)
+            bbPredictions = bbPredictions.view(bbPredictions.size(0),-1,bbPredictions.size(3)) #[batch, instances+anchors, channel]
 
-        offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous()
+            offsetPredictions = offsetPredictions.permute(0,1,3,4,2).contiguous()
+        else:
+            bbPredictions=None
+            offsetPredictions=None
 
         linePreds=[]
         offsetLinePreds=[]
@@ -169,10 +173,12 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
             predictions = torch.cat(stackedPred, dim=1)
             predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
-            predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
+            predictions = predictions.view(predictions.size(0),-1,predictions.size(3))#flatten to [batch, instances, channel]
             linePreds.append(predictions)
 
-            offsetLinePreds.append(y[:,offset:offset+self.numLineParams+self.numBBTypes,:,:])
+            offsets = y[:,offset:offset+self.numLineParams+self.numBBTypes,:,:]
+            offsets = offsets.permute(0,2,3,1).contiguous()
+            offsetLinePreds.append(offsets)
 
         pointPreds=[]
         for i in range(self.predPointCount):
@@ -213,6 +219,10 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
     def setForPairing(self):
         self.forPairing=True
+        def save_final(module,input,output):
+            self.final_features=output
+        self.net_down_modules[-2].register_forward_hook(save_final)
+    def setForGraphPairing(self):
         def save_final(module,input,output):
             self.final_features=output
         self.net_down_modules[-2].register_forward_hook(save_final)

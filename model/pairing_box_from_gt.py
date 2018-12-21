@@ -93,6 +93,7 @@ class PairingBoxFromGT(BaseModel):
         
 
     def forward(self, image, queryMask,imageName,scale,cropPoint):
+
         padH=(self.detect_scale-(image.size(2)%self.detect_scale))%self.detect_scale
         padW=(self.detect_scale-(image.size(3)%self.detect_scale))%self.detect_scale
         if padH!=0 or padW!=0:

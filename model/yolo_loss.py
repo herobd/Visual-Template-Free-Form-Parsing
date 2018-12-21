@@ -649,8 +649,8 @@ class LineLoss (nn.Module):
     def forward(self,prediction, target, target_sizes ):
 
         nB = prediction.size(0)
-        nH = prediction.size(2)
-        nW = prediction.size(3)
+        nH = prediction.size(1)
+        nW = prediction.size(2)
         stride=self.scale
 
         FloatTensor = torch.cuda.FloatTensor if prediction.is_cuda else torch.FloatTensor
@@ -681,8 +681,8 @@ class LineLoss (nn.Module):
         pred = torch.stack([o_x,o_y,o_r,o_h],dim=3)
 
         if target is not None: #target is x1,y1,x2,y2
-            target[[0,2]] /= self.scale[0]
-            target[[1,3]] /= self.scale[1]
+            target[:,:,[0,2]] /= self.scale[0]
+            target[:,:,[1,3]] /= self.scale[1]
 
         nGT, mask, conf_mask, tx1, ty1, tx2, ty2, tconf, tcls = self.build_targets_lines(
             pred=pred.cpu().data,
@@ -690,11 +690,8 @@ class LineLoss (nn.Module):
             pred_cls=pred_cls.cpu().data,
             target=target.cpu().data if target is not None else None,
             target_sizes=target_sizes,
-            num_classes=self.num_classes,
             grid_sizeH=nH,
             grid_sizeW=nW,
-            ignore_thres=self.ignore_thresh,
-            scale=self.scale
         )
 
         #nProposals = int((pred_conf > 0).sum().item())
@@ -711,8 +708,8 @@ class LineLoss (nn.Module):
         # Handle target variables
         tx1 = tx1.type(FloatTensor)
         ty1 = ty1.type(FloatTensor)
-        tx1 = tx1.type(FloatTensor)
-        ty1 = ty1.type(FloatTensor)
+        tx2 = tx2.type(FloatTensor)
+        ty2 = ty2.type(FloatTensor)
         tconf = tconf.type(FloatTensor)
         tcls = tcls.type(LongTensor)
 
@@ -753,16 +750,18 @@ class LineLoss (nn.Module):
     def build_targets_lines(self,
         pred, pred_conf, pred_cls, target, target_sizes, grid_sizeH, grid_sizeW
     ):
-        nB = pred_points.size(0)
+        nB = pred.size(0)
         nC = self.num_classes
         nH = grid_sizeH
         nW = grid_sizeW
         mask = torch.zeros(nB, nH, nW)
         conf_mask = torch.ones(nB, nH, nW)
-        tx = torch.zeros(nB, nH, nW)
-        ty = torch.zeros(nB, nH, nW)
-        th = torch.zeros(nB, nH, nW)
-        tr = torch.zeros(nB, nH, nW)
+        tx1 = torch.zeros(nB, nH, nW)
+        ty1 = torch.zeros(nB, nH, nW)
+        tx2 = torch.zeros(nB, nH, nW)
+        ty2 = torch.zeros(nB, nH, nW)
+        #th = torch.zeros(nB, nH, nW)
+        #tr = torch.zeros(nB, nH, nW)
         tconf = torch.ByteTensor(nB, nH, nW).fill_(0)
         tcls = torch.ByteTensor(nB, nH, nW, nC).fill_(0)
 
@@ -778,13 +777,13 @@ class LineLoss (nn.Module):
                 gx2 = target[b, t, 2] 
                 gy2 = target[b, t, 3]
                 gx = (gx1+gx2)/2.0
-                gh = (gy1+gy2)/2.0
+                gy = (gy1+gy2)/2.0
                 #if gh==0:
                 #    continue
                 nGT += 1
                 # Get grid box indices
-                gi = max(min(int(gx),conf_mask.size(3)-1),0)
-                gj = max(min(int(gy),conf_mask.size(2)-1),0)
+                gi = max(min(int(gx),conf_mask.size(2)-1),0)
+                gj = max(min(int(gy),conf_mask.size(1)-1),0)
                 # Masks
                 mask[b, gj, gi] = 1
                 conf_mask[b, gj, gi] = 1

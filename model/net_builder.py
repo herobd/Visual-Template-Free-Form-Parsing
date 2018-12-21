@@ -100,6 +100,24 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
     layers += [nn.ReLU(inplace=True)]
     return layers
 
+def fcReLU(in_ch,out_ch,norm,dropout=None):
+    fc = nn.Linear(in_ch,out_ch)
+    if norm=='weight_norm':
+        layers = [weight_norm(fc)]
+    else:
+        layers = [fc]
+    if norm=='batch_norm':
+        layers.append(nn.BatchNorm2d(out_ch))
+    elif norm=='instance_norm':
+        layers.append(nn.InstanceNorm2d(out_ch))
+    elif norm=='group_norm':
+        layers.append(nn.GroupNorm(8,out_ch))
+    if dropout is not None:
+        if dropout != False:
+            layers.append(nn.Dropout(p=0.1,inplace=True))
+    layers += [nn.ReLU(inplace=True)]
+    return layers
+
 def make_layers(cfg, dilation=1, norm=None, dropout=None):
     modules = []
     in_channels = [cfg[0]]
@@ -167,14 +185,14 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
         elif type(v)==str and v[0] == 'W': #dilated conv later
             outCh=int(v[1:])
             layers += convReLU(in_channels[-1],outCh,norm,dilation,dropout=dropout)
-            layerCodes.append(outCh)
+            layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'k': #conv later with custom kernel size
             div = v.find('-')
             kernel_size=int(v[1:div])
             outCh=int(v[div+1:])
             layers += convReLU(in_channels[-1],outCh,norm,kernel=kernel_size,dropout=dropout)
-            layerCodes.append(outCh)
+            layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'd': #3x3 conv layer with custom dilation
             if v[:3] == 'dil':
@@ -190,7 +208,7 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
                 dilate=( int(v[ind:div0]), int(v[div0+1:div]) )
             outCh=int(v[div+1:])
             layers += convReLU(in_channels[-1],outCh,norm,dilate,dropout=dropout)
-            layerCodes.append(outCh)
+            layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[:2] == 'hd': #horz 1x3 conv layer with custom dilation
             if v[:4] == 'hdil':
@@ -201,7 +219,7 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             dilate=int(v[ind:div])
             outCh=int(v[div+1:])
             layers += convReLU(in_channels[-1],outCh,norm,dilate,kernel=(1,3),dropout=dropout)
-            layerCodes.append(outCh)
+            layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[:2] == 'vd': #vert 3x1 conv layer with custom dilation
             if v[:4] == 'vdil':
@@ -228,8 +246,18 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             layers.append(ResBlock(in_channels[-1],outCh,dilate,norm,dropout=dropout,secondKernel=1))
             layerCodes.append(v)
             in_channels.append(outCh)
+        elif type(v)==str and v[:2] == 'FC': #fully connected layer
+            outCh=int(v[2:])
+            layers += fcReLU(in_channels[-1],outCh,norm,dropout=dropout)
+            layerCodes.append(v)
+            in_channels.append(outCh)
+        #elif type(v)==str and len(v)>9 and v[:10] == 'global-avg':
+        #    modules.append(nn.Sequential(*layers))
+        #    layers = [nn.MaxPool2d(kernel_size=2, stride=2)]
+        #    layerCodes = [v]
+            
         elif type(v)==str:
-            print('Error reading net cfg, unknown later: '+v)
+            print('Error reading net cfg, unknown layer: '+v)
             exit(1)
         else:
             layers += convReLU(in_channels[-1],v,norm,dropout=dropout)

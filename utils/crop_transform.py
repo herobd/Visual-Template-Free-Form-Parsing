@@ -19,7 +19,7 @@ def perform_crop(img, gt, crop):
     return scaled_gt_img, scaled_gt
 
 
-def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None, query_bb=None,cropPoint=None):
+def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None, bb_ids=None, query_bb=None,cropPoint=None):
     
     contains_label = np.random.random() < params['prob_label'] if 'prob_label' in params else None
     cs = params['crop_size']
@@ -261,10 +261,13 @@ def generate_random_crop(img, pixel_gt, line_gts, point_gts, params, bb_gt=None,
                         bb_gt[...,2:4] += mv_right
                         bb_gt[...,4:6] += mv_right
                         #bb_gt = bb_gt[np.where(bb_gt_candidate)]
+
+                        if bb_ids is not None:
+                            bb_ids = [id for ind,id in enumerate(bb_ids) if  bb_gt_candidate[0,ind]]
                 if point_gts is not None:
                     for name in point_gt_match:
                         point_gt_match[name] = np.where(point_gt_match[name]!=0)
-                return crop, cropped_gt_img, cropped_pixel_gt, line_gt_match, point_gt_match, bb_gt, (dim1,dim0)
+                return crop, cropped_gt_img, cropped_pixel_gt, line_gt_match, point_gt_match, bb_gt, bb_ids, (dim1,dim0)
 
         cnt += 1
 
@@ -307,7 +310,7 @@ class CropTransform(object):
             gt[:,:,0] = gt[:,:,0] + self.pad_params[0][0]
             gt[:,:,1] = gt[:,:,1] + self.pad_params[1][0]
 
-        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, _ , cropPoint = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params)
+        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, _, _, cropPoint = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params)
         #print(crop_params)
         #print(gt_match)
         
@@ -361,6 +364,7 @@ class CropBoxTransform(object):
     def __call__(self, sample,cropPoint=None):
         org_img = sample['img']
         bb_gt = sample['bb_gt']
+        bb_ids = sample['bb_ids'] if 'bb_ids' in sample else None
         line_gts = sample['line_gt'] if 'line_gt' in sample else None
         point_gts = sample['point_gt'] if 'point_gt' in sample else None
         pixel_gt = sample['pixel_gt'] if 'pixel_gt' in sample else None
@@ -479,7 +483,7 @@ class CropBoxTransform(object):
                     gt[:,:,3] = gt[:,:,3] + pad_params[0][0]
 
 
-        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt , cropPoint = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, query_bb=query_bb, cropPoint=cropPoint)
+        crop_params, org_img, pixel_gt, line_gt_match, point_gt_match, new_bb_gt, new_bb_ids, cropPoint = generate_random_crop(org_img, pixel_gt, line_gts, point_gts, self.random_crop_params, bb_gt=bb_gt, bb_ids=bb_ids, query_bb=query_bb, cropPoint=cropPoint)
         #print(crop_params)
         #print(gt_match)
         
@@ -522,6 +526,7 @@ class CropBoxTransform(object):
         return ({
             "img": org_img,
             "bb_gt": new_bb_gt,
+            "bb_ids": new_bb_ids,
             "line_gt": new_line_gts,
             "point_gt": new_point_gts,
             "pixel_gt": pixel_gt

@@ -24,11 +24,12 @@ class BoxDetectTrainer(BaseTrainer):
             self.loss_params=config['loss_params']
         else:
             self.loss_params={}
-        self.loss['box'] = self.loss['box'](**self.loss_params['box'], 
-                num_classes=model.numBBTypes, 
-                rotation=model.rotation, 
-                scale=model.scale,
-                anchors=model.anchors)
+        if 'box' in self.loss:
+            self.loss['box'] = self.loss['box'](**self.loss_params['box'], 
+                    num_classes=model.numBBTypes, 
+                    rotation=model.rotation, 
+                    scale=model.scale,
+                    anchors=model.anchors)
         if 'line' in self.loss and self.loss['line'] is not None:
             if 'line' in self.loss_params:
                 params = self.loss_params['line']
@@ -169,21 +170,30 @@ class BoxDetectTrainer(BaseTrainer):
         #    this_loss, position_loss, conf_loss, class_loss, recall, precision = lossC
         #else:
         data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(thisInstance)
-        outputBoxes, outputOffsets, outputLines, outputOffsetsLines, outputPoints, outputPixels = self.model(data)
-        this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+        outputBoxes, outputOffsets, outputLines, outputOffsetLines, outputPoints, outputPixels = self.model(data)
 
-        this_loss*=self.loss_weight['box']
-        loss+=this_loss
-        losses['box_loss']=this_loss.item()
+        if 'box' in self.loss:
+            this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+
+            this_loss*=self.loss_weight['box']
+            loss+=this_loss
+            losses['box_loss']=this_loss.item()
+        else:
+            position_loss=0
+            conf_loss=0
+            class_loss=0
 
         index=0
         for name, target in targetLines.items():
             #print('line')
             predictions = outputOffsetLines[index]
-            this_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
+            this_loss, line_pos_loss, line_conf_loss, line_class_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
             this_loss*=self.loss_weight['line']
             loss+=this_loss
             losses[name+'_loss']=this_loss.item()
+            losses[name+'_pos_loss']=line_pos_loss
+            losses[name+'_conf_loss']=line_conf_loss
+            losses[name+'_class_loss']=line_class_loss
             index+=1
         index=0
         for name, target in targetPoints.items():
@@ -291,47 +301,51 @@ class BoxDetectTrainer(BaseTrainer):
                 #if batch_idx>10:
                 #    break
                 data, targetBoxes, targetBoxes_sizes, targetLines, targetLines_sizes, targetPoints, targetPoints_sizes, targetPixels = self._to_tensor(instance)
+                batchSize = data.size(0)
                 #print('data: {}'.format(data.size()))
                 outputBoxes,outputOffsets, outputLines, outputOffsetsLines, outputPoints, outputPixels = self.model(data)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
                 
-                this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
-                loss+=this_loss*self.loss_weight['box']
-                total_position_loss+=position_loss
-                total_conf_loss+=conf_loss
-                tota_class_loss+=class_loss
-                losses['val_box_loss']+=this_loss.item()
+                if 'box' in self.loss:
+                    this_loss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,targetBoxes_sizes)
+                    loss+=this_loss*self.loss_weight['box']
+                    total_position_loss+=position_loss
+                    total_conf_loss+=conf_loss
+                    tota_class_loss+=class_loss
+                    losses['val_box_loss']+=this_loss.item()
                 
-                threshConf = max(self.thresh_conf*outputBoxes[:,:,0].max().item(),0.5)
-                if self.model.rotation:
-                    outputBoxes = non_max_sup_dist(outputBoxes.cpu(),threshConf,1.2/self.thresh_intersect)
-                else:
-                    outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,self.thresh_intersect)
-                if targetBoxes is not None:
-                    targetBoxes = targetBoxes.cpu()
-                batchSize = len(outputBoxes)
-                for b in range(batchSize):
-                    if targetBoxes is not None:
-                        target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
-                    else:
-                        target_for_b = torch.empty(0)
+                    threshConf = max(self.thresh_conf*outputBoxes[:,:,0].max().item(),0.5)
                     if self.model.rotation:
-                        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
+                        outputBoxes = non_max_sup_dist(outputBoxes.cpu(),threshConf,1.2/self.thresh_intersect)
                     else:
-                        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.9,self.model.numBBTypes)
-                    mAP += np.array(ap_5,dtype=np.float)#/len(outputBoxes)
-                    mRecall += np.array(recall_5,dtype=np.float)#/len(outputBoxes)
-                    mPrecision += np.array(prec_5,dtype=np.float)#/len(outputBoxes)
+                        outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,self.thresh_intersect)
+                    if targetBoxes is not None:
+                        targetBoxes = targetBoxes.cpu()
+                    for b in range(batchSize):
+                        if targetBoxes is not None:
+                            target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
+                        else:
+                            target_for_b = torch.empty(0)
+                        if self.model.rotation:
+                            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes[b],0.9,self.model.numBBTypes)
+                        else:
+                            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
+                        mAP += np.array(ap_5,dtype=np.float)#/len(outputBoxes)
+                        mRecall += np.array(recall_5,dtype=np.float)#/len(outputBoxes)
+                        mPrecision += np.array(prec_5,dtype=np.float)#/len(outputBoxes)
                 index=0
                 for name, target in targetLines.items():
                     #print('line')
-                    predictions = outputOffsetLines[index]
-                    this_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
+                    predictions = outputOffsetsLines[index]
+                    this_loss, line_pos_loss, line_conf_loss, line_class_loss = self.loss['line'](predictions,target,targetLines_sizes[name])
                     this_loss*=self.loss_weight['line']
                     loss+=this_loss
                     losses['val_'+name+'_loss']=this_loss.item()
+                    losses['val_'+name+'_pos_loss']=line_pos_loss
+                    losses['val_'+name+'_conf_loss']=line_conf_loss
+                    losses['val_'+name+'_class_loss']=line_class_loss
                     index+=1
                 index=0
                 for name, target in targetPoints.items():

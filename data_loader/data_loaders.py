@@ -7,6 +7,7 @@ from datasets import forms_detect
 from datasets.forms_detect import FormsDetect
 from datasets import forms_box_detect
 from datasets.forms_box_detect import FormsBoxDetect
+from datasets import forms_graph_pair
 from datasets import forms_box_pair
 from datasets.forms_box_pair import FormsBoxPair
 from datasets.forms_feature_pair import FormsFeaturePair
@@ -88,6 +89,8 @@ def getDataLoader(config,split):
             return withCollate(FormsBoxDetect,forms_box_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsBoxPair':
             return withCollate(FormsBoxPair,forms_box_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
+        elif data_set_name=='FormsGraphPair':
+            return withCollate(forms_graph_pair.FormsGraphPair,forms_graph_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsFeaturePair':
             return withCollate(FormsFeaturePair,forms_feature_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsPair':

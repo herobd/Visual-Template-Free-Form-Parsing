@@ -2,11 +2,11 @@ import torch
 #from model.yolo_loss import bbox_iou
 import math
 
-def non_max_sup_iou(pred_boxes,thresh_conf=0.5, thresh_inter=0.5):
-    return non_max_sup_(pred_boxes,thresh_conf, thresh_inter, max_intersection)
-def non_max_sup_dist(pred_boxes,thresh_conf=0.5, thresh_dist=0.9):
-    return non_max_sup_(pred_boxes,thresh_conf, thresh_dist*-1, dist_neg)
-def non_max_sup_(pred_boxes,thresh_conf, thresh_loc, loc_metric):
+def non_max_sup_iou(pred_boxes,thresh_conf=0.5, thresh_inter=0.5, hard_limit=300):
+    return non_max_sup_(pred_boxes,thresh_conf, thresh_inter, max_intersection, hard_limit)
+def non_max_sup_dist(pred_boxes,thresh_conf=0.5, thresh_dist=0.9, hard_limit=300):
+    return non_max_sup_(pred_boxes,thresh_conf, thresh_dist*-1, dist_neg, hard_limit)
+def non_max_sup_(pred_boxes,thresh_conf, thresh_loc, loc_metric, hard_limit):
     #rearr = [0,1,2,5,4,3]
     #for i in range(6,pred_boxes.shape[2]):
     #    rearr.append(i)
@@ -20,6 +20,7 @@ def non_max_sup_(pred_boxes,thresh_conf, thresh_loc, loc_metric):
             if pred_boxes[b,i,0]>thresh_conf:
                 above_thresh.append( (pred_boxes[b,i,0], i) )
         above_thresh.sort(key=lambda a: a[0], reverse=True)
+        above_thresh = above_thresh[:hard_limit]
         li = 0
         while li<len(above_thresh)-1:
             i=above_thresh[li][1]
@@ -316,3 +317,43 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
     return aps, precisions, recalls
 
 
+def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,allIOU)
+def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,allBoxDistNeg)
+
+def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
+    targIndex = torch.LongTensor((pred.size(0)))
+    #mAP=0.0
+    aps=[]
+    precisions=[]
+    recalls=[]
+
+    if len(target.size())<=1:
+        return None
+
+    #by class
+    #import pdb; pdb.set_trace()
+    clsIOUs = getLoc(target[:,0:],pred[:,1:])
+    hits = clsIOUs>iou_thresh
+    clsIOUs *= hits.float()
+
+    for cls in range(numClasses):
+        scores=[]
+        clsTargInd = target[:,cls+13]==1
+        notClsTargInd = target[:,cls+13]!=1
+        if len(pred.size())>1 and pred.size(0)>0:
+            #print(pred.size())
+            clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
+        else:
+            clsPredInd = torch.empty(0,dtype=torch.uint8)
+        if  clsPredInd.any():
+            if notClsTargInd.any():
+                clsIOUs[notClsTargInd][:,clsPredInd]=0 #we do this to maintain target index integrity
+            targIndexes = targIndex[clsPredInd]
+            val,targIndexes = torch.max(clsIOUs[:,clsPredInd],dim=0)
+
+            #assign -1 index to places that don't really have a match
+            targIndexes = torch.where(val==0,-torch.ones_like(targIndexes),targIndexes)
+
+    return targIndex

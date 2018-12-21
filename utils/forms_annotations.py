@@ -318,13 +318,14 @@ def fixAnnotations(this,annotations):
 
     #add pairs
     toAdd=[]
-    for gid,group in  circleGroups.items():
-        for id in group:
-            for id2 in group:
-                if id!=id2:
+    if not this.only_opposite_pairs:
+        for gid,group in  circleGroups.items():
+            for id in group:
+                for id2 in group:
+                    if id!=id2:
+                        toAdd.append([id,id2])
+                for id2 in groupPairedTo[gid]:
                     toAdd.append([id,id2])
-            for id2 in groupPairedTo[gid]:
-                toAdd.append([id,id2])
     for pair in toAdd:
         if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
              annotations['pairs'].append(pair)

@@ -54,7 +54,7 @@ class PairingBoxNet(nn.Module):
         down1scale=1
         down1scaleX=1
         down1scaleY=1
-        for a in layers_cfg:
+        for a in layers_cfg_down1:
             if a=='M' or (type(a) is str and a[0]=='D'):
                 down1scaleX*=2
                 down1scaleY*=2
@@ -64,7 +64,7 @@ class PairingBoxNet(nn.Module):
             elif type(a) is str and a[0:4]=='long': #long pool
                 down1scaleX*=3
                 down1scaleY*=2
-        down1scale=(down1scaleX,down1scaleY)
+        down1scale=[down1scaleX,down1scaleY]
 
         detect_ch_after_up = config['up_sample_ch'] if 'up_sample_ch' in config else 256
 
@@ -97,7 +97,7 @@ class PairingBoxNet(nn.Module):
             elif type(a) is str and a[0:4]=='long': #long pool
                 self.scale[0]*=3
                 self.scale[1]*=2
-        assert(self.scale == detect_scale)
+        assert(self.scale[0] == detect_scale[0] and self.scale[1] == detect_scale[1])
         
         if 'final_layers_cfg' in config:
             layers_cfg_final = config['final_layers_cfg']

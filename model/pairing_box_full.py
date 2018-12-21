@@ -47,8 +47,8 @@ class PairingBoxFull(BaseModel):
     def forward(self, image, queryMask,imageName=None):
         #print(image.size())
         #pad so that upsampling from model features works
-        padH=(self.detector.scale-(image.size(2)%self.detector.scale))%self.detector.scale
-        padW=(self.detector.scale-(image.size(3)%self.detector.scale))%self.detector.scale
+        padH=(self.detector.scale[1]-(image.size(2)%self.detector.scale[1]))%self.detector.scale[1]
+        padW=(self.detector.scale[0]-(image.size(3)%self.detector.scale[0]))%self.detector.scale[0]
         if padH!=0 or padW!=0:
             padder = torch.nn.ZeroPad2d((0,padW,0,padH))
             image = padder(image)

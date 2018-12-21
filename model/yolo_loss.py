@@ -681,8 +681,8 @@ class LineLoss (nn.Module):
         pred = torch.stack([o_x,o_y,o_r,o_h],dim=3)
 
         if target is not None: #target is x1,y1,x2,y2
-            target[[0,2]] /= self.scale[0]
-            target[[1,3]] /= self.scale[1]
+            target[:,:,[0,2]] /= self.scale[0]
+            target[:,:,[1,3]] /= self.scale[1]
 
         nGT, mask, conf_mask, tx1, ty1, tx2, ty2, tconf, tcls = self.build_targets_lines(
             pred=pred.cpu().data,

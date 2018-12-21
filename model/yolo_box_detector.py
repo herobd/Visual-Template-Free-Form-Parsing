@@ -173,7 +173,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
             predictions = torch.cat(stackedPred, dim=1)
             predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]
-            predictions = predictions.view(predictions.size(0),-1,5)#flatten to [batch, instances, channel]
+            predictions = predictions.view(predictions.size(0),-1,predictions.size(3))#flatten to [batch, instances, channel]
             linePreds.append(predictions)
 
             offsets = y[:,offset:offset+self.numLineParams+self.numBBTypes,:,:]

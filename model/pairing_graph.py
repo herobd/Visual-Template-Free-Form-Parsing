@@ -266,6 +266,8 @@ class PairingGraph(BaseModel):
 
 
     def selectCandidateEdges(self,bbs):
+        if bbs.size(0)<2:
+            return []
         #return list of index pairs
 
 
@@ -336,7 +338,7 @@ class PairingGraph(BaseModel):
         r = bbs[:,2]
 
         distMul=1.0
-        while distMul>0.2:
+        while distMul>0.03:
 
             boxesDrawn = np.zeros( (math.ceil(maxY-minY),math.ceil(maxX-minX)) ,dtype=int)#torch.IntTensor( (maxY-minY,maxX-minX) ).zero_()
             if boxesDrawn.shape[0]==0 or boxesDrawn.shape[1]==0:
@@ -349,7 +351,7 @@ class PairingGraph(BaseModel):
                 #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(brX[i]),int(brY[i])),i,1)
                 #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(tlX[i]),int(tlY[i])),i,1)
 
-                rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])])
+                rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])],boxesDrawn.shape,True)
                 boxesDrawn[rr,cc]=i+1
 
             #how to walk?
@@ -497,13 +499,13 @@ class PairingGraph(BaseModel):
                 for jId in hit:
                     candidates.add( (min(i,jId-1),max(i,jId-1)) )
             
-            #print('candidates:{}'.format(len(candidates)))
+            #print('candidates:{} ({})'.format(len(candidates),distMul))
             #if len(candidates)>1:
             #    drawIt()
-            if len(candidates)<1000:
+            if len(candidates)<520:
                 return list(candidates)
             else:
-                distMul*=0.8
+                distMul*=0.85
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {}".format(len(candidates)))
-        return candidates[:999]
+        return candidates[:520]

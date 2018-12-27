@@ -82,7 +82,6 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
     outputBBs, outputOffsets, edgePred = model(dataT)
-    import pdb;pdb.set_trace()
 
     if targetBBsT is not None:
         targetSize=targetBBsT.size(1)

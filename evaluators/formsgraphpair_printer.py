@@ -200,15 +200,17 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    cv2.circle(image,mid,rad,(1,0,1),1)
         
         for i in range(len(edgeCand)):
+            #print('{},{} : {}'.format(edgeCand[i][0],edgeCand[i][1],edgePred[i]))
             if edgePred[i]>EDGE_THRESH:
                 ind1 = edgeCand[i][0]
                 ind2 = edgeCand[i][1]
-                x1 = round(bbs[ind1,0])
-                y1 = round(bbs[ind1,1])
-                x2 = round(bbs[ind2,0])
+                x1 = round(bbs[ind1,1])
+                y1 = round(bbs[ind1,2])
+                x2 = round(bbs[ind2,1])
                 y2 = round(bbs[ind2,2])
 
-                cv2.line(image,(x1,y1),(x2,y2),(0,1,0),1)
+                #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
+                cv2.line(image,(x1,y1),(x2,y2),(0,0.65,0),1)
 
 
 

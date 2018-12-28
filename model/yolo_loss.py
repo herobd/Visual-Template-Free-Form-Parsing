@@ -22,6 +22,7 @@ class YoloLoss (nn.Module):
         self.ce_loss = nn.CrossEntropyLoss(reduction='elementwise_mean')  # Class loss
 
     def forward(self,prediction, target, target_sizes ):
+        import pdb;pdb.set_trace()
 
         nA = self.num_anchors
         nB = prediction.size(0)

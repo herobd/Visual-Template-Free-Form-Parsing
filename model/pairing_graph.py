@@ -81,9 +81,11 @@ class PairingGraph(BaseModel):
         self.edgeFeaturizerConv = nn.Sequential(*layers)
 
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
-        featurizer_fc = [last_ch] + featurizer_fc + ['FC{}'.format(edge_channels)]
         if config['graph_config']['arch']=='BinaryPairNet':
             feat_norm=None
+            featurizer_fc = [last_ch] + featurizer_fc + ['FCnR{}'.format(edge_channels)]
+        else:
+            featurizer_fc = [last_ch] + featurizer_fc + ['FC{}'.format(edge_channels)]
         layers, last_ch = make_layers(featurizer_fc,norm=feat_norm) #we just don't dropout here
         self.edgeFeaturizerFC = nn.Sequential(*layers)
 
@@ -261,6 +263,7 @@ class PairingGraph(BaseModel):
         #assert(edgeFeats.requries_grad)
         #edge_features = torch.sparse.FloatTensor(candidateLocs,edgeFeats,torch.Size([bbs.size(0),bbs.size(0),edgeFeats.size(1)]))
         #assert(edge_features.requries_grad)
+
 
         edge_features = (candidates,edgeFeats)
         adjacencyMatrix = None

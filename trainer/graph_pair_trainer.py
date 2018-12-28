@@ -6,6 +6,7 @@ from utils import util
 from collections import defaultdict
 from evaluators import FormsBoxDetect_printer
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
+from datasets.testforms_graph_pair import display
 import random
 
 
@@ -114,7 +115,9 @@ class GraphPairTrainer(BaseTrainer):
         if self.unfreeze_detector is not None and iteration>=self.unfreeze_detector:
             self.model.unfreeze()
         self.model.train()
-        self.lr_schedule.step()
+        #self.model.eval()
+        #print("WARNING EVAL")
+        #self.lr_schedule.step()
 
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
@@ -166,10 +169,12 @@ class GraphPairTrainer(BaseTrainer):
                 targSize = targetBoxes.size(1)
             else:
                 targSize =0 
+            #import pdb;pdb.set_trace()
             boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
             loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
         else:
             loss = edgeLoss
+
 
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))

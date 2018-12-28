@@ -6,6 +6,7 @@ from utils import util
 from collections import defaultdict
 from evaluators import FormsBoxDetect_printer
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist
+from datasets.testforms_box import display
 
 
 class BoxDetectTrainer(BaseTrainer):
@@ -178,6 +179,8 @@ class BoxDetectTrainer(BaseTrainer):
             this_loss*=self.loss_weight['box']
             loss+=this_loss
             losses['box_loss']=this_loss.item()
+            print('boxLoss:{}'.format(this_loss))
+            display(thisInstance)
         else:
             position_loss=0
             conf_loss=0

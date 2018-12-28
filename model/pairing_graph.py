@@ -14,7 +14,7 @@ import random
 import timeit
 import cv2
 
-MAX_CANIDATES=470
+MAX_CANDIDATES=470
 
 class PairingGraph(BaseModel):
     def __init__(self, config):
@@ -504,7 +504,7 @@ class PairingGraph(BaseModel):
             #print('candidates:{} ({})'.format(len(candidates),distMul))
             #if len(candidates)>1:
             #    drawIt()
-            if len(candidates)<MAX_CANIDATES:
+            if len(candidates)<MAX_CANDIDATES:
                 return list(candidates)
             else:
                 distMul*=0.85

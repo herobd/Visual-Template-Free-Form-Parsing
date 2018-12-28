@@ -81,6 +81,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
         #self.base_0 = config['base_0']
         #self.base_1 = config['base_1']
+        if 'DEBUG' in config:
+            self.setDEBUG()
 
     def forward(self, img):
         #import pdb; pdb.set_trace()
@@ -226,3 +228,9 @@ class YoloBoxDetector(nn.Module): #BaseModel
         def save_final(module,input,output):
             self.final_features=output
         self.net_down_modules[-2].register_forward_hook(save_final)
+    def setDEBUG(self):
+        self.debug=[]*5
+        for i in range(5):
+            def save_layer(module,input,output):
+                self.debug[i]=output.cpu()
+            self.net_down_modules[i].register_forward_hook(save_layer)

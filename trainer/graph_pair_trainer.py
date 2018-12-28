@@ -115,7 +115,9 @@ class GraphPairTrainer(BaseTrainer):
         if self.unfreeze_detector is not None and iteration>=self.unfreeze_detector:
             self.model.unfreeze()
         self.model.train()
-        self.lr_schedule.step()
+        #self.model.eval()
+        #print("WARNING EVAL")
+        #self.lr_schedule.step()
 
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)
@@ -173,10 +175,6 @@ class GraphPairTrainer(BaseTrainer):
         else:
             loss = edgeLoss
 
-        ####
-        print('edgeLoss: {}, boxLoss: {}'.format(edgeLoss,boxLoss))
-        display(thisInstance)
-        ####
 
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))

@@ -40,6 +40,9 @@ class PairingGraph(BaseModel):
         else:
             self.detector_frozen=False
 
+        if 'DEBUG' in config:
+            self.detector.setDEBUG()
+
         self.numBBTypes = self.detector.numBBTypes
         self.rotation = self.detector.rotation
         self.scale = self.detector.scale
@@ -70,7 +73,7 @@ class PairingGraph(BaseModel):
             elif type(a) is str and a[0:4]=='long': #long pool
                 scaleX*=3
                 scaleY*=2
-        self.scale=(scaleX,scaleY)
+        #self.scale=(scaleX,scaleY) this holds scale for detector
         fsizeX = self.pool_w//scaleX
         fsizeY = self.pool_h//scaleY
         layers, last_ch = make_layers(featurizer_conv,norm=feat_norm) #we just don't dropout here

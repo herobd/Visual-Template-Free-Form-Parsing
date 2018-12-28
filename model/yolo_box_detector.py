@@ -229,8 +229,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
             self.final_features=output
         self.net_down_modules[-2].register_forward_hook(save_final)
     def setDEBUG(self):
-        self.debug=[]*5
-        for i in range(5):
+        self.debug=[None]*5
+        for i in range(1,2):
             def save_layer(module,input,output):
                 self.debug[i]=output.cpu()
             self.net_down_modules[i].register_forward_hook(save_layer)

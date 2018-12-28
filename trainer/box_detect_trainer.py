@@ -140,6 +140,8 @@ class BoxDetectTrainer(BaseTrainer):
             The metrics in log must have the key 'metrics'.
         """
         self.model.train()
+        #self.model.eval()
+        #print('WARNING EVAL')
         self.lr_schedule.step()
 
         ##tic=timeit.default_timer()

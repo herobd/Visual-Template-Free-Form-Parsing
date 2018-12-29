@@ -324,6 +324,7 @@ def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses):
 
 def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
     targIndex = torch.LongTensor((pred.size(0)))
+    targIndex = -1
     #mAP=0.0
     aps=[]
     precisions=[]

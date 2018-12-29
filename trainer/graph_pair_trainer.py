@@ -357,6 +357,8 @@ class GraphPairTrainer(BaseTrainer):
                 preds.append(predsAll[i])
             #else skip this
             i+=1
+        if len(preds)==0:
+            return torch.tensor([]),torch.tensor([])
         newGT = torch.tensor(newGT).float().to(edgePred[1].device)
         preds = torch.cat(preds).to(edgePred[1].device)
         #assert(preds.requires_grad)

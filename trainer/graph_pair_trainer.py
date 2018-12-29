@@ -179,6 +179,12 @@ class GraphPairTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
+        gtPairing=predPairing=outputBoxes=outputOffsets=edgePred=image=targetBoxes=None
+        edgeLoss = edgeLoss.item()
+        if not self.model.detector_frozen:
+            boxLoss = boxLoss.item()
+        else:
+            boxLoss = 0
         loss.backward()
         #what is grads?
         #minGrad=9999999999
@@ -189,6 +195,8 @@ class GraphPairTrainer(BaseTrainer):
         #import pdb; pdb.set_trace()
         torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
         self.optimizer.step()
+
+        loss = loss.item()
 
         ##toc=timeit.default_timer()
         ##print('bac: '+str(toc-tic))
@@ -204,15 +212,6 @@ class GraphPairTrainer(BaseTrainer):
         #toc=timeit.default_timer()
         #print('metric: '+str(toc-tic))
 
-        ##tic=timeit.default_timer()
-        loss = loss.item()
-        edgeLoss = edgeLoss.item()
-        if not self.model.detector_frozen:
-            boxLoss = boxLoss.item()
-        else:
-            boxLoss = 0
-        ##toc=timeit.default_timer()
-        ##print('item: '+str(toc-tic))
         #perAnchor={}
         #for i in range(avg_conf_per_anchor.size(0)):
         #    perAnchor['anchor{}'.format(i)]=avg_conf_per_anchor[i]

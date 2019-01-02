@@ -198,7 +198,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(mid)
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
-        
+        for i,j in adjacency:
+            x1 = round(targetBBs[0,i,0].item())
+            y1 = round(targetBBs[0,i,1].item())
+            x2 = round(targetBBs[0,j,0].item())
+            y2 = round(targetBBs[0,j,1].item())
+            cv2.line(image,(x1,y1),(x2,y2),(0.1,0,0.1),3)
+
+        numedgepred=0
         for i in range(len(edgeCand)):
             #print('{},{} : {}'.format(edgeCand[i][0],edgeCand[i][1],edgePred[i]))
             if edgePred[i]>EDGE_THRESH:
@@ -209,8 +216,12 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 x2 = round(bbs[ind2,1])
                 y2 = round(bbs[ind2,2])
 
+                shade = (edgePred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
+
                 #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
-                cv2.line(image,(x1,y1),(x2,y2),(0,0.65,0),1)
+                cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
+                numedgepred+=1
+        print('number of pred edges: {}'.format(numedgepred))
 
 
 

@@ -87,6 +87,7 @@
     "arch": "PairingGraph", 
     "model": {
         "DEBUG":1,
+        "detector_config": "cf_cfTest.json",
         "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration150000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,

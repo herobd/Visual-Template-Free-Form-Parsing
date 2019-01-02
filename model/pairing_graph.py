@@ -10,6 +10,7 @@ from model.net_builder import make_layers
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist
 import math
 import random
+import json
 
 import timeit
 import cv2
@@ -22,7 +23,7 @@ class PairingGraph(BaseModel):
 
         if 'detector_checkpoint' in config:
             checkpoint = torch.load(config['detector_checkpoint'])
-            detector_config = config['detector_config'] if 'detector_config' in config else checkpoint['config']['model']
+            detector_config = json.load(open(config['detector_config']))['model'] if 'detector_config' in config else checkpoint['config']['model']
             if 'state_dict' in checkpoint:
                 self.detector = eval(checkpoint['config']['arch'])(detector_config)
                 self.detector.load_state_dict(checkpoint['state_dict'])

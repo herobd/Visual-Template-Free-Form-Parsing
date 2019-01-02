@@ -155,15 +155,31 @@ class GraphPairTrainer(BaseTrainer):
             outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
-            gtPairing,predPairing = self.prealignedEdgePred(adj,edgePred)
+            #gtPairing,predPairing = self.prealignedEdgePred(adj,edgePred)
+            predPairingShouldBeTrue,predPairingShouldBeFalse = self.prealignedEdgePred(adj,edgePred)
         else:
             outputBoxes, outputOffsets, edgePred = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
-            gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
-        if len(predPairing.size())>0 and predPairing.size(0)>0:
-            edgeLoss = self.loss['edge'](predPairing,gtPairing)
+            #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
+            predPairingShouldBeTrue,predPairingShouldBeFalse = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
+        if iteration>50:
+            import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
+        #if len(predPairing.size())>0 and predPairing.size(0)>0:
+        #    edgeLoss = self.loss['edge'](predPairing,gtPairing)
+        #else:
+        #    edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+        edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+        if predPairingShouldBeTrue is not None:
+            edgeLoss += self.loss['edge'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue))
+            debug_avg_edgeTrue = predPairingShouldBeTrue.mean().item()
         else:
-            edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+            debug_avg_edgeTrue =0 
+        if predPairingShouldBeFalse is not None:
+            edgeLoss += self.loss['edge'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse))
+            debug_avg_edgeFalse = predPairingShouldBeFalse.mean().item()
+        else:
+            debug_avg_edgeFalse = 0
         if not self.model.detector_frozen:
             if targetBoxes is not None:
                 targSize = targetBoxes.size(1)
@@ -220,6 +236,8 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'edgeLoss': edgeLoss,
+            'debug_avg_edgeTrue': debug_avg_edgeTrue,
+            'debug_avg_edgeFalse': debug_avg_edgeFalse,
 
             **metrics,
         }
@@ -342,8 +360,9 @@ class GraphPairTrainer(BaseTrainer):
 
         edges = edgePred[0] #edgePred._indices().cpu()
         predsAll = edgePred[1] #edgePred._values()
-        newGT = []#torch.tensor((edges.size(0)))
-        preds = []
+        #newGT = []#torch.tensor((edges.size(0)))
+        predsPos = []
+        predsNeg = []
         #for i in range(edges.size(0)):
         i=0
         for n0,n1 in edges:
@@ -352,32 +371,60 @@ class GraphPairTrainer(BaseTrainer):
             t0 = targIndex[n0]
             t1 = targIndex[n1]
             if t0>=0 and t1>=0:
-                newGT.append( int((t0,t1) in adj) )#adjM[ min(t0,t1), max(t0,t1) ])
-                preds.append(predsAll[i])
+                #newGT.append( int((t0,t1) in adj) )#adjM[ min(t0,t1), max(t0,t1) ])
+                #preds.append(predsAll[i])
+                if (t0,t1) in adj:
+                    predsPos.append(predsAll[i])
+                else:
+                    predsNeg.append(predsAll[i])
             #else skip this
             i+=1
-        if len(preds)==0:
-            return torch.tensor([]),torch.tensor([])
-        newGT = torch.tensor(newGT).float().to(edgePred[1].device)
-        preds = torch.cat(preds).to(edgePred[1].device)
-        #assert(preds.requires_grad)
+        #if len(preds)==0:
+        #    return torch.tensor([]),torch.tensor([])
+        #newGT = torch.tensor(newGT).float().to(edgePred[1].device)
+        #preds = torch.cat(preds).to(edgePred[1].device)
     
-        return newGT, preds
+        #return newGT, preds
+        if len(predsPos)>0:
+            predsPos = torch.cat(predsPos).to(edgePred[1].device)
+        else:
+            predsPos = None
+        if len(predsNeg)>0:
+            predsNeg = torch.cat(predsNeg).to(edgePred[1].device)
+        else:
+            predsNeg = None
+        return predsPos,predsNeg
+
 
     def prealignedEdgePred(self,adj,edgePred):
         if edgePred is None:
             assert(adj is None or len(adj)==0)
             return torch.tensor([]),torch.tensor([])
         edges = edgePred[0] #edgePred._indices().cpu().t()
+        predsAll = edgePred[1]
 
-        gt = torch.empty(len(edges))#edges.size(0))
-        #for i in range(edges.size(0)):
+        #gt = torch.empty(len(edges))#edges.size(0))
+        predsPos = []
+        predsNeg = []
         i=0
         for n0,n1 in edges:
             #n0 = edges[i,0]
             #n1 = edges[i,1]
-            gt[i] = int((n0,n1) in adj) #(adjM[ n0, n1 ])
+            #gt[i] = int((n0,n1) in adj) #(adjM[ n0, n1 ])
+            if (n0,n1) in adj:
+                predsPos.append(predsAll[i])
+            else:
+                predsNeg.append(predsAll[i])
             i+=1
     
         #return gt.to(edgePred.device), edgePred._values().view(-1).view(-1)
-        return gt.to(edgePred[1].device), edgePred[1].view(-1)
+        #return gt.to(edgePred[1].device), edgePred[1].view(-1)
+        if len(predsPos)>0:
+            predsPos = torch.cat(predsPos).to(edgePred[1].device)
+        else:
+            predsPos = None
+        if len(predsNeg)>0:
+            predsNeg = torch.cat(predsNeg).to(edgePred[1].device)
+        else:
+            predsNeg = None
+        return predsPos,predsNeg

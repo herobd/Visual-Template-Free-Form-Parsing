@@ -179,7 +179,7 @@ class GraphPairTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
-        gtPairing=predPairing=outputBoxes=outputOffsets=edgePred=image=targetBoxes=None
+        gtPairing=predPairing=outputBoxes=outputOffsets=edgePred=image=targetBoxes=thisInstance=None
         edgeLoss = edgeLoss.item()
         if not self.model.detector_frozen:
             boxLoss = boxLoss.item()

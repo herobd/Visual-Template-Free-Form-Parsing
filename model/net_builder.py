@@ -97,6 +97,8 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
             layers.append(nn.Dropout2d(p=0.1,inplace=True))
         elif dropout=='normal':
             layers.append(nn.Dropout(p=0.1,inplace=True))
+        elif type(dropout)==float:
+            layers.append(nn.Dropout2d(p=dropout,inplace=True))
     layers += [nn.ReLU(inplace=True)]
     return layers
 

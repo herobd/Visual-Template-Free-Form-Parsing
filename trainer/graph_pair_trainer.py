@@ -153,7 +153,8 @@ class GraphPairTrainer(BaseTrainer):
         else:
             threshIntur = None
         image, targetBoxes, adj = self._to_tensor(thisInstance)
-        if self.useGT(iteration):
+        useGT = self.useGT(iteration)
+        if useGT:
             outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
@@ -164,6 +165,10 @@ class GraphPairTrainer(BaseTrainer):
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
+        if edgePred is not None:
+            numEdgePred = len(edgePred[0])
+        else:
+            numEdgePred = 0
         #if iteration>25:
         #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
@@ -181,6 +186,8 @@ class GraphPairTrainer(BaseTrainer):
             debug_avg_edgeFalse = predPairingShouldBeFalse.mean().item()
         else:
             debug_avg_edgeFalse = 0
+        edgeLoss *= self.lossWeights['edge']
+
         if not self.model.detector_frozen:
             if targetBoxes is not None:
                 targSize = targetBoxes.size(1)
@@ -188,9 +195,10 @@ class GraphPairTrainer(BaseTrainer):
                 targSize =0 
             #import pdb;pdb.set_trace()
             boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
-            loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
+            boxLoss *= self.lossWeights['box']
+            loss = edgeLoss + boxLoss
         else:
-            loss = edgeLoss*self.lossWeights['edge']
+            loss = edgeLoss
 
 
         ##toc=timeit.default_timer()
@@ -204,13 +212,7 @@ class GraphPairTrainer(BaseTrainer):
         else:
             boxLoss = 0
         loss.backward()
-        #what is grads?
-        #minGrad=9999999999
-        #maxGrad=-9999999999
-        #for p in filter(lambda p: p.grad is not None, self.model.parameters()):
-        #    minGrad = min(minGrad,p.min())
-        #    maxGrad = max(maxGrad,p.max())
-        #import pdb; pdb.set_trace()
+
         torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
         self.optimizer.step()
 
@@ -238,6 +240,7 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'edgeLoss': edgeLoss,
+            'numEdgePred':numEdgePred,
             'edge_recall':eRecall,
             'edge_prec': ePrec,
             'edge_fullPrec':fullPrec,

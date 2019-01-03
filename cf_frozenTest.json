@@ -1,5 +1,5 @@
 {
-    "name": "Simple17_pair_binary_scratch",
+    "name": "frozenTest",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -8,14 +8,15 @@
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "simple_dataset": true,
-        "data_dir": "../data/forms",
+        "data_dir": "../data/test",
         "batch_size": 1,
         "shuffle": true,
         "num_workers": 1,
         "crop_to_page":false,
         "color":false,
-        "rescale_range": [0.4,0.65],
-        "crop_params": {
+        "rescale_range": [0.52,0.52],
+        "Xrescale_range": [0.4,0.65],
+        "Xcrop_params": {
             "crop_size":[652,1608],
 	    "pad":0
         },
@@ -55,8 +56,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 0.6,
-        "edge": 0.4
+        "box": 0.9,
+        "edge": 0.001
     },
     "loss_params": 
         {
@@ -66,42 +67,30 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 200000,
+        "iterations": 20000,
         "save_dir": "saved/",
         "val_step": 10000,
-        "save_step": 50000,
-        "save_step_minor": 250,
-        "log_step": 500,
+        "save_step": 5000,
+        "save_step_minor": 25,
+        "log_step": 10,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
         "warmup_steps": 1000,
         "conf_thresh_init": 0.9,
-        "conf_thresh_change_iters": 5000
+        "conf_thresh_change_iters": 5000,
+
+        "Xunfreeze_detector": "never",
+        "partial_from_gt": 0,
+        "stop_from_gt": 0
     },
     "arch": "PairingGraph", 
     "model": {
-        "Xdetector_checkpoint": "saved/Forms16_dil5_neg20_new12/checkpoint-iteration200000.pth.tar",
-        "detector_config": {
-            "arch": "YoloBoxDetector",
-            "color":false,
-            "number_of_box_types": 2,
-            "number_of_point_types": 0,
-            "number_of_pixel_types": 0,
-            "norm_type": "group_norm",
-            "dropout": true,
-            "down_layers_cfg": [1,"k5-64", "M",
-                                    128, 128,  "M",
-                                    "hd2-256", "vd1-256", "hd4-256", 256,  "M",
-                                    "hd4-512", "vd1-512", "hd8-512", 512,  "M",
-                                    "hd8-1024","vd1-1024","hd16-1024",1024, 1024],
-            "up_layers_cfg":[],
-            "anchors_file": "anchors_noRot_new_25.json",
-            "rotation":false
-
-        },
+        "DEBUG":1,
+        "detector_config": "cf_cfTest.json",
+        "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration150000.pth.tar",
         "conf_thresh": 0.5,
-        "start_frozen": false,
+        "start_frozen": true,
         "graph_config": {
             "arch": "BinaryPairNet",
             "node_channels": 0,

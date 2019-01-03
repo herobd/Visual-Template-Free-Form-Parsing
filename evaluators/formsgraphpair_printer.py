@@ -8,7 +8,7 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist
+from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
 
 
 def plotRect(img,color,xyrhw):
@@ -113,6 +113,37 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes)
 
+    numClasses=2
+    if model.rotation:
+        targIndex = getTargIndexForPreds_dist(targetBBs[0],outputBBs,0.9,numClasses)
+    else:
+        targIndex = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.5,numClasses)
+    truePred=falsePred=badPred=0
+    i=0
+    for n0,n1 in edgeCand:
+        if edgePred[i]>EDGE_THRESH:
+            t0 = targIndex[n0].item()
+            t1 = targIndex[n1].item()
+            if t0>=0 and t1>=0:
+                if (min(t0,t1),max(t0,t1)) in adjacency:
+                    truePred+=1
+                else:
+                    falsePred+=1
+            else:
+                badPred+=1
+        i+=1
+    if len(adjacency)>0:
+        edgeRecall = truePred/len(adjacency)
+    else:
+        edgeRecall = 1
+    if falsePred>0:
+        edgePrec = truePred/falsePred
+    else:
+        edgePrec = 1
+    if falsePred+badPred>0:
+        fullPrec = truePred/(falsePred+badPred)
+    else:
+        fullPrec = 1
 
     #for b in range(len(outputBBs)):
     outputBBs = outputBBs.data.numpy()
@@ -125,7 +156,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     rotDiffs=defaultdict(list)
     b=0
     #print('image {} has {} {}'.format(startIndex+b,targetBBsSizes[name][b],name))
-    #bbImage = np.ones_like(image)
+    #bbImage = np.ones_like(image):w
+
     if outDir is not None:
         #Write the results so we can train LF with them
         #saveFile = os.path.join(outDir,resultsDirName,name,'{}'.format(imageName[b]))
@@ -198,7 +230,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(mid)
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
-        
+        for i,j in adjacency:
+            x1 = round(targetBBs[0,i,0].item())
+            y1 = round(targetBBs[0,i,1].item())
+            x2 = round(targetBBs[0,j,0].item())
+            y2 = round(targetBBs[0,j,1].item())
+            cv2.line(image,(x1,y1),(x2,y2),(0.25,0,0.25),3)
+
+        numedgepred=0
         for i in range(len(edgeCand)):
             #print('{},{} : {}'.format(edgeCand[i][0],edgeCand[i][1],edgePred[i]))
             if edgePred[i]>EDGE_THRESH:
@@ -209,12 +248,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 x2 = round(bbs[ind2,1])
                 y2 = round(bbs[ind2,2])
 
+                shade = (edgePred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
+
                 #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
-                cv2.line(image,(x1,y1),(x2,y2),(0,0.65,0),1)
+                cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
+                numedgepred+=1
+        print('number of pred edges: {}'.format(numedgepred))
 
 
 
-        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1])
+        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_edges_prec:{:.2f}_recall:{:.2f}_fullPrec:{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],edgePrec,edgeRecall,fullPrec)
         #for j in range(metricsOut.shape[1]):
         #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
         saveName+='.png'

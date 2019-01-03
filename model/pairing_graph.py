@@ -41,8 +41,6 @@ class PairingGraph(BaseModel):
         else:
             self.detector_frozen=False
 
-        if 'DEBUG' in config:
-            self.detector.setDEBUG()
 
         self.numBBTypes = self.detector.numBBTypes
         self.rotation = self.detector.rotation
@@ -96,7 +94,12 @@ class PairingGraph(BaseModel):
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
 
 
-        self.storedImageName=None
+        if 'DEBUG' in config:
+            self.detector.setDEBUG()
+            self.setDEBUG()
+            self.debug=True
+        else:
+            self.debug=False
 
  
     def unfreeze(self): 
@@ -213,7 +216,7 @@ class PairingGraph(BaseModel):
         i=0
         for (index1, index2) in candidates:
             #... or make it so index1 is always to top-left one
-            if random.random()<0.5:
+            if random.random()<0.5 and not self.debug:
                 temp=index1
                 index1=index2
                 index2=temp
@@ -519,3 +522,15 @@ class PairingGraph(BaseModel):
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {}".format(len(candidates)))
         return candidates[:MAX_CANDIDATES]
+
+    def setDEBUG(self):
+        self.debug=True
+        def save_layerConv0(module,input,output):
+            self.debug_conv0=output.cpu()
+        self.edgeFeaturizerConv[0].register_forward_hook(save_layerConv0)
+        def save_layerConv1(module,input,output):
+            self.debug_conv1=output.cpu()
+        self.edgeFeaturizerConv[1].register_forward_hook(save_layerConv1)
+        #def save_layerFC(module,input,output):
+            #    self.debug_fc=output.cpu()
+        #self.edgeFeaturizerConv[0].register_forward_hook(save_layerFC)

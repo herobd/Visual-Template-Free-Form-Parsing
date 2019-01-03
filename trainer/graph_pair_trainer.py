@@ -160,6 +160,10 @@ class GraphPairTrainer(BaseTrainer):
             outputBoxes, outputOffsets, edgePred = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
+        if edgePred is not None:
+            numEdgePred = len(edgePred[0])
+        else:
+            numEdgePred = 0
         if len(predPairing.size())>0 and predPairing.size(0)>0:
             edgeLoss = self.loss['edge'](predPairing,gtPairing)
         else:
@@ -179,20 +183,14 @@ class GraphPairTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
-        gtPairing=predPairing=outputBoxes=outputOffsets=edgePred=image=targetBoxes=None
+        gtPairing=predPairing=outputBoxes=outputOffsets=edgePred=image=targetBoxes=thisInstance=None
         edgeLoss = edgeLoss.item()
         if not self.model.detector_frozen:
             boxLoss = boxLoss.item()
         else:
             boxLoss = 0
         loss.backward()
-        #what is grads?
-        #minGrad=9999999999
-        #maxGrad=-9999999999
-        #for p in filter(lambda p: p.grad is not None, self.model.parameters()):
-        #    minGrad = min(minGrad,p.min())
-        #    maxGrad = max(maxGrad,p.max())
-        #import pdb; pdb.set_trace()
+
         torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
         self.optimizer.step()
 
@@ -220,6 +218,7 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'edgeLoss': edgeLoss,
+            'numEdgePred':numEdgePred,
 
             **metrics,
         }

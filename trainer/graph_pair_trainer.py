@@ -163,20 +163,20 @@ class GraphPairTrainer(BaseTrainer):
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
-        if iteration>25:
-            import pdb;pdb.set_trace()
+        #if iteration>25:
+        #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
         #    edgeLoss = self.loss['edge'](predPairing,gtPairing)
         #else:
         #    edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
         edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
-        if predPairingShouldBeTrue is not None:
-            edgeLoss += self.loss['edge'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue))
+        if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
+            edgeLoss += self.loss['edge'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue)).to(image.device)
             debug_avg_edgeTrue = predPairingShouldBeTrue.mean().item()
         else:
             debug_avg_edgeTrue =0 
-        if predPairingShouldBeFalse is not None:
-            edgeLoss += self.loss['edge'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse))
+        if predPairingShouldBeFalse is not None and predPairingShouldBeFalse.size(0)>0:
+            edgeLoss += self.loss['edge'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse)).to(image.device)
             debug_avg_edgeFalse = predPairingShouldBeFalse.mean().item()
         else:
             debug_avg_edgeFalse = 0
@@ -447,7 +447,7 @@ class GraphPairTrainer(BaseTrainer):
     def prealignedEdgePred(self,adj,edgePred):
         if edgePred is None:
             assert(adj is None or len(adj)==0)
-            if (edgePred[1]>self.thresh_edge).any():
+            if edgePred is not None and (edgePred[1]>self.thresh_edge).any():
                 prec=0
             else:
                 prec=1

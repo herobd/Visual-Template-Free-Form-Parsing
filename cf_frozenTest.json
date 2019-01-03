@@ -14,9 +14,9 @@
         "num_workers": 1,
         "crop_to_page":false,
         "color":false,
-        "rescale_range": [0.52,0.52],
-        "Xrescale_range": [0.4,0.65],
-        "Xcrop_params": {
+        "Xrescale_range": [0.52,0.52],
+        "rescale_range": [0.4,0.65],
+        "crop_params": {
             "crop_size":[652,1608],
 	    "pad":0
         },
@@ -48,7 +48,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.1,
+        "lr": 0.01,
         "weight_decay": 0
     },
     "loss": {
@@ -57,7 +57,7 @@
     },
     "loss_weights": {
         "box": 0.9,
-        "edge": 0.001
+        "edge": 0.0001
     },
     "loss_params": 
         {
@@ -71,8 +71,8 @@
         "save_dir": "saved/",
         "val_step": 10000,
         "save_step": 5000,
-        "save_step_minor": 25,
-        "log_step": 10,
+        "save_step_minor": 50,
+        "log_step": 50,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
@@ -86,8 +86,8 @@
     },
     "arch": "PairingGraph", 
     "model": {
-        "DEBUG":1,
-        "detector_config": "cf_cfTest.json",
+        "xDEBUG":1,
+        "xdetector_config": "cf_cfTest.json",
         "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration150000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,

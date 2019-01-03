@@ -163,8 +163,8 @@ class GraphPairTrainer(BaseTrainer):
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
-        if iteration>25:
-            import pdb;pdb.set_trace()
+        #if iteration>25:
+        #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
         #    edgeLoss = self.loss['edge'](predPairing,gtPairing)
         #else:
@@ -315,7 +315,7 @@ class GraphPairTrainer(BaseTrainer):
                     loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
-                    loss = edgeLoss
+                    loss = edgeLoss*self.lossWeights['edge']
                 total_box_loss+=boxLoss.item()
                 total_edge_loss+=edgeLoss.item()
                 

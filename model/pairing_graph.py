@@ -107,6 +107,7 @@ class PairingGraph(BaseModel):
             for param in self.detector.parameters(): 
                 param.requires_grad=param.will_use_grad 
             self.detector_frozen=False
+            print('Unfroze detector')
         
 
     def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):

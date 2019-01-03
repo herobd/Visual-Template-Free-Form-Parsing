@@ -115,7 +115,6 @@ class GraphPairTrainer(BaseTrainer):
         """
         if self.unfreeze_detector is not None and iteration>=self.unfreeze_detector:
             self.model.unfreeze()
-            print('Unfroze detector')
         self.model.train()
         #self.model.eval()
         #print("WARNING EVAL")
@@ -244,6 +243,7 @@ class GraphPairTrainer(BaseTrainer):
             'edge_recall':eRecall,
             'edge_prec': ePrec,
             'edge_fullPrec':fullPrec,
+            'edge_F': (eRecall+ePrec)/2,
             'debug_avg_edgeTrue': debug_avg_edgeTrue,
             'debug_avg_edgeFalse': debug_avg_edgeFalse,
 
@@ -355,6 +355,7 @@ class GraphPairTrainer(BaseTrainer):
             'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_edge_recall':total_edge_recall/len(self.valid_data_loader),
             'val_edge_prec':total_edge_prec/len(self.valid_data_loader),
+            'val_edge_F':(total_edge_prec+total_edge_recall)/(2*len(self.valid_data_loader)),
             'val_edge_fullPrec':total_edge_fullPrec/len(self.valid_data_loader),
             #'val_position_loss':total_position_loss / len(self.valid_data_loader),
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),

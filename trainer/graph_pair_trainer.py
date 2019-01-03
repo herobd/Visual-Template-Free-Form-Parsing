@@ -115,6 +115,7 @@ class GraphPairTrainer(BaseTrainer):
         """
         if self.unfreeze_detector is not None and iteration>=self.unfreeze_detector:
             self.model.unfreeze()
+            print('Unfroze detector')
         self.model.train()
         #self.model.eval()
         #print("WARNING EVAL")
@@ -379,9 +380,9 @@ class GraphPairTrainer(BaseTrainer):
         #should this be the same as AP_?
         numClasses = 2
         if self.model.rotation:
-            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,0.9,numClasses)
+            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
         else:
-            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.5,numClasses)
+            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
         #Create gt vector to match edgePred.values()
 

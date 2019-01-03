@@ -4,11 +4,11 @@
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":true,
+    "super_computer":false,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "simple_dataset": true,
-        "data_dir": "../data/forms17",
+        "data_dir": "../data/forms",
         "batch_size": 1,
         "shuffle": true,
         "num_workers": 1,
@@ -95,7 +95,7 @@
         },
         "featurizer_start_h": 8,
         "featurizer_start_w": 8,
-        "featurizer_conv": [512,"M",1024],
+        "featurizer_conv": [512,"M",512],
         "featurizer_fc": []
     }
 }

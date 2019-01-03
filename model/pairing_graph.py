@@ -10,10 +10,12 @@ from model.net_builder import make_layers
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist
 import math
 import random
+import json
 
 import timeit
 import cv2
 
+MAX_CANDIDATES=470
 
 class PairingGraph(BaseModel):
     def __init__(self, config):
@@ -21,7 +23,7 @@ class PairingGraph(BaseModel):
 
         if 'detector_checkpoint' in config:
             checkpoint = torch.load(config['detector_checkpoint'])
-            detector_config = config['detector_config'] if 'detector_config' in config else checkpoint['config']['model']
+            detector_config = json.load(open(config['detector_config']))['model'] if 'detector_config' in config else checkpoint['config']['model']
             if 'state_dict' in checkpoint:
                 self.detector = eval(checkpoint['config']['arch'])(detector_config)
                 self.detector.load_state_dict(checkpoint['state_dict'])
@@ -38,6 +40,7 @@ class PairingGraph(BaseModel):
             self.detector_frozen=True
         else:
             self.detector_frozen=False
+
 
         self.numBBTypes = self.detector.numBBTypes
         self.rotation = self.detector.rotation
@@ -69,7 +72,7 @@ class PairingGraph(BaseModel):
             elif type(a) is str and a[0:4]=='long': #long pool
                 scaleX*=3
                 scaleY*=2
-        self.scale=(scaleX,scaleY)
+        #self.scale=(scaleX,scaleY) this holds scale for detector
         fsizeX = self.pool_w//scaleX
         fsizeY = self.pool_h//scaleY
         layers, last_ch = make_layers(featurizer_conv,norm=feat_norm) #we just don't dropout here
@@ -77,9 +80,11 @@ class PairingGraph(BaseModel):
         self.edgeFeaturizerConv = nn.Sequential(*layers)
 
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
-        featurizer_fc = [last_ch] + featurizer_fc + ['FC{}'.format(edge_channels)]
         if config['graph_config']['arch']=='BinaryPairNet':
             feat_norm=None
+            featurizer_fc = [last_ch] + featurizer_fc + ['FCnR{}'.format(edge_channels)]
+        else:
+            featurizer_fc = [last_ch] + featurizer_fc + ['FC{}'.format(edge_channels)]
         layers, last_ch = make_layers(featurizer_fc,norm=feat_norm) #we just don't dropout here
         self.edgeFeaturizerFC = nn.Sequential(*layers)
 
@@ -89,13 +94,19 @@ class PairingGraph(BaseModel):
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
 
 
-        self.storedImageName=None
+        if 'DEBUG' in config:
+            self.detector.setDEBUG()
+            self.setDEBUG()
+            self.debug=True
+        else:
+            self.debug=False
 
  
     def unfreeze(self): 
-        for param in self.detector.parameters(): 
-            param.requires_grad=param.will_use_grad 
-        self.detector_frozen=False
+        if self.detector_frozen:
+            for param in self.detector.parameters(): 
+                param.requires_grad=param.will_use_grad 
+            self.detector_frozen=False
         
 
     def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
@@ -138,6 +149,7 @@ class PairingGraph(BaseModel):
             useBBs = gtBBs[0]
         if useBBs.size(0)>0:
             node_features, adjacencyMatrix, edge_features = self.createGraph(useBBs,final_features)
+
             ##tic=timeit.default_timer()
             nodeOuts, edgeOuts = self.pairer(node_features, adjacencyMatrix, edge_features)
             ##print('pairer: {}'.format(timeit.default_timer()-tic))
@@ -205,7 +217,7 @@ class PairingGraph(BaseModel):
         i=0
         for (index1, index2) in candidates:
             #... or make it so index1 is always to top-left one
-            if random.random()<0.5:
+            if random.random()<0.5 and not self.debug:
                 temp=index1
                 index1=index2
                 index2=temp
@@ -241,6 +253,7 @@ class PairingGraph(BaseModel):
             i+=1
 
         stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,masks.to(stackedEdgeFeatWindows.device)),dim=1)
+        #import pdb; pdb.set_trace()
         edgeFeats = self.edgeFeaturizerConv(stackedEdgeFeatWindows) #preparing for graph feature size
         edgeFeats = self.edgeFeaturizerFC(edgeFeats.view(edgeFeats.size(0),edgeFeats.size(1)))
         #?
@@ -256,6 +269,7 @@ class PairingGraph(BaseModel):
         #assert(edgeFeats.requries_grad)
         #edge_features = torch.sparse.FloatTensor(candidateLocs,edgeFeats,torch.Size([bbs.size(0),bbs.size(0),edgeFeats.size(1)]))
         #assert(edge_features.requries_grad)
+
 
         edge_features = (candidates,edgeFeats)
         adjacencyMatrix = None
@@ -502,10 +516,22 @@ class PairingGraph(BaseModel):
             #print('candidates:{} ({})'.format(len(candidates),distMul))
             #if len(candidates)>1:
             #    drawIt()
-            if len(candidates)<520:
+            if len(candidates)<MAX_CANDIDATES:
                 return list(candidates)
             else:
                 distMul*=0.85
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {}".format(len(candidates)))
-        return candidates[:520]
+        return candidates[:MAX_CANDIDATES]
+
+    def setDEBUG(self):
+        self.debug=True
+        def save_layerConv0(module,input,output):
+            self.debug_conv0=output.cpu()
+        self.edgeFeaturizerConv[0].register_forward_hook(save_layerConv0)
+        def save_layerConv1(module,input,output):
+            self.debug_conv1=output.cpu()
+        self.edgeFeaturizerConv[1].register_forward_hook(save_layerConv1)
+        #def save_layerFC(module,input,output):
+            #    self.debug_fc=output.cpu()
+        #self.edgeFeaturizerConv[0].register_forward_hook(save_layerFC)

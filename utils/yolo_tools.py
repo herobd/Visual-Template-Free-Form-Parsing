@@ -324,6 +324,7 @@ def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses):
 
 def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
     targIndex = torch.LongTensor((pred.size(0)))
+    targIndex[:] = -1
     #mAP=0.0
     aps=[]
     precisions=[]
@@ -334,9 +335,10 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
 
     #by class
     #import pdb; pdb.set_trace()
-    clsIOUs = getLoc(target[:,0:],pred[:,1:])
-    hits = clsIOUs>iou_thresh
-    clsIOUs *= hits.float()
+    #first get all IOUs, then process by class
+    allIOUs = getLoc(target[:,0:],pred[:,1:])
+    hits = allIOUs>iou_thresh
+    allIOUs *= hits.float()
 
     for cls in range(numClasses):
         scores=[]
@@ -349,11 +351,15 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if  clsPredInd.any():
             if notClsTargInd.any():
-                clsIOUs[notClsTargInd][:,clsPredInd]=0 #we do this to maintain target index integrity
-            targIndexes = targIndex[clsPredInd]
-            val,targIndexes = torch.max(clsIOUs[:,clsPredInd],dim=0)
+                allIOUs[notClsTargInd][:,clsPredInd]=0 #set IOU for instances that are from different class than predicted to 0 (different class so no intersection)
+            #targIndexes = targIndex[clsPredInd]
+            val,targIndexes = torch.max(allIOUs[:,clsPredInd],dim=0)
+            #targIndexes has the target indexes for the predictions of cls
 
             #assign -1 index to places that don't really have a match
-            targIndexes = torch.where(val==0,-torch.ones_like(targIndexes),targIndexes)
-
+            #targIndexes[:] = torch.where(val==0,-torch.ones_like(targIndexes),targIndexes)
+            targIndexes[val==0] = -1
+            targIndex[clsPredInd] =  targIndexes
+            
+    #import pdb;pdb.set_trace()
     return targIndex

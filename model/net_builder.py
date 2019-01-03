@@ -97,10 +97,12 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
             layers.append(nn.Dropout2d(p=0.1,inplace=True))
         elif dropout=='normal':
             layers.append(nn.Dropout(p=0.1,inplace=True))
+        elif type(dropout)==float:
+            layers.append(nn.Dropout2d(p=dropout,inplace=True))
     layers += [nn.ReLU(inplace=True)]
     return layers
 
-def fcReLU(in_ch,out_ch,norm,dropout=None):
+def fcReLU(in_ch,out_ch,norm,dropout=None,relu=True):
     fc = nn.Linear(in_ch,out_ch)
     if norm=='weight_norm':
         layers = [weight_norm(fc)]
@@ -115,7 +117,8 @@ def fcReLU(in_ch,out_ch,norm,dropout=None):
     if dropout is not None:
         if dropout != False:
             layers.append(nn.Dropout(p=0.1,inplace=True))
-    layers += [nn.ReLU(inplace=True)]
+    if relu:
+        layers += [nn.ReLU(inplace=True)]
     return layers
 
 def make_layers(cfg, dilation=1, norm=None, dropout=None):
@@ -247,8 +250,14 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[:2] == 'FC': #fully connected layer
-            outCh=int(v[2:])
-            layers += fcReLU(in_channels[-1],outCh,norm,dropout=dropout)
+            if v[2:4]=='nR':
+                div= 4
+                relu=False
+            else:
+                div = 2
+                relu=True
+            outCh=int(v[div:])
+            layers += fcReLU(in_channels[-1],outCh,norm,dropout=dropout,relu=relu)
             layerCodes.append(v)
             in_channels.append(outCh)
         #elif type(v)==str and len(v)>9 and v[:10] == 'global-avg':

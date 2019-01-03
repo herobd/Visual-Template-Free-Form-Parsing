@@ -15,7 +15,7 @@ import json
 import timeit
 import cv2
 
-MAX_CANDIDATES=470
+MAX_CANDIDATES=500#470
 
 class PairingGraph(BaseModel):
     def __init__(self, config):

@@ -152,7 +152,8 @@ class GraphPairTrainer(BaseTrainer):
         else:
             threshIntur = None
         image, targetBoxes, adj = self._to_tensor(thisInstance)
-        if self.useGT(iteration):
+        useGT = self.useGT(iteration)
+        if useGT:
             outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
@@ -184,6 +185,8 @@ class GraphPairTrainer(BaseTrainer):
             debug_avg_edgeFalse = predPairingShouldBeFalse.mean().item()
         else:
             debug_avg_edgeFalse = 0
+        edgeLoss *= self.lossWeights['edge']
+
         if not self.model.detector_frozen:
             if targetBoxes is not None:
                 targSize = targetBoxes.size(1)
@@ -191,9 +194,10 @@ class GraphPairTrainer(BaseTrainer):
                 targSize =0 
             #import pdb;pdb.set_trace()
             boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
-            loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
+            boxLoss *= self.lossWeights['box']
+            loss = edgeLoss + boxLoss
         else:
-            loss = edgeLoss*self.lossWeights['edge']
+            loss = edgeLoss
 
 
         ##toc=timeit.default_timer()

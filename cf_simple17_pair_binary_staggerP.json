@@ -47,7 +47,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.1,
+        "lr": 0.01,
         "weight_decay": 0
     },
     "loss": {
@@ -55,8 +55,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 0.6,
-        "edge": 0.4
+        "box": 0.1,
+        "edge": 0.9
     },
     "loss_params": 
         {

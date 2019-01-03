@@ -315,7 +315,7 @@ class GraphPairTrainer(BaseTrainer):
                     loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
-                    loss = edgeLoss
+                    loss = edgeLoss*self.lossWeights['edge']
                 total_box_loss+=boxLoss.item()
                 total_edge_loss+=edgeLoss.item()
                 

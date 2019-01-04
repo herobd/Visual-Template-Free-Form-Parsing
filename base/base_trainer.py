@@ -154,7 +154,7 @@ class BaseTrainer:
                 if self.iteration%self.log_step!=0:
                     print('                   ', end='\r')
                 #    print()#clear inplace text
-                self.logger.info('Minor checkpoint saved for iteration '+str(self.iteration))
+                #self.logger.info('Minor checkpoint saved for iteration '+str(self.iteration))
 
             #LR ADJUST
             if self.lr_scheduler and self.iteration % self.epoch_size == 0:

@@ -108,9 +108,10 @@ class PairingGraph(BaseModel):
             for param in self.detector.parameters(): 
                 param.requires_grad=param.will_use_grad 
             self.detector_frozen=False
+            print('Unfroze detector')
         
 
-    def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
+    def forward(self, image, gtBBs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
         ##tic=timeit.default_timer()
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
@@ -140,7 +141,7 @@ class PairingGraph(BaseModel):
         ##print('process boxes: {}'.format(timeit.default_timer()-tic))
         #bbPredictions should be switched for GT for training? Then we can easily use BCE loss. 
         #Otherwise we have to to alignment first
-        if gtBBs is None:
+        if not useGTBBs:
             if bbPredictions.size(0)==0:
                 return bbPredictions, offsetPredictions, None
             useBBs = bbPredictions[:,1:] #remove confidence score

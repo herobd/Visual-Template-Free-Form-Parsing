@@ -69,6 +69,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     scale = instance['scale']
     dataT, targetBBsT, adjT = __to_tensor(instance,gpu)
 
+
     resultsDirName='results'
     #if outDir is not None and resultsDirName is not None:
         #rPath = os.path.join(outDir,resultsDirName)
@@ -115,9 +116,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     numClasses=2
     if model.rotation:
-        targIndex = getTargIndexForPreds_dist(targetBBs[0],outputBBs,0.9,numClasses)
+        targIndex = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
     else:
-        targIndex = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.5,numClasses)
+        targIndex = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
     truePred=falsePred=badPred=0
     i=0
     for n0,n1 in edgeCand:
@@ -254,6 +255,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
                 numedgepred+=1
         print('number of pred edges: {}'.format(numedgepred))
+
+        for predI in range(bbs.shape[0]):
+            targI=targIndex[predI].item()
+            if targI>0:
+                x1 = round(bbs[predI,1])
+                y1 = round(bbs[predI,2])
+
+                x2 = round(targetBBs[0,targI,0].item())
+                y2 = round(targetBBs[0,targI,1].item())
+                cv2.line(image,(x1,y1),(x2,y2),(1,0,1),1)
 
 
 

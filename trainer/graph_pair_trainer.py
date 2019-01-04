@@ -91,9 +91,9 @@ class GraphPairTrainer(BaseTrainer):
 
     def useGT(self,iteration):
         if self.stop_from_gt is not None and iteration>=self.stop_from_gt:
-            return False
+            return random.random()>0.9 #I think it's best to always have some GT examples
         elif self.partial_from_gt is not None and iteration>=self.partial_from_gt:
-            return random.random()>0.5
+            return random.random()> 0.9*(iteration-self.partial_from_gt)/(self.stop_from_gt-self.partial_from_gt)
         else:
             return True
 
@@ -154,7 +154,7 @@ class GraphPairTrainer(BaseTrainer):
         image, targetBoxes, adj = self._to_tensor(thisInstance)
         useGT = self.useGT(iteration)
         if useGT:
-            outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
+            outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes,True,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,edgePred)
@@ -243,6 +243,7 @@ class GraphPairTrainer(BaseTrainer):
             'edge_recall':eRecall,
             'edge_prec': ePrec,
             'edge_fullPrec':fullPrec,
+            'edge_F': (eRecall+ePrec)/2,
             'debug_avg_edgeTrue': debug_avg_edgeTrue,
             'debug_avg_edgeFalse': debug_avg_edgeFalse,
 
@@ -354,6 +355,7 @@ class GraphPairTrainer(BaseTrainer):
             'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_edge_recall':total_edge_recall/len(self.valid_data_loader),
             'val_edge_prec':total_edge_prec/len(self.valid_data_loader),
+            'val_edge_F':(total_edge_prec+total_edge_recall)/(2*len(self.valid_data_loader)),
             'val_edge_fullPrec':total_edge_fullPrec/len(self.valid_data_loader),
             #'val_position_loss':total_position_loss / len(self.valid_data_loader),
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
@@ -382,9 +384,9 @@ class GraphPairTrainer(BaseTrainer):
         #should this be the same as AP_?
         numClasses = 2
         if self.model.rotation:
-            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,0.9,numClasses)
+            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
         else:
-            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.5,numClasses)
+            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
         #Create gt vector to match edgePred.values()
 
@@ -413,7 +415,7 @@ class GraphPairTrainer(BaseTrainer):
                     predsNeg.append(predsAll[i])
                     if sigPredsAll[i]>self.thresh_edge:
                         falsePred+=1
-            elif predsAll[i]>self.thresh_edge:
+            elif sigPredsAll[i]>self.thresh_edge:
                 badPred+=1
             #else skip this
             i+=1

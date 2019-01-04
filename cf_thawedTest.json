@@ -1,5 +1,5 @@
 {
-    "name": "frozenTest",
+    "name": "thawedTest",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -80,7 +80,7 @@
         "conf_thresh_init": 0.9,
         "conf_thresh_change_iters": 5000,
 
-        "Xunfreeze_detector": "never",
+        "unfreeze_detector": 200,
         "partial_from_gt": 0,
         "stop_from_gt": 0
     },
@@ -88,7 +88,7 @@
     "model": {
         "xDEBUG":1,
         "xdetector_config": "cf_cfTest.json",
-        "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration150000.pth.tar",
+        "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
         "graph_config": {

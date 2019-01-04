@@ -15,7 +15,8 @@ import json
 import timeit
 import cv2
 
-MAX_CANDIDATES=500#470
+MAX_CANDIDATES=400 #450
+#max seen 428, so why'd it crash on 375?
 
 class PairingGraph(BaseModel):
     def __init__(self, config):

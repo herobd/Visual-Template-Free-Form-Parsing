@@ -4,7 +4,8 @@ import torch.nn as nn
 import numpy as np
 from model import *
 from model.binary_pair_net import BinaryPairNet
-from model.roi_align.roi_align import RoIAlign
+#from model.roi_align.roi_align import RoIAlign
+from model.roi_align import RoIAlign
 from skimage import draw
 from model.net_builder import make_layers
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist

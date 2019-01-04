@@ -4,11 +4,11 @@
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":false,
+    "super_computer":true,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "simple_dataset": true,
-        "data_dir": "../data/forms",
+        "data_dir": "../data/forms17",
         "batch_size": 1,
         "shuffle": true,
         "num_workers": 1,
@@ -47,7 +47,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.1,
+        "lr": 0.01,
         "weight_decay": 0
     },
     "loss": {
@@ -55,8 +55,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 0.6,
-        "edge": 0.4
+        "box": 0.9,
+        "edge": 0.001
     },
     "loss_params": 
         {
@@ -77,7 +77,10 @@
         "monitor_mode": "none",
         "warmup_steps": 1000,
         "conf_thresh_init": 0.9,
-        "conf_thresh_change_iters": 5000
+        "conf_thresh_change_iters": 5000,
+
+        "partial_from_gt": 50000,
+        "stop_from_gt": 150000
     },
     "arch": "PairingGraph", 
     "model": {

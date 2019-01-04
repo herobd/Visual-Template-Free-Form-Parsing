@@ -12,3 +12,5 @@ from model.pairing_box_from_gt import PairingBoxFromGT
 from model.binary_pair_net import BinaryPairNet
 from model.line_follower import LineFollower
 from model.simpleNN import SimpleNN
+#from .roi_align import ROIAlign
+#from .roi_align import roi_align

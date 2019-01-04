@@ -91,9 +91,9 @@ class GraphPairTrainer(BaseTrainer):
 
     def useGT(self,iteration):
         if self.stop_from_gt is not None and iteration>=self.stop_from_gt:
-            return False
+            return random.random()>0.9 #I think it's best to always have some GT examples
         elif self.partial_from_gt is not None and iteration>=self.partial_from_gt:
-            return random.random()>0.5
+            return random.random()> 0.9*(iteration-self.partial_from_gt)/(self.stop_from_gt-self.partial_from_gt)
         else:
             return True
 

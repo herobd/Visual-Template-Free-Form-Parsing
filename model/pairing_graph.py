@@ -16,7 +16,7 @@ import json
 import timeit
 import cv2
 
-MAX_CANDIDATES=470
+MAX_CANDIDATES=500#470
 
 class PairingGraph(BaseModel):
     def __init__(self, config):
@@ -108,6 +108,7 @@ class PairingGraph(BaseModel):
             for param in self.detector.parameters(): 
                 param.requires_grad=param.will_use_grad 
             self.detector_frozen=False
+            print('Unfroze detector')
         
 
     def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):

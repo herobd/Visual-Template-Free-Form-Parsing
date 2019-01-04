@@ -20,6 +20,8 @@ def graph(log,plot=True):
                 graphs[metric]['values'].append(value)
     
     print('summed')
+    for metric, data in graphs.items():
+        print('{} max: {}, min {}'.format(metric,max(data['values']),min(data['values'])))
 
     if plot:
         import matplotlib.pyplot as plt

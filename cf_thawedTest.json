@@ -1,5 +1,5 @@
 {
-    "name": "Simple17_pair_binary_staggerP",
+    "name": "thawedTest",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -8,12 +8,13 @@
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "simple_dataset": true,
-        "data_dir": "../data/forms",
+        "data_dir": "../data/test",
         "batch_size": 1,
         "shuffle": true,
         "num_workers": 1,
         "crop_to_page":false,
         "color":false,
+        "Xrescale_range": [0.52,0.52],
         "rescale_range": [0.4,0.65],
         "crop_params": {
             "crop_size":[652,1608],
@@ -66,12 +67,12 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 200000,
+        "iterations": 20000,
         "save_dir": "saved/",
         "val_step": 10000,
-        "save_step": 50000,
-        "save_step_minor": 250,
-        "log_step": 500,
+        "save_step": 5000,
+        "save_step_minor": 50,
+        "log_step": 50,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
@@ -79,12 +80,14 @@
         "conf_thresh_init": 0.9,
         "conf_thresh_change_iters": 5000,
 
-        "unfreeze_detector": 4000,
-        "partial_from_gt": 2000,
-        "stop_from_gt": 150000
+        "unfreeze_detector": 200,
+        "partial_from_gt": 0,
+        "stop_from_gt": 0
     },
     "arch": "PairingGraph", 
     "model": {
+        "xDEBUG":1,
+        "xdetector_config": "cf_cfTest.json",
         "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,

@@ -152,7 +152,8 @@ class GraphPairTrainer(BaseTrainer):
         else:
             threshIntur = None
         image, targetBoxes, adj = self._to_tensor(thisInstance)
-        if self.useGT(iteration):
+        useGT = self.useGT(iteration)
+        if useGT:
             outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
@@ -163,6 +164,10 @@ class GraphPairTrainer(BaseTrainer):
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
+        if edgePred is not None:
+            numEdgePred = len(edgePred[0])
+        else:
+            numEdgePred = 0
         #if iteration>25:
         #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
@@ -180,6 +185,8 @@ class GraphPairTrainer(BaseTrainer):
             debug_avg_edgeFalse = predPairingShouldBeFalse.mean().item()
         else:
             debug_avg_edgeFalse = 0
+        edgeLoss *= self.lossWeights['edge']
+
         if not self.model.detector_frozen:
             if targetBoxes is not None:
                 targSize = targetBoxes.size(1)
@@ -187,9 +194,10 @@ class GraphPairTrainer(BaseTrainer):
                 targSize =0 
             #import pdb;pdb.set_trace()
             boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
-            loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
+            boxLoss *= self.lossWeights['box']
+            loss = edgeLoss + boxLoss
         else:
-            loss = edgeLoss*self.lossWeights['edge']
+            loss = edgeLoss
 
 
         ##toc=timeit.default_timer()
@@ -203,13 +211,7 @@ class GraphPairTrainer(BaseTrainer):
         else:
             boxLoss = 0
         loss.backward()
-        #what is grads?
-        #minGrad=9999999999
-        #maxGrad=-9999999999
-        #for p in filter(lambda p: p.grad is not None, self.model.parameters()):
-        #    minGrad = min(minGrad,p.min())
-        #    maxGrad = max(maxGrad,p.max())
-        #import pdb; pdb.set_trace()
+
         torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
         self.optimizer.step()
 
@@ -237,9 +239,11 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'edgeLoss': edgeLoss,
+            'numEdgePred':numEdgePred,
             'edge_recall':eRecall,
             'edge_prec': ePrec,
             'edge_fullPrec':fullPrec,
+            'edge_F': (eRecall+ePrec)/2,
             'debug_avg_edgeTrue': debug_avg_edgeTrue,
             'debug_avg_edgeFalse': debug_avg_edgeFalse,
 
@@ -351,6 +355,7 @@ class GraphPairTrainer(BaseTrainer):
             'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_edge_recall':total_edge_recall/len(self.valid_data_loader),
             'val_edge_prec':total_edge_prec/len(self.valid_data_loader),
+            'val_edge_F':(total_edge_prec+total_edge_recall)/(2*len(self.valid_data_loader)),
             'val_edge_fullPrec':total_edge_fullPrec/len(self.valid_data_loader),
             #'val_position_loss':total_position_loss / len(self.valid_data_loader),
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
@@ -379,9 +384,9 @@ class GraphPairTrainer(BaseTrainer):
         #should this be the same as AP_?
         numClasses = 2
         if self.model.rotation:
-            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,0.9,numClasses)
+            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
         else:
-            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.5,numClasses)
+            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
         #Create gt vector to match edgePred.values()
 

@@ -60,6 +60,7 @@ def display(data):
         y2=data['bb_gt'][b,ind2,1]
 
         ax_im.plot([x1,x2],[y1,y2],'g-')
+        #print('{} to {}, {} - {}'.format(ind1,ind2,(x1,y1),(x2,y2)))
     plt.show()
 
 
@@ -76,8 +77,9 @@ if __name__ == "__main__":
     data=FormsGraphPair(dirPath=dirPath,split='train',config={
         'color':False,
         'crop_to_page':False,
-        'rescale_range':[0.4,0.65],
-        'crop_params':{"crop_size":[652,1608],"pad":0}, 
+        'rescale_range':[1,1],
+        'Xrescale_range':[0.4,0.65],
+        'Xcrop_params':{"crop_size":[652,1608],"pad":0}, 
         'no_blanks':True,
         "swap_circle":True,
         'no_graphics':True,

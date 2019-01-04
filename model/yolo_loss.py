@@ -54,9 +54,10 @@ class YoloLoss (nn.Module):
         pred_boxes[..., 2] = torch.exp(w.data) * anchor_w
         pred_boxes[..., 3] = torch.exp(h.data) * anchor_h
 
-        if target is not None:
-            target[:,:,[0,4]] /= self.scale[0]
-            target[:,:,[1,3]] /= self.scale[1]
+        #moved back into build_targets
+        #if target is not None:
+        #    target[:,:,[0,4]] /= self.scale[0]
+        #    target[:,:,[1,3]] /= self.scale[1]
 
         nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, distances, ious = build_targets(
             pred_boxes=pred_boxes.cpu().data,
@@ -240,6 +241,7 @@ def build_targets(
     #import pdb; pdb.set_trace()
     for b in range(nB):
         if calcIOUAndDist and target_sizes[b]>0:
+            raise Exception('caclIOUAndDist does not have normalized target (scaled)')
             flat_pred = pred_boxes[b].view(-1,pred_boxes.size(-1))
             #flat_target = target[b,:target_sizes[b]].view(-1,target.size(-1))
             iousB = allIOU(flat_pred,target[b,:target_sizes[b]], boxes1XYWH=[0,1,2,3])
@@ -253,10 +255,10 @@ def build_targets(
             #if target[b, t].sum() == 0:
             #    continue
             # Convert to position relative to box
-            gx = target[b, t, 0] #/ scale
-            gy = target[b, t, 1] #/ scale
-            gw = target[b, t, 4] #/ scale
-            gh = target[b, t, 3] #/ scale
+            gx = target[b, t, 0] / scale[0]
+            gy = target[b, t, 1] / scale[1]
+            gw = target[b, t, 4] / scale[0]
+            gh = target[b, t, 3] / scale[1]
         
             if gw==0 or gh==0:
                 continue
@@ -395,9 +397,10 @@ class YoloDistLoss (nn.Module):
         p_bot_y = o_y+cos_rot*o_h
         pred_points = torch.stack([p_left_x,p_left_y,p_right_x,p_right_y,p_top_x,p_top_y,p_bot_x,p_bot_y],dim=4)
 
-        if target is not None:
-            target[:,:,[0,1,3,4]] /= self.scale[0]
-            target[:,:,5:13] /= self.scale[0]
+        #moved back into build_targets
+        #if target is not None:
+        #    target[:,:,[0,1,3,4]] /= self.scale[0]
+        #    target[:,:,5:13] /= self.scale[0]
 
         nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tr, tconf, tcls = build_targets_dist(
             pred_points=pred_points.cpu().data,
@@ -520,10 +523,10 @@ def build_targets_dist(
             #    continue
 
             # Convert to position relative to box
-            gx = target[b, t, 0] #/ scale
-            gy = target[b, t, 1] #/ scale
-            gw = target[b, t, 4] #/ scale
-            gh = target[b, t, 3] #/ scale
+            gx = target[b, t, 0] / scale[0]
+            gy = target[b, t, 1] / scale[0]
+            gw = target[b, t, 4] / scale[0]
+            gh = target[b, t, 3] / scale[0]
             gr = target[b, t, 2]
             if gw==0 or gh==0:
                 continue
@@ -532,7 +535,7 @@ def build_targets_dist(
             gi = max(min(int(gx),conf_mask.size(3)-1),0)
             gj = max(min(int(gy),conf_mask.size(2)-1),0)
             # Get shape of gt box
-            gt_points = target[b,t,5:13]
+            gt_points = target[b,t,5:13] / scale[0]
             gt_points[[0,2,4,6]]-=gx #center the points about the origin instead of BB location
             gt_points[[1,3,5,7]]-=gy
             # Get shape of anchor box
@@ -544,7 +547,7 @@ def build_targets_dist(
             # Find the best matching anchor box
             best_n = np.argmin(anch_dists)
             # Get ground truth box
-            gt_points = target[b,t,5:13] #/ scale
+            gt_points = target[b,t,5:13] / scale[0]
             #gt_points[[0,2,4,6]]+=gx
             #gt_points[[1,3,5,7]]+=gy
             # Get the best prediction
@@ -680,9 +683,10 @@ class LineLoss (nn.Module):
 
         pred = torch.stack([o_x,o_y,o_r,o_h],dim=3)
 
-        if target is not None: #target is x1,y1,x2,y2
-            target[:,:,[0,2]] /= self.scale[0]
-            target[:,:,[1,3]] /= self.scale[1]
+        #moved back into build_targets
+        #if target is not None: #target is x1,y1,x2,y2
+        #    target[:,:,[0,2]] /= self.scale[0]
+        #    target[:,:,[1,3]] /= self.scale[1]
 
         nGT, mask, conf_mask, tx1, ty1, tx2, ty2, tconf, tcls = self.build_targets_lines(
             pred=pred.cpu().data,
@@ -772,10 +776,10 @@ class LineLoss (nn.Module):
                 #    continue
 
                 # Convert to position relative to box
-                gx1 = target[b, t, 0] 
-                gy1 = target[b, t, 1]
-                gx2 = target[b, t, 2] 
-                gy2 = target[b, t, 3]
+                gx1 = target[b, t, 0] / scale[0]
+                gy1 = target[b, t, 1] / scale[1]
+                gx2 = target[b, t, 2] / scale[0]
+                gy2 = target[b, t, 3] / scale[1]
                 gx = (gx1+gx2)/2.0
                 gy = (gy1+gy2)/2.0
                 #if gh==0:

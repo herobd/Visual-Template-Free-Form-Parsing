@@ -57,7 +57,7 @@
     },
     "loss_weights": {
         "box": 0.1,
-        "edge": 0.9
+        "edge": 0.1
     },
     "loss_params": 
         {

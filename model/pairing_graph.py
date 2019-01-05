@@ -32,7 +32,8 @@ class PairingGraph(BaseModel):
         else:
             detector_config = config['detector_config']
             self.detector = eval(detector_config['arch'])(detector_config)
-        self.detector.setForGraphPairing()
+        useBeginningOfLast = config['use_beg_det_feats'] if 'use_beg_det_feats' in config else False
+        self.detector.setForGraphPairing(useBeginningOfLast)
         if (config['start_frozen'] if 'start_frozen' in config else False):
             for param in self.detector.parameters(): 
                 param.will_use_grad=param.requires_grad 

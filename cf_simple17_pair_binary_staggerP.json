@@ -47,7 +47,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.01,
+        "lr": 0.008,
         "weight_decay": 0
     },
     "loss": {
@@ -55,8 +55,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 0.1,
-        "edge": 0.9
+        "box": 1,
+        "edge": 1
     },
     "loss_params": 
         {
@@ -80,8 +80,8 @@
         "conf_thresh_change_iters": 5000,
 
         "unfreeze_detector": 4000,
-        "partial_from_gt": 2000,
-        "stop_from_gt": 150000
+        "partial_from_gt": 4000,
+        "stop_from_gt": 200000
     },
     "arch": "PairingGraph", 
     "model": {

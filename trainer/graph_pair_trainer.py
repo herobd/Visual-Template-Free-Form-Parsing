@@ -154,7 +154,7 @@ class GraphPairTrainer(BaseTrainer):
         image, targetBoxes, adj = self._to_tensor(thisInstance)
         useGT = self.useGT(iteration)
         if useGT:
-            outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
+            outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes,True,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,edgePred)

@@ -164,7 +164,7 @@ class PairingGraph(BaseModel):
         else:
             return bbPredictions, offsetPredictions, None
 
-    def createGraph(self,bbs,features):
+    def createGraph(self,bbs,features,debug_image=None):
         ##tic=timeit.default_timer()
         candidates = self.selectCandidateEdges(bbs)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
@@ -175,19 +175,21 @@ class PairingGraph(BaseModel):
         #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.edgeWindowSize,self.edgeWindowSize)).to(features.device())
 
         #get corners from bb predictions
-        r = bbs[:,3]
-        h = bbs[:,4]
-        w = bbs[:,5]
+        x = bbs[:,0]
+        y = bbs[:,1]
+        r = bbs[:,2]
+        h = bbs[:,3]
+        w = bbs[:,4]
         cos_r = torch.cos(r)
         sin_r = torch.sin(r)
-        tlX = -w*cos_r + -h*sin_r
-        tlY =  w*sin_r + -h*cos_r
-        trX =  w*cos_r + -h*sin_r
-        trY = -w*sin_r + -h*cos_r
-        brX =  w*cos_r + h*sin_r
-        brY = -w*sin_r + h*cos_r
-        blX = -w*cos_r + h*sin_r
-        blY =  w*sin_r + h*cos_r
+        tlX = -w*cos_r + -h*sin_r +x
+        tlY =  w*sin_r + -h*cos_r +y
+        trX =  w*cos_r + -h*sin_r +x
+        trY = -w*sin_r + -h*cos_r +y
+        brX =  w*cos_r + h*sin_r +x
+        brY = -w*sin_r + h*cos_r +y
+        blX = -w*cos_r + h*sin_r +x
+        blY =  w*sin_r + h*cos_r +y
 
         tlX = tlX.cpu()
         tlY = tlY.cpu()
@@ -211,6 +213,26 @@ class PairingGraph(BaseModel):
             rois[i,3]=maxX
             rois[i,4]=maxY
             i+=1
+
+            ###DEBUG
+            if debug_image is not None and i<10:
+                assert(self.rotation==False)
+                #print('crop {}: ({},{}), ({},{})'.format(i,minX.item(),maxX.item(),minY.item(),maxY.item()))
+                #print(bbs[index1])
+                #print(bbs[index2])
+                crop = debug_image[0,:,int(minY.item()):int(maxY.item()),int(minX.item()):int(maxX.item())+1].cpu()
+                crop = (2-crop)/2
+                if crop.size(0)==1:
+                    crop = crop.expand(3,crop.size(1),crop.size(2))
+                crop[0,int(tlY[index1].item()-minY.item()):int(brY[index1].item()-minY.item())+1,int(tlX[index1].item()-minX.item()):int(brX[index1].item()-minX.item())+1]*=0.5
+                crop[1,int(tlY[index2].item()-minY.item()):int(brY[index2].item()-minY.item())+1,int(tlX[index2].item()-minX.item()):int(brX[index2].item()-minX.item())+1]*=0.5
+                crop = crop.numpy().transpose([1,2,0])
+                cv2.imshow('crop {}'.format(i),crop)
+                #import pdb;pdb.set_trace()
+            ###
+        if debug_image is not None:
+            cv2.waitKey()
+
         #crop from feats, ROI pool
         stackedEdgeFeatWindows = self.roi_align(features,rois.to(features.device))
 

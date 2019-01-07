@@ -69,6 +69,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     scale = instance['scale']
     dataT, targetBBsT, adjT = __to_tensor(instance,gpu)
 
+
     resultsDirName='results'
     #if outDir is not None and resultsDirName is not None:
         #rPath = os.path.join(outDir,resultsDirName)

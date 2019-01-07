@@ -365,6 +365,7 @@ class FormsGraphPair(torch.utils.data.Dataset):
         ##print('transfrm: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
         pairs=set()
         index1=0
+        #import pdb;pdb.set_trace()
         for id in ids: #updated
             responseBBList = self.__getResponseBBList(id,annotations)
             for bb in responseBBList:

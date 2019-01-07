@@ -55,8 +55,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 0.9,
-        "edge": 0.001
+        "box": 1,
+        "edge": 1
     },
     "loss_params": 
         {
@@ -66,7 +66,7 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 200000,
+        "iterations": 250000,
         "save_dir": "saved/",
         "val_step": 10000,
         "save_step": 50000,
@@ -76,15 +76,14 @@
         "monitor": "loss",
         "monitor_mode": "none",
         "warmup_steps": 1000,
-        "conf_thresh_init": 0.9,
-        "conf_thresh_change_iters": 5000,
+        "Xconf_thresh_init": 0.9,
+        "Xconf_thresh_change_iters": 5000,
 
-        "partial_from_gt": 50000,
-        "stop_from_gt": 150000
+        "partial_from_gt": 40000,
+        "stop_from_gt": 200000
     },
     "arch": "PairingGraph", 
     "model": {
-        "Xdetector_checkpoint": "saved/Forms16_dil5_neg20_new12/checkpoint-iteration200000.pth.tar",
         "detector_config": {
             "arch": "YoloBoxDetector",
             "color":false,

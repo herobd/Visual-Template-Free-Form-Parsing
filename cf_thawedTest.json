@@ -48,7 +48,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.01,
+        "lr": 0.1,
         "weight_decay": 0
     },
     "loss": {
@@ -57,7 +57,7 @@
     },
     "loss_weights": {
         "box": 0.1,
-        "edge": 0.9
+        "edge": 0.1
     },
     "loss_params": 
         {
@@ -77,12 +77,12 @@
         "monitor": "loss",
         "monitor_mode": "none",
         "warmup_steps": 1000,
-        "conf_thresh_init": 0.9,
-        "conf_thresh_change_iters": 5000,
+        "Xconf_thresh_init": 0.9,
+        "Xconf_thresh_change_iters": 2000,
 
         "unfreeze_detector": 200,
-        "partial_from_gt": 0,
-        "stop_from_gt": 0
+        "partial_from_gt": 1000,
+        "stop_from_gt": 20000
     },
     "arch": "PairingGraph", 
     "model": {

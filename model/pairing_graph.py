@@ -16,7 +16,8 @@ import json
 import timeit
 import cv2
 
-MAX_CANDIDATES=500#470
+MAX_CANDIDATES=400 #450
+#max seen 428, so why'd it crash on 375?
 
 class PairingGraph(BaseModel):
     def __init__(self, config):
@@ -33,7 +34,8 @@ class PairingGraph(BaseModel):
         else:
             detector_config = config['detector_config']
             self.detector = eval(detector_config['arch'])(detector_config)
-        self.detector.setForGraphPairing()
+        useBeginningOfLast = config['use_beg_det_feats'] if 'use_beg_det_feats' in config else False
+        self.detector.setForGraphPairing(useBeginningOfLast)
         if (config['start_frozen'] if 'start_frozen' in config else False):
             for param in self.detector.parameters(): 
                 param.will_use_grad=param.requires_grad 
@@ -111,7 +113,7 @@ class PairingGraph(BaseModel):
             print('Unfroze detector')
         
 
-    def forward(self, image, gtBBs=None, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
+    def forward(self, image, gtBBs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
         ##tic=timeit.default_timer()
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
@@ -141,7 +143,7 @@ class PairingGraph(BaseModel):
         ##print('process boxes: {}'.format(timeit.default_timer()-tic))
         #bbPredictions should be switched for GT for training? Then we can easily use BCE loss. 
         #Otherwise we have to to alignment first
-        if gtBBs is None:
+        if not useGTBBs:
             if bbPredictions.size(0)==0:
                 return bbPredictions, offsetPredictions, None
             useBBs = bbPredictions[:,1:] #remove confidence score
@@ -164,7 +166,7 @@ class PairingGraph(BaseModel):
         else:
             return bbPredictions, offsetPredictions, None
 
-    def createGraph(self,bbs,features):
+    def createGraph(self,bbs,features,debug_image=None):
         ##tic=timeit.default_timer()
         candidates = self.selectCandidateEdges(bbs)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
@@ -175,19 +177,21 @@ class PairingGraph(BaseModel):
         #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.edgeWindowSize,self.edgeWindowSize)).to(features.device())
 
         #get corners from bb predictions
-        r = bbs[:,3]
-        h = bbs[:,4]
-        w = bbs[:,5]
+        x = bbs[:,0]
+        y = bbs[:,1]
+        r = bbs[:,2]
+        h = bbs[:,3]
+        w = bbs[:,4]
         cos_r = torch.cos(r)
         sin_r = torch.sin(r)
-        tlX = -w*cos_r + -h*sin_r
-        tlY =  w*sin_r + -h*cos_r
-        trX =  w*cos_r + -h*sin_r
-        trY = -w*sin_r + -h*cos_r
-        brX =  w*cos_r + h*sin_r
-        brY = -w*sin_r + h*cos_r
-        blX = -w*cos_r + h*sin_r
-        blY =  w*sin_r + h*cos_r
+        tlX = -w*cos_r + -h*sin_r +x
+        tlY =  w*sin_r + -h*cos_r +y
+        trX =  w*cos_r + -h*sin_r +x
+        trY = -w*sin_r + -h*cos_r +y
+        brX =  w*cos_r + h*sin_r +x
+        brY = -w*sin_r + h*cos_r +y
+        blX = -w*cos_r + h*sin_r +x
+        blY =  w*sin_r + h*cos_r +y
 
         tlX = tlX.cpu()
         tlY = tlY.cpu()
@@ -211,6 +215,26 @@ class PairingGraph(BaseModel):
             rois[i,3]=maxX
             rois[i,4]=maxY
             i+=1
+
+            ###DEBUG
+            if debug_image is not None and i<10:
+                assert(self.rotation==False)
+                #print('crop {}: ({},{}), ({},{})'.format(i,minX.item(),maxX.item(),minY.item(),maxY.item()))
+                #print(bbs[index1])
+                #print(bbs[index2])
+                crop = debug_image[0,:,int(minY.item()):int(maxY.item()),int(minX.item()):int(maxX.item())+1].cpu()
+                crop = (2-crop)/2
+                if crop.size(0)==1:
+                    crop = crop.expand(3,crop.size(1),crop.size(2))
+                crop[0,int(tlY[index1].item()-minY.item()):int(brY[index1].item()-minY.item())+1,int(tlX[index1].item()-minX.item()):int(brX[index1].item()-minX.item())+1]*=0.5
+                crop[1,int(tlY[index2].item()-minY.item()):int(brY[index2].item()-minY.item())+1,int(tlX[index2].item()-minX.item()):int(brX[index2].item()-minX.item())+1]*=0.5
+                crop = crop.numpy().transpose([1,2,0])
+                cv2.imshow('crop {}'.format(i),crop)
+                #import pdb;pdb.set_trace()
+            ###
+        if debug_image is not None:
+            cv2.waitKey()
+
         #crop from feats, ROI pool
         stackedEdgeFeatWindows = self.roi_align(features,rois.to(features.device))
 

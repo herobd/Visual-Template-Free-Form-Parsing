@@ -91,9 +91,9 @@ class GraphPairTrainer(BaseTrainer):
 
     def useGT(self,iteration):
         if self.stop_from_gt is not None and iteration>=self.stop_from_gt:
-            return False
+            return random.random()>0.9 #I think it's best to always have some GT examples
         elif self.partial_from_gt is not None and iteration>=self.partial_from_gt:
-            return random.random()>0.5
+            return random.random()> 0.9*(iteration-self.partial_from_gt)/(self.stop_from_gt-self.partial_from_gt)
         else:
             return True
 
@@ -154,7 +154,7 @@ class GraphPairTrainer(BaseTrainer):
         image, targetBoxes, adj = self._to_tensor(thisInstance)
         useGT = self.useGT(iteration)
         if useGT:
-            outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes, 
+            outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes,True,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,edgePred)
@@ -415,7 +415,7 @@ class GraphPairTrainer(BaseTrainer):
                     predsNeg.append(predsAll[i])
                     if sigPredsAll[i]>self.thresh_edge:
                         falsePred+=1
-            elif predsAll[i]>self.thresh_edge:
+            elif sigPredsAll[i]>self.thresh_edge:
                 badPred+=1
             #else skip this
             i+=1

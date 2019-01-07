@@ -80,9 +80,9 @@
         "Xconf_thresh_init": 0.9,
         "Xconf_thresh_change_iters": 2000,
 
-        "unfreeze_detector": 200,
-        "partial_from_gt": 1000,
-        "stop_from_gt": 20000
+        "unfreeze_detector": 100,
+        "partial_from_gt": 200,
+        "stop_from_gt": 10000
     },
     "arch": "PairingGraph", 
     "model": {

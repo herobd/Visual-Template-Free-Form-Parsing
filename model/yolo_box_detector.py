@@ -229,6 +229,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
             self.final_features=output
         if beginningOfLast:
             self.net_down_modules[-2][0].register_forward_hook(save_final) #after max pool
+            self.last_channels= self.last_channels//2 #HACK
         else:
             self.net_down_modules[-2].register_forward_hook(save_final)
     def setDEBUG(self):

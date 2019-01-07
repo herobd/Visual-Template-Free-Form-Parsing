@@ -224,10 +224,14 @@ class YoloBoxDetector(nn.Module): #BaseModel
         def save_final(module,input,output):
             self.final_features=output
         self.net_down_modules[-2].register_forward_hook(save_final)
-    def setForGraphPairing(self):
+    def setForGraphPairing(self,beginningOfLast=False):
         def save_final(module,input,output):
             self.final_features=output
-        self.net_down_modules[-2].register_forward_hook(save_final)
+        if beginningOfLast:
+            self.net_down_modules[-2][0].register_forward_hook(save_final) #after max pool
+            self.last_channels= self.last_channels//2 #HACK
+        else:
+            self.net_down_modules[-2].register_forward_hook(save_final)
     def setDEBUG(self):
         #self.debug=[None]*5
         #for i in range(0,1):

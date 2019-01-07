@@ -96,9 +96,9 @@
             "node_channels": 0,
             "edge_channels": 1
         },
-        "featurizer_start_h": 8,
-        "featurizer_start_w": 8,
-        "featurizer_conv": [512,"M",512],
+        "featurizer_start_h": 16,
+        "featurizer_start_w": 16,
+        "featurizer_conv": [256,"M",512],
         "featurizer_fc": []
     }
 }

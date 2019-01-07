@@ -439,11 +439,11 @@ class GraphPairTrainer(BaseTrainer):
         else:
             recall = 1
         if falsePred>0:
-            prec = truePred/falsePred
+            prec = truePred/(truePred+falsePred)
         else:
             prec = 1
         if falsePred+badPred>0:
-            fullPrec = truePred/(falsePred+badPred)
+            fullPrec = truePred/(truePred+falsePred+badPred)
         else:
             fullPrec = 1
         return predsPos,predsNeg, recall, prec ,fullPrec
@@ -497,7 +497,7 @@ class GraphPairTrainer(BaseTrainer):
         else:
             recall = 1
         if falsePred>0:
-            prec = truePred/falsePred
+            prec = truePred/(truePred+falsePred)
         else:
             prec = 1
         return predsPos,predsNeg, recall, prec, prec

@@ -138,11 +138,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         edgeRecall = 1
     if falsePred>0:
-        edgePrec = truePred/falsePred
+        edgePrec = truePred/(truePred+falsePred)
     else:
         edgePrec = 1
     if falsePred+badPred>0:
-        fullPrec = truePred/(falsePred+badPred)
+        fullPrec = truePred/(truePred+falsePred+badPred)
     else:
         fullPrec = 1
 

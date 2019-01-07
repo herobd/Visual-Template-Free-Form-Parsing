@@ -80,7 +80,7 @@
         "conf_thresh_change_iters": 5000,
 
         "unfreeze_detector": 4000,
-        "partial_from_gt": 4000,
+        "partial_from_gt": 8000,
         "stop_from_gt": 200000
     },
     "arch": "PairingGraph", 

@@ -200,6 +200,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
     dists_y=defaultdict(list)
     scaleDiffs=defaultdict(list)
     rotDiffs=defaultdict(list)
+    queryMask = queryMask.numpy()
     for b in range(batchSize):
         #print('image {} has {} {}'.format(startIndex+b,targetBBsSizes[name][b],name))
         #bbImage = np.ones_like(image)

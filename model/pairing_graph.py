@@ -56,7 +56,10 @@ class PairingGraph(BaseModel):
         self.pool_h = config['featurizer_start_h']
         self.pool_w = config['featurizer_start_w']
 
-        self.useShapeFeatures=False
+        self.useShapeFeats= config['use_rel_shape_feats'] if 'use_rel_shape_feats' in config else False
+        #HACK, fixed values
+        self.normalizeHorz=400
+        self.normalizeVert=50
 
         assert(self.detector.scale[0]==self.detector.scale[1])
         detect_scale = self.detector.scale[0]
@@ -80,24 +83,26 @@ class PairingGraph(BaseModel):
         #self.scale=(scaleX,scaleY) this holds scale for detector
         fsizeX = self.pool_w//scaleX
         fsizeY = self.pool_h//scaleY
-        layers, last_ch = make_layers(featurizer_conv,norm=feat_norm) #we just don't dropout here
+        layers, last_ch_edgeC = make_layers(featurizer_conv,norm=feat_norm) #we just don't dropout here
         layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
         self.edgeFeaturizerConv = nn.Sequential(*layers)
 
-        if self.useShapeFeatures:
-           edge_channels-=8+2*self.numBBTypes #we'll append some extra feats
+        if self.useShapeFeats:
+           added_feats=8+2*self.numBBTypes #we'll append some extra feats
+        else:
+           added_feats=0
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if config['graph_config']['arch']=='BinaryPairNet':
             feat_norm=None
-            featurizer_fc = [last_ch] + featurizer_fc + ['FCnR{}'.format(edge_channels)]
+            featurizer_fc = [last_ch_edgeC+added_feats] + featurizer_fc + ['FCnR{}'.format(edge_channels)]
         else:
-            featurizer_fc = [last_ch] + featurizer_fc + ['FC{}'.format(edge_channels)]
+            featurizer_fc = [last_ch_edgeC+added_feats] + featurizer_fc + ['FC{}'.format(edge_channels)]
         layers, last_ch_edge = make_layers(featurizer_fc,norm=feat_norm) #we just don't dropout here
         self.edgeFeaturizerFC = nn.Sequential(*layers)
 
         if self.useNodeVisualFeats:
             featurizer = config['node_featurizer'] if 'node_featurizer' in config else []
-            featurizer = [last_ch] + featurizer + [node_channels]
+            featurizer = [self.detector.last_channels] + featurizer + [node_channels]
             layers, last_ch_node = make_layers(featurizer,norm=feat_norm)
             self.nodeFeaturizer = nn.Sequential(*layers)
 
@@ -159,7 +164,16 @@ class PairingGraph(BaseModel):
         else:
             if gtBBs is None:
                 return bbPredictions, offsetPredictions, None
-            useBBs = gtBBs[0]
+            useBBs = gtBBs[0,:,0:5]
+            if self.useShapeFeats:
+                classes = gtBBs[0,:,13:]
+                #pos = random.uniform(0.51,0.99)
+                #neg = random.uniform(0.01,0.49)
+                #classes = torch.where(classes==0,torch.tensor(neg).to(classes.device),torch.tensor(pos).to(classes.device))
+                pos = torch.rand_like(classes)/2 +0.5
+                neg = torch.rand_like(classes)/2
+                classes = torch.where(classes==0,neg,pos)
+                useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>0:
             node_features, adjacencyMatrix, edge_features = self.createGraph(useBBs,final_features)
 
@@ -250,7 +264,7 @@ class PairingGraph(BaseModel):
         #create and add masks
         masks = torch.zeros(stackedEdgeFeatWindows.size(0),2,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
         if self.useShapeFeats:
-            shapeFeats = torch.tensor(len(candidates),8+2*self.numBBTypes)
+            shapeFeats = torch.FloatTensor(len(candidates),8+2*self.numBBTypes)
         i=0
         for (index1, index2) in candidates:
             #... or make it so index1 is always to top-left one
@@ -304,15 +318,16 @@ class PairingGraph(BaseModel):
         stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,masks.to(stackedEdgeFeatWindows.device)),dim=1)
         #import pdb; pdb.set_trace()
         edgeFeats = self.edgeFeaturizerConv(stackedEdgeFeatWindows) #preparing for graph feature size
-        edgeFeats = self.edgeFeaturizerFC(edgeFeats.view(edgeFeats.size(0),edgeFeats.size(1)))
-        if self.useShapeFeatures:
+        edgeFeats = edgeFeats.view(edgeFeats.size(0),edgeFeats.size(1))
+        if self.useShapeFeats:
             edgeFeats = torch.cat((edgeFeats,shapeFeats.to(edgeFeats.device)),dim=1)
+        edgeFeats = self.edgeFeaturizerFC(edgeFeats)
         #?
         #?crop bbs
         #?run bbs through net
         if self.useNodeVisualFeats:
             assert(features.size(0)==1)
-            node_features = torch.tensor(bbs.size(0),features.size(1))
+            node_features = torch.FloatTensor(bbs.size(0),features.size(1))
             for i in range(bbs.size(0)):
                 minY = round(min(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))
                 maxY = round(max(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))

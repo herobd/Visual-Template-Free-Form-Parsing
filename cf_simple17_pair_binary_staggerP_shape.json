@@ -96,7 +96,7 @@
         },
         "featurizer_start_h": 8,
         "featurizer_start_w": 8,
-        "featurizer_conv": [512,"M",502],
+        "featurizer_conv": [512,"M",496],
         "featurizer_fc": []
     }
 }

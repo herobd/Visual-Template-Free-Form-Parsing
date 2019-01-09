@@ -62,7 +62,8 @@ class PairingGraph(BaseModel):
         self.pool_w = config['featurizer_start_w']
 
 
-        self.useShapeFeats= config['use_rel_shape_feats'] if 'use_rel_shape_feats' in config else False
+        assert('use_rel_shape_feats' not in config)
+        self.useShapeFeats= config['use_shape_feats'] if 'use_shape_feats' in config else False
         #HACK, fixed values
         self.normalizeHorz=400
         self.normalizeVert=50
@@ -96,8 +97,10 @@ class PairingGraph(BaseModel):
 
         if self.useShapeFeats:
            added_feats=8+2*self.numBBTypes #we'll append some extra feats
+           added_featsBB=3+self.numBBTypes
         else:
            added_feats=0
+           added_featsBB=0
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if config['graph_config']['arch']=='BinaryPairNet':
             feat_norm=None
@@ -111,7 +114,7 @@ class PairingGraph(BaseModel):
             #TODO un-hardcode
             #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
             #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
-            self.bbFeaturizerConv = nn.Conv2d(self.detector.last_channels,graph_in_channels,kernel_size=(2,3))
+            self.bbFeaturizerConv = nn.Conv2d(self.detector.last_channels,graph_in_channels-added_featsBB,kernel_size=(2,3))
             featurizer = config['node_featurizer'] if 'node_featurizer' in config else []
             assert(len(featurizer)==0)
 
@@ -327,8 +330,8 @@ class PairingGraph(BaseModel):
                 shapeFeats[i,5] = bbs[index2,3]/self.normalizeVert
                 shapeFeats[i,6] = bbs[index1,4]/self.normalizeHorz
                 shapeFeats[i,7] = bbs[index2,4]/self.normalizeHorz
-                shapeFeats[i,8:8+self.numBBTypes] = bbs[index1,5:]
-                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = bbs[index2,5:]
+                shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,5:])
+                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,5:])
 
             i+=1
 
@@ -344,6 +347,8 @@ class PairingGraph(BaseModel):
         #?run bbs through net
         if self.useBBVisualFeats:
             assert(features.size(0)==1)
+            if self.useShapeFeats:
+                bb_shapeFeats=torch.FloatTensor(bbs.size(0),3+self.numBBTypes)
             rois = torch.zeros((bbs.size(0),5))
             for i in range(bbs.size(0)):
                 minY = round(min(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))
@@ -354,11 +359,18 @@ class PairingGraph(BaseModel):
                 rois[i,2]=minY
                 rois[i,3]=maxX
                 rois[i,4]=maxY
+                if self.useShapeFeats:
+                    bb_shapeFeats[i,0]= (bbs[i,2]+math.pi)/(2*math.pi)
+                    bb_shapeFeats[i,1]=bbs[i,3]/self.normalizeVert
+                    bb_shapeFeats[i,2]=bbs[i,4]/self.normalizeHorz
+                    bb_shapeFeats[i,3:]=torch.sigmoid(bbs[i,5:])
                 #bb_features[i]= F.avg_pool2d(features[0,:,minY:maxY+1,minX:maxX+1], (1+maxY-minY,1+maxX-minX)).view(-1)
             bb_features = self.avg_box(features,rois.to(features.device))
             bb_features = self.bbFeaturizerConv(bb_features)
             bb_features = bb_features.view(bb_features.size(0),bb_features.size(1))
-            #bb_features = self.bbFeaturizerFC(bb_features)
+            if self.useShapeFeats:
+                bb_features = torch.cat( (bb_features,bb_shapeFeats.to(bb_features.device)), dim=1 )
+            #bb_features = self.bbFeaturizerFC(bb_features) if uncommented, change rot on bb_shapeFeats
         else:
             bb_features = None
         

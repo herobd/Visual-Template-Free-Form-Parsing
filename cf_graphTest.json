@@ -101,6 +101,7 @@
             "dropout": false
         },
         "use_rel_rel_edges": true,
+        "use_shape_feats": true,
         "featurizer_start_h": 8,
         "featurizer_start_w": 8,
         "featurizer_conv": [256,"M",256],

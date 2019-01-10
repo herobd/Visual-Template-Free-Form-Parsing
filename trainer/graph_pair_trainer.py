@@ -166,8 +166,10 @@ class GraphPairTrainer(BaseTrainer):
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
         if edgePred is not None:
             numEdgePred = len(edgePred[0])
+            lenTrue = predPairingShouldBeTrue.size(0)
+            lenFalse = predPairingShouldBeFalse.size(0)
         else:
-            numEdgePred = 0
+            numEdgePred = lenTrue = lenFalse = 0
         #if iteration>25:
         #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
@@ -239,7 +241,7 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'edgeLoss': edgeLoss,
-            'numEdgePred':numEdgePred,
+            'edgePredLens':np.array([numEdgePred,lenTrue,lenFalse]),
             'edge_recall':eRecall,
             'edge_prec': ePrec,
             'edge_fullPrec':fullPrec,
@@ -439,11 +441,11 @@ class GraphPairTrainer(BaseTrainer):
         else:
             recall = 1
         if falsePred>0:
-            prec = truePred/falsePred
+            prec = truePred/(truePred+falsePred)
         else:
             prec = 1
         if falsePred+badPred>0:
-            fullPrec = truePred/(falsePred+badPred)
+            fullPrec = truePred/(truePred+falsePred+badPred)
         else:
             fullPrec = 1
         return predsPos,predsNeg, recall, prec ,fullPrec
@@ -497,7 +499,7 @@ class GraphPairTrainer(BaseTrainer):
         else:
             recall = 1
         if falsePred>0:
-            prec = truePred/falsePred
+            prec = truePred/(truePred+falsePred)
         else:
             prec = 1
         return predsPos,predsNeg, recall, prec, prec

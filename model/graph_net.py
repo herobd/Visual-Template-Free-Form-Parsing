@@ -19,11 +19,13 @@ class GraphNet(nn.Module):
                 act_layers = []
                 if 'norm' in config:
                     if config['norm']=='batch_norm':
-                        act_layers.append(nn.BatchNorm1d(out_ch)) #essentially all the nodes compose a batch
+                        act_layers.append(nn.BatchNorm1d(out_ch)) #essentially all the nodes compose a batch. There aren't enough some times
+                    elif config['norm']=='group_norm':
+                        act_layers.append(nn.GroupNorm(4,out_ch)) 
                     elif config['norm']=='split_norm':
                         #act_layers.append(nn.InstanceNorm1d(out_ch))
-                        self.split_normBB = nn.BatchNorm1d(out_ch)
-                        self.split_normRel = nn.BatchNorm1d(out_ch)
+                        self.split_normBB = nn.GroupNorm(4,out_ch)
+                        self.split_normRel = nn.GroupNorm(4,out_ch)
                 if 'dropout' in config:
                     if type(config['dropout']) is float:
                         act_layers.append(nn.Dropout(p=config['dropout'],inplace=True))
@@ -72,10 +74,12 @@ class GraphNet(nn.Module):
         if 'norm' in config:
             if config['norm']=='batch_norm':
                 act_layers.append(nn.BatchNorm1d(prevCh)) #essentially all the nodes compose a batch
+            elif config['norm']=='group_norm':
+                act_layers.append(nn.GroupNorm(4,prevCh)) 
             elif config['norm']=='split_norm':
                 #act_layers.append(nn.InstanceNorm1d(prevCh))
-                self.split_normBB = nn.BatchNorm1d(prevCh)
-                self.split_normRel = nn.BatchNorm1d(prevCh)
+                self.split_normBB = nn.GroupNorm(4,prevCh)
+                self.split_normRel = nn.GroupNorm(4,prevCh)
         if 'dropout' in config:
             if type(config['dropout']) is float:
                 act_layers.append(nn.Dropout(p=config['dropout'],inplace=True))

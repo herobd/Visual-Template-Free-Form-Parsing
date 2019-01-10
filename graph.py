@@ -6,6 +6,7 @@ import logging
 import argparse
 import torch
 from collections import defaultdict
+import numpy as np
 
 logging.basicConfig(level=logging.INFO, format='')
 
@@ -21,7 +22,11 @@ def graph(log,plot=True):
     
     print('summed')
     for metric, data in graphs.items():
-        print('{} max: {}, min {}'.format(metric,max(data['values']),min(data['values'])))
+        #print('{} max: {}, min {}'.format(metric,max(data['values']),min(data['values'])))
+        ndata = np.array(data['values'])
+        maxV = ndata.max(axis=0)
+        minV = ndata.min(axis=0)
+        print('{} max: {}, min {}'.format(metric,maxV,minV))
 
     if plot:
         import matplotlib.pyplot as plt

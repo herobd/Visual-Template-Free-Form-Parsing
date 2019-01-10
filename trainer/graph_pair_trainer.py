@@ -331,7 +331,7 @@ class GraphPairTrainer(BaseTrainer):
 
                 image, targetBoxes, adjM = self._to_tensor(instance)
 
-                outputBoxes, outputOffsets, relPre, relIndexes = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
+                outputBoxes, outputOffsets, relPred, relIndexes = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
@@ -340,14 +340,23 @@ class GraphPairTrainer(BaseTrainer):
                 total_rel_recall+=recall
                 total_rel_prec+=prec
                 total_rel_fullPrec+=fullPrec
-                relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+                #relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+                relLoss=None
                 if predPairingShouldBeTrue is not None:
-                    relLoss += self.loss['rel'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue))
+                    relLoss = self.loss['rel'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue).to(image.device))
                 if predPairingShouldBeFalse is not None:
-                    relLoss += self.loss['rel'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse))
+                    relFalseLoss = self.loss['rel'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse).to(image.device))
+                    if relLoss is not None:
+                        relLoss += relFalseLoss
+                    else:
+                        relLoss = relFalseLoss
+                if relLoss is None:
+                    relLoss = torch.tensor(0.0)
+                else:
+                    relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
                     boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
-                    loss = relLoss*self.lossWeights['rel'] + boxLoss*self.lossWeights['box']
+                    loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
                     loss = relLoss*self.lossWeights['rel']
@@ -369,12 +378,13 @@ class GraphPairTrainer(BaseTrainer):
                 mPrecision += np.array(prec_5)
 
                 total_val_loss += loss.item()
-                loss=None
+                loss=relFalseLoss=relLoss=boxLoss=None
                 image=None
                 queryMask=None
                 targetBoxes=None
                 outputBoxes=None
                 outputOffsets=None
+                relPred=relIndexes=predPairingShouldBeTrue=predPairingShouldBeFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),

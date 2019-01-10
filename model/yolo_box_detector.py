@@ -224,16 +224,18 @@ class YoloBoxDetector(nn.Module): #BaseModel
         def save_final(module,input,output):
             self.final_features=output
         self.net_down_modules[-2].register_forward_hook(save_final)
-    def setForGraphPairing(self,beginningOfLast=False,featuresFromHere=20):
+    def setForGraphPairing(self,beginningOfLast=False,featuresFromHere=-1):
         def save_final(module,input,output):
             self.final_features=output
         if beginningOfLast:
             self.net_down_modules[-2][0].register_forward_hook(save_final) #after max pool
             self.last_channels= self.last_channels//2 #HACK
         else:
-            import pdb;pdb.set_trace()
-            checkHowToIdIfLayerIsReLU=0#type?
-            self.net_down_modules[-2][featuresFromHere].register_forward_hook(save_final)
+            if type( self.net_down_modules[-2][featuresFromHere]) == torch.nn.modules.activation.ReLU:
+                self.net_down_modules[-2][featuresFromHere].register_forward_hook(save_final)
+            else:
+                print('Layer {} of the final conv block was specified, but it is not a ReLU layer. Did you choose the right layer?'.format(featuresFromHere))
+                exit()
     def setDEBUG(self):
         #self.debug=[None]*5
         #for i in range(0,1):

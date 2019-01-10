@@ -5,7 +5,7 @@ import numpy as np
 from model import *
 from model.binary_pair_net import BinaryPairNet
 #from model.roi_align.roi_align import RoIAlign
-from model.roi_align import RoIAlign
+from model.roi_align import ROIAlign
 from skimage import draw
 from model.net_builder import make_layers
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist
@@ -58,7 +58,7 @@ class PairingGraph(BaseModel):
 
         assert(self.detector.scale[0]==self.detector.scale[1])
         detect_scale = self.detector.scale[0]
-        self.roi_align = RoIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
+        self.roi_align = ROIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
 
         feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
         featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]

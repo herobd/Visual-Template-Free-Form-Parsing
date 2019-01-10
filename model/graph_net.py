@@ -43,8 +43,14 @@ class GraphNet(nn.Module):
                 node_featuresX = self.graph_conv(node_featuresX,adjacencyMatrix)
                 return node_featuresX
         
+        #how many times to re-apply graph conv layers
+        self.repetitions = config['repetitions'] if 'repetitions' in config else 1 
+
         layer_desc = config['layers'] if 'layers' in config else [256,256,256]
         prevCh=config['in_channels']
+        if self.repetitions>1:
+            for n in layer_desc:
+                assert(n==prevCh)
         self.layers=nn.ModuleList()
         for ch in layer_desc:
             self.layers.append( GraphConvWithAct(prevCh,ch,config) )
@@ -61,6 +67,7 @@ class GraphNet(nn.Module):
         else:
             self.rel_out=lambda x:  None
 
+        self.split_normBB=None
         act_layers = []
         if 'norm' in config:
             if config['norm']=='batch_norm':
@@ -76,16 +83,23 @@ class GraphNet(nn.Module):
                 act_layers.append(nn.Dropout(p=0.3,inplace=True))
         act_layers.append(nn.ReLU(inplace=True))
         self.act_layers = nn.Sequential(*act_layers)
-        
 
-    def forward(self, node_features, adjacencyMatrix, numBBs, repititions=1):
+
+    def forward(self, node_features, adjacencyMatrix, numBBs):
+        #it is assumed these features are not activated
         node_featuresX = node_features
-        for i in range(repititions):
+        for i in range(self.repetitions):
             side=node_featuresX
             for graph_conv in self.layers:
                 side = graph_conv(side,adjacencyMatrix,numBBs)
             node_featuresX=side+node_featuresX
+        #the graph conv layers are residual, so activation is applied here
+        if self.split_normBB is not None:
+            bb = self.split_normBB(node_featuresX[:numBBs])
+            rel = self.split_normRel(node_featuresX[numBBs:])
+            node_featuresX = torch.cat((bb,rel),dim=0)
         node_featuresX = self.act_layers(node_featuresX)
+
         bb_features = node_featuresX[:numBBs]
         rel_features = node_featuresX[numBBs:]
         return self.bb_out(bb_features), self.rel_out(rel_features)

@@ -114,7 +114,10 @@ class PairingGraph(BaseModel):
             #TODO un-hardcode
             #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
             #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
-            self.bbFeaturizerConv = nn.Conv2d(self.detector.last_channels,graph_in_channels-added_featsBB,kernel_size=(2,3))
+            self.bbFeaturizerConv = nn.Sequential( 
+                    nn.Conv2d(self.detector.last_channels,graph_in_channels-added_featsBB,kernel_size=(2,3)),
+                    nn.GroupNorm(13,graph_in_channels-added_featsBB)
+                    )
             featurizer = config['node_featurizer'] if 'node_featurizer' in config else []
             assert(len(featurizer)==0)
 
@@ -190,9 +193,11 @@ class PairingGraph(BaseModel):
                 neg = torch.rand_like(classes)/2
                 classes = torch.where(classes==0,neg,pos)
                 useBBs = torch.cat((useBBs,classes),dim=1)
-        if useBBs.size(0)>0:
+        if useBBs.size(0)>1:
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
             bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,final_features)
+            if bbAndRel_features is None:
+                return bbPredictions, offsetPredictions, None, None
 
             ##tic=timeit.default_timer()
             #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
@@ -214,7 +219,7 @@ class PairingGraph(BaseModel):
         candidates = self.selectCandidateEdges(bbs)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
         if len(candidates)==0:
-            return None,None,None
+            return None,None,None,None,None
         ##tic=timeit.default_timer()
 
         #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.relWindowSize,self.relWindowSize)).to(features.device())

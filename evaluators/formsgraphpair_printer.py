@@ -55,7 +55,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    print(instance)
     #    print(startIndex)
     #data, targetBB, targetBBSizes = instance
-    lossWeights = config['loss_weights'] if 'loss_weights' in config else {"box": 1, "edge":1}
+    lossWeights = config['loss_weights'] if 'loss_weights' in config else {"box": 1, "rel":1}
     if lossFunc is None:
         yolo_loss = YoloLoss(model.numBBTypes,model.rotation,model.scale,model.anchors,**config['loss_params']['box'])
     else:
@@ -82,7 +82,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets, edgePred = model(dataT)
+    outputBBs, outputOffsets, relPred, relIndexes = model(dataT)
 
     if targetBBsT is not None:
         targetSize=targetBBsT.size(1)
@@ -90,10 +90,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         targetSize=0
     lossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize])
 
-    #TODO edge loss
+    #TODO rel loss
 
-    edgeCand = edgePred[0]
-    edgePred = torch.sigmoid(edgePred[1])
+    relCand = relIndexes
+    relPred = torch.sigmoid(relPred)
 
     data = data.numpy()
     #threshed in model
@@ -121,8 +121,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         targIndex = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
     truePred=falsePred=badPred=0
     i=0
-    for n0,n1 in edgeCand:
-        if edgePred[i]>EDGE_THRESH:
+    for n0,n1 in relCand:
+        if relPred[i]>EDGE_THRESH:
             t0 = targIndex[n0].item()
             t1 = targIndex[n1].item()
             if t0>=0 and t1>=0:
@@ -134,15 +134,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 badPred+=1
         i+=1
     if len(adjacency)>0:
-        edgeRecall = truePred/len(adjacency)
+        relRecall = truePred/len(adjacency)
     else:
-        edgeRecall = 1
+        relRecall = 1
     if falsePred>0:
-        edgePrec = truePred/falsePred
+        relPrec = truePred/(truePred+falsePred)
     else:
-        edgePrec = 1
+        relPrec = 1
     if falsePred+badPred>0:
-        fullPrec = truePred/(falsePred+badPred)
+        fullPrec = truePred/(truePred+falsePred+badPred)
     else:
         fullPrec = 1
 
@@ -238,23 +238,23 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             y2 = round(targetBBs[0,j,1].item())
             cv2.line(image,(x1,y1),(x2,y2),(0.25,0,0.25),3)
 
-        numedgepred=0
-        for i in range(len(edgeCand)):
-            #print('{},{} : {}'.format(edgeCand[i][0],edgeCand[i][1],edgePred[i]))
-            if edgePred[i]>EDGE_THRESH:
-                ind1 = edgeCand[i][0]
-                ind2 = edgeCand[i][1]
+        numrelpred=0
+        for i in range(len(relCand)):
+            #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
+            if relPred[i]>EDGE_THRESH:
+                ind1 = relCand[i][0]
+                ind2 = relCand[i][1]
                 x1 = round(bbs[ind1,1])
                 y1 = round(bbs[ind1,2])
                 x2 = round(bbs[ind2,1])
                 y2 = round(bbs[ind2,2])
 
-                shade = (edgePred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
+                shade = (relPred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
 
                 #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
                 cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
-                numedgepred+=1
-        print('number of pred edges: {}'.format(numedgepred))
+                numrelpred+=1
+        print('number of pred rels: {}'.format(numrelpred))
 
         for predI in range(bbs.shape[0]):
             targI=targIndex[predI].item()
@@ -268,7 +268,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
 
-        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_edges_prec:{:.2f}_recall:{:.2f}_fullPrec:{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],edgePrec,edgeRecall,fullPrec)
+        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_prec:{:.2f}_recall:{:.2f}_fullPrec:{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],relPrec,relRecall,fullPrec)
         #for j in range(metricsOut.shape[1]):
         #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
         saveName+='.png'

@@ -1,8 +1,10 @@
 from base import BaseModel
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from model import *
+from model.graph_net import GraphNet
 from model.binary_pair_net import BinaryPairNet
 #from model.roi_align.roi_align import RoIAlign
 from model.roi_align import ROIAlign
@@ -35,7 +37,8 @@ class PairingGraph(BaseModel):
             detector_config = config['detector_config']
             self.detector = eval(detector_config['arch'])(detector_config)
         useBeginningOfLast = config['use_beg_det_feats'] if 'use_beg_det_feats' in config else False
-        self.detector.setForGraphPairing(useBeginningOfLast)
+        useFeatsLayer = config['use_detect_layer_feats'] if 'use_detect_layer_feats' in config else -1
+        self.detector.setForGraphPairing(useBeginningOfLast,useFeatsLayer)
         if (config['start_frozen'] if 'start_frozen' in config else False):
             for param in self.detector.parameters(): 
                 param.will_use_grad=param.requires_grad 
@@ -51,14 +54,26 @@ class PairingGraph(BaseModel):
         self.anchors = self.detector.anchors
         self.confThresh = config['conf_thresh'] if 'conf_thresh' in config else 0.5
 
-        node_channels = config['graph_config']['node_channels']
-        edge_channels = config['graph_config']['edge_channels']
+        graph_in_channels = config['graph_config']['in_channels'] if 'in_channels' in config['graph_config'] else 1
+        self.useBBVisualFeats=True
+        if config['graph_config']['arch']=='BinaryPairNet':
+            self.useBBVisualFeats=False
+        self.includeRelRelEdges= config['use_rel_rel_edges'] if 'use_rel_rel_edges' in config else True
+        #rel_channels = config['graph_config']['rel_channels']
         self.pool_h = config['featurizer_start_h']
         self.pool_w = config['featurizer_start_w']
+
+
+        assert('use_rel_shape_feats' not in config)
+        self.useShapeFeats= config['use_shape_feats'] if 'use_shape_feats' in config else False
+        #HACK, fixed values
+        self.normalizeHorz=400
+        self.normalizeVert=50
 
         assert(self.detector.scale[0]==self.detector.scale[1])
         detect_scale = self.detector.scale[0]
         self.roi_align = ROIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
+        self.avg_box = ROIAlign(2,3,1.0/detect_scale)
 
         feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
         featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
@@ -78,19 +93,39 @@ class PairingGraph(BaseModel):
         #self.scale=(scaleX,scaleY) this holds scale for detector
         fsizeX = self.pool_w//scaleX
         fsizeY = self.pool_h//scaleY
-        layers, last_ch = make_layers(featurizer_conv,norm=feat_norm) #we just don't dropout here
+        layers, last_ch_relC = make_layers(featurizer_conv,norm=feat_norm) #we just don't dropout here
         layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
-        self.edgeFeaturizerConv = nn.Sequential(*layers)
+        self.relFeaturizerConv = nn.Sequential(*layers)
 
+        if self.useShapeFeats:
+           added_feats=8+2*self.numBBTypes #we'll append some extra feats
+           added_featsBB=3+self.numBBTypes
+        else:
+           added_feats=0
+           added_featsBB=0
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if config['graph_config']['arch']=='BinaryPairNet':
             feat_norm=None
-            featurizer_fc = [last_ch] + featurizer_fc + ['FCnR{}'.format(edge_channels)]
+            featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
         else:
-            featurizer_fc = [last_ch] + featurizer_fc + ['FC{}'.format(edge_channels)]
-        layers, last_ch = make_layers(featurizer_fc,norm=feat_norm) #we just don't dropout here
-        self.edgeFeaturizerFC = nn.Sequential(*layers)
+            featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
+        layers, last_ch_rel = make_layers(featurizer_fc,norm=feat_norm) #we just don't dropout here
+        self.relFeaturizerFC = nn.Sequential(*layers)
 
+        if self.useBBVisualFeats:
+            #TODO un-hardcode
+            #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
+            #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
+            self.bbFeaturizerConv = nn.Sequential( 
+                    nn.Conv2d(self.detector.last_channels,graph_in_channels-added_featsBB,kernel_size=(2,3)),
+                    nn.GroupNorm(13,graph_in_channels-added_featsBB)
+                    )
+            featurizer = config['node_featurizer'] if 'node_featurizer' in config else []
+            assert(len(featurizer)==0)
+
+            #featurizer = [self.detector.last_channels] + featurizer + ['FCnR{}'.format(graph_in_channels)]
+            #layers, last_ch_node = make_layers(featurizer,norm=feat_norm)
+            #self.bbFeaturizerFC = nn.Sequential(*layers)
 
 
         #self.pairer = GraphNet(config['graph_config'])
@@ -145,36 +180,51 @@ class PairingGraph(BaseModel):
         #Otherwise we have to to alignment first
         if not useGTBBs:
             if bbPredictions.size(0)==0:
-                return bbPredictions, offsetPredictions, None
+                return bbPredictions, offsetPredictions, None, None
             useBBs = bbPredictions[:,1:] #remove confidence score
         else:
             if gtBBs is None:
-                return bbPredictions, offsetPredictions, None
-            useBBs = gtBBs[0]
-        if useBBs.size(0)>0:
-            node_features, adjacencyMatrix, edge_features = self.createGraph(useBBs,final_features)
+                return bbPredictions, offsetPredictions, None, None
+            useBBs = gtBBs[0,:,0:5]
+            if self.useShapeFeats:
+                classes = gtBBs[0,:,13:]
+                #pos = random.uniform(0.51,0.99)
+                #neg = random.uniform(0.01,0.49)
+                #classes = torch.where(classes==0,torch.tensor(neg).to(classes.device),torch.tensor(pos).to(classes.device))
+                pos = torch.rand_like(classes)/2 +0.5
+                neg = torch.rand_like(classes)/2
+                classes = torch.where(classes==0,neg,pos)
+                useBBs = torch.cat((useBBs,classes),dim=1)
+        if useBBs.size(0)>1:
+            #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
+            bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,final_features)
+            if bbAndRel_features is None:
+                return bbPredictions, offsetPredictions, None, None
 
             ##tic=timeit.default_timer()
-            nodeOuts, edgeOuts = self.pairer(node_features, adjacencyMatrix, edge_features)
+            #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
+            bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+            #bbOuts = graphOut[:numBBs]
+            #relOuts = graphOut[numBBs:]
             ##print('pairer: {}'.format(timeit.default_timer()-tic))
 
             #adjacencyMatrix = torch.zeros((bbPredictions.size(1),bbPredictions.size(1)))
-            #for edge in edgeOuts:
+            #for rel in relOuts:
             #    i,j,a=graphToDetectionsMap(
 
-            return bbPredictions, offsetPredictions, edgeOuts #adjacencyMatrix
+            return bbPredictions, offsetPredictions, relOuts, relIndexes
         else:
-            return bbPredictions, offsetPredictions, None
+            return bbPredictions, offsetPredictions, None, None
 
     def createGraph(self,bbs,features,debug_image=None):
         ##tic=timeit.default_timer()
         candidates = self.selectCandidateEdges(bbs)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
         if len(candidates)==0:
-            return None,None,None
+            return None,None,None,None,None
         ##tic=timeit.default_timer()
 
-        #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.edgeWindowSize,self.edgeWindowSize)).to(features.device())
+        #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.relWindowSize,self.relWindowSize)).to(features.device())
 
         #get corners from bb predictions
         x = bbs[:,0]
@@ -240,6 +290,8 @@ class PairingGraph(BaseModel):
 
         #create and add masks
         masks = torch.zeros(stackedEdgeFeatWindows.size(0),2,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
+        if self.useShapeFeats:
+            shapeFeats = torch.FloatTensor(len(candidates),8+2*self.numBBTypes)
         i=0
         for (index1, index2) in candidates:
             #... or make it so index1 is always to top-left one
@@ -276,32 +328,102 @@ class PairingGraph(BaseModel):
             rr, cc = draw.polygon([tlY2,trY2,brY2,blY2],[tlX2,trX2,brX2,blX2], [self.pool_h,self.pool_w])
             masks[i,1,rr,cc]=1
 
+            if self.useShapeFeats:
+                shapeFeats[i,0] = (bbs[index1,0]-bbs[index2,0])/self.normalizeHorz
+                shapeFeats[i,1] = (bbs[index1,1]-bbs[index2,1])/self.normalizeVert
+                shapeFeats[i,2] = bbs[index1,2]/math.pi
+                shapeFeats[i,3] = bbs[index2,2]/math.pi
+                shapeFeats[i,4] = bbs[index1,3]/self.normalizeVert
+                shapeFeats[i,5] = bbs[index2,3]/self.normalizeVert
+                shapeFeats[i,6] = bbs[index1,4]/self.normalizeHorz
+                shapeFeats[i,7] = bbs[index2,4]/self.normalizeHorz
+                shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,5:])
+                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,5:])
+
             i+=1
 
         stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,masks.to(stackedEdgeFeatWindows.device)),dim=1)
         #import pdb; pdb.set_trace()
-        edgeFeats = self.edgeFeaturizerConv(stackedEdgeFeatWindows) #preparing for graph feature size
-        edgeFeats = self.edgeFeaturizerFC(edgeFeats.view(edgeFeats.size(0),edgeFeats.size(1)))
+        relFeats = self.relFeaturizerConv(stackedEdgeFeatWindows) #preparing for graph feature size
+        relFeats = relFeats.view(relFeats.size(0),relFeats.size(1))
+        if self.useShapeFeats:
+            relFeats = torch.cat((relFeats,shapeFeats.to(relFeats.device)),dim=1)
+        relFeats = self.relFeaturizerFC(relFeats)
         #?
         #?crop bbs
         #?run bbs through net
+        if self.useBBVisualFeats:
+            assert(features.size(0)==1)
+            if self.useShapeFeats:
+                bb_shapeFeats=torch.FloatTensor(bbs.size(0),3+self.numBBTypes)
+            rois = torch.zeros((bbs.size(0),5))
+            for i in range(bbs.size(0)):
+                minY = round(min(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))
+                maxY = round(max(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))
+                minX = round(min(tlX[i].item(),trX[i].item(),blX[i].item(),brX[i].item()))
+                maxX = round(max(tlX[i].item(),trX[i].item(),blX[i].item(),brX[i].item()))
+                rois[i,1]=minX
+                rois[i,2]=minY
+                rois[i,3]=maxX
+                rois[i,4]=maxY
+                if self.useShapeFeats:
+                    bb_shapeFeats[i,0]= (bbs[i,2]+math.pi)/(2*math.pi)
+                    bb_shapeFeats[i,1]=bbs[i,3]/self.normalizeVert
+                    bb_shapeFeats[i,2]=bbs[i,4]/self.normalizeHorz
+                    bb_shapeFeats[i,3:]=torch.sigmoid(bbs[i,5:])
+                #bb_features[i]= F.avg_pool2d(features[0,:,minY:maxY+1,minX:maxX+1], (1+maxY-minY,1+maxX-minX)).view(-1)
+            bb_features = self.avg_box(features,rois.to(features.device))
+            bb_features = self.bbFeaturizerConv(bb_features)
+            bb_features = bb_features.view(bb_features.size(0),bb_features.size(1))
+            if self.useShapeFeats:
+                bb_features = torch.cat( (bb_features,bb_shapeFeats.to(bb_features.device)), dim=1 )
+            #bb_features = self.bbFeaturizerFC(bb_features) if uncommented, change rot on bb_shapeFeats
+        else:
+            bb_features = None
         
-        #We're not adding diagonal (self-edges) here!
+        #We're not adding diagonal (self-rels) here!
         #Expecting special handeling during graph conv
-        #candidateLocs = torch.LongTensor(candidates).t().to(edgeFeats.device)
-        #ones = torch.ones(len(candidates)).to(edgeFeats.device)
+        #candidateLocs = torch.LongTensor(candidates).t().to(relFeats.device)
+        #ones = torch.ones(len(candidates)).to(relFeats.device)
         #adjacencyMatrix = torch.sparse.FloatTensor(candidateLocs,ones,torch.Size([bbs.size(0),bbs.size(0)]))
 
-        #assert(edgeFeats.requries_grad)
-        #edge_features = torch.sparse.FloatTensor(candidateLocs,edgeFeats,torch.Size([bbs.size(0),bbs.size(0),edgeFeats.size(1)]))
-        #assert(edge_features.requries_grad)
+        #assert(relFeats.requries_grad)
+        #rel_features = torch.sparse.FloatTensor(candidateLocs,relFeats,torch.Size([bbs.size(0),bbs.size(0),relFeats.size(1)]))
+        #assert(rel_features.requries_grad)
+        relIndexes=candidates
+        numBB = bbs.size(0)
+        numRel = len(candidates)
+        if bb_features is None:
+            numBB=0
+            bbAndRel_features=relFeats
+            adjacencyMatrix = None
+        else:
+            bbAndRel_features = torch.cat((bb_features,relFeats),dim=0)
+            if self.includeRelRelEdges:
+                relEdges=set()
+                i=0
+                for bb1,bb2 in candidates:
+                    j=0
+                    for bbA,bbB in candidates[i:]:
+                        if i!=j and bb1==bbA or bb1==bbB or bb2==bbA or bb2==bbB:
+                            relEdges.add( (numBB+i,numBB+j) ) #i<j always
+                        j+=1   
+                    i+=1
+                edges = candidates+list(relEdges)
+            else:
+                edges = candidates
+            #add diagonal (self edges)
+            for i in range(bbAndRel_features.size(0)):
+                edges.append((i,i))
+            edgeLocs = torch.LongTensor(edges).t().to(relFeats.device)
+            ones = torch.ones(len(edges)).to(relFeats.device)
+            adjacencyMatrix = torch.sparse.FloatTensor(edgeLocs,ones,torch.Size([bbAndRel_features.size(0),bbAndRel_features.size(0)]))
 
-
-        edge_features = (candidates,edgeFeats)
-        adjacencyMatrix = None
-        node_features = None
+        #rel_features = (candidates,relFeats)
+        #adjacencyMatrix = None
         ##print('create graph: {}'.format(timeit.default_timer()-tic))
-        return node_features, adjacencyMatrix, edge_features
+        #return bb_features, adjacencyMatrix, rel_features
+        return bbAndRel_features, adjacencyMatrix, numBB, numRel, relIndexes
 
 
 
@@ -554,10 +676,10 @@ class PairingGraph(BaseModel):
         self.debug=True
         def save_layerConv0(module,input,output):
             self.debug_conv0=output.cpu()
-        self.edgeFeaturizerConv[0].register_forward_hook(save_layerConv0)
+        self.relFeaturizerConv[0].register_forward_hook(save_layerConv0)
         def save_layerConv1(module,input,output):
             self.debug_conv1=output.cpu()
-        self.edgeFeaturizerConv[1].register_forward_hook(save_layerConv1)
+        self.relFeaturizerConv[1].register_forward_hook(save_layerConv1)
         #def save_layerFC(module,input,output):
             #    self.debug_fc=output.cpu()
-        #self.edgeFeaturizerConv[0].register_forward_hook(save_layerFC)
+        #self.relFeaturizerConv[0].register_forward_hook(save_layerFC)

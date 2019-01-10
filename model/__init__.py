@@ -10,6 +10,7 @@ from model.pairing_box_net import PairingBoxNet
 from model.pairing_box_from_gt import PairingBoxFromGT
 from model.pairing_graph import PairingGraph
 from model.binary_pair_net import BinaryPairNet
+from model.graph_net import GraphNet
 from model.line_follower import LineFollower
 from model.simpleNN import SimpleNN
 #from .roi_align import ROIAlign

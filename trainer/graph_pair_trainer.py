@@ -355,7 +355,7 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
-                    boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
+                    boxLoss, position_loss, conf_loss, class_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
                     loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
@@ -373,6 +373,8 @@ class GraphPairTrainer(BaseTrainer):
                     ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,self.model.numBBTypes)
                 else:
                     ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,self.model.numBBTypes)
+
+                #import pdb;pdb.set_trace()
                 mAP += np.array(ap_5)
                 mRecall += np.array(recall_5)
                 mPrecision += np.array(prec_5)

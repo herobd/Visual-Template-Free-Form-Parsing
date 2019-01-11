@@ -26,7 +26,7 @@ class GraphPairTrainer(BaseTrainer):
             self.loss_params=config['loss_params']
         else:
             self.loss_params={}
-        self.lossWeights = config['loss_weights'] if 'loss_weights' in config else {"box": 1, "edge":1}
+        self.lossWeights = config['loss_weights'] if 'loss_weights' in config else {"box": 1, "rel":1}
         self.loss['box'] = self.loss['box'](**self.loss_params['box'], 
                 num_classes=model.numBBTypes, 
                 rotation=model.rotation, 
@@ -50,7 +50,7 @@ class GraphPairTrainer(BaseTrainer):
 
         self.thresh_conf = config['trainer']['thresh_conf'] if 'thresh_conf' in config['trainer'] else 0.92
         self.thresh_intersect = config['trainer']['thresh_intersect'] if 'thresh_intersect' in config['trainer'] else 0.4
-        self.thresh_edge = config['trainer']['thresh_edge'] if 'thresh_edge' in config['trainer'] else 0.5
+        self.thresh_rel = config['trainer']['thresh_rel'] if 'thresh_rel' in config['trainer'] else 0.5
 
         #we iniailly train the pairing using GT BBs, but eventually need to fine-tune the pairing using the networks performance
         self.stop_from_gt = config['trainer']['stop_from_gt'] if 'stop_from_gt' in config['trainer'] else None
@@ -61,6 +61,12 @@ class GraphPairTrainer(BaseTrainer):
 
         self.train_hard_detect_limit = config['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
         self.val_hard_detect_limit = config['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
+
+        #Name change
+        if 'edge' in self.lossWeights:
+            self.lossWeights['rel'] = self.lossWeights['edge']
+        if 'edge' in self.loss:
+            self.loss['rel'] = self.loss['edge']
 
     def _to_tensor(self, instance):
         image = instance['img']
@@ -154,38 +160,54 @@ class GraphPairTrainer(BaseTrainer):
         image, targetBoxes, adj = self._to_tensor(thisInstance)
         useGT = self.useGT(iteration)
         if useGT:
-            outputBoxes, outputOffsets, edgePred = self.model(image,targetBoxes,True,
+            outputBoxes, outputOffsets, relPred, relIndexes = self.model(image,targetBoxes,True,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
-            #gtPairing,predPairing = self.prealignedEdgePred(adj,edgePred)
-            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.prealignedEdgePred(adj,edgePred)
+            #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
+            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.prealignedEdgePred(adj,relPred,relIndexes)
         else:
-            outputBoxes, outputOffsets, edgePred = self.model(image,
+            outputBoxes, outputOffsets, relPred, relIndexes = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
-            #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
-            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,edgePred)
-        if edgePred is not None:
-            numEdgePred = len(edgePred[0])
+            #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred)
+            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
+        if relPred is not None:
+            numEdgePred = len(relPred[0])
+            if predPairingShouldBeTrue is not None:
+                lenTrue = predPairingShouldBeTrue.size(0)
+            else:
+                lenTrue = 0
+            if predPairingShouldBeFalse is not None:
+                lenFalse = predPairingShouldBeFalse.size(0)
+            else:
+                lenFalse = 0
         else:
-            numEdgePred = 0
+            numEdgePred = lenTrue = lenFalse = 0
         #if iteration>25:
         #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
-        #    edgeLoss = self.loss['edge'](predPairing,gtPairing)
+        #    relLoss = self.loss['rel'](predPairing,gtPairing)
         #else:
-        #    edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
-        edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+        #    relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+        #relLoss = torch.tensor(0.0).to(image.device)
+        relLoss = None
         if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
-            edgeLoss += self.loss['edge'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue)).to(image.device)
-            debug_avg_edgeTrue = predPairingShouldBeTrue.mean().item()
+            ones = torch.ones_like(predPairingShouldBeTrue).to(image.device)
+            relLoss = self.loss['rel'](predPairingShouldBeTrue,ones)
+            debug_avg_relTrue = predPairingShouldBeTrue.mean().item()
         else:
-            debug_avg_edgeTrue =0 
+            debug_avg_relTrue =0 
         if predPairingShouldBeFalse is not None and predPairingShouldBeFalse.size(0)>0:
-            edgeLoss += self.loss['edge'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse)).to(image.device)
-            debug_avg_edgeFalse = predPairingShouldBeFalse.mean().item()
+            zeros = torch.zeros_like(predPairingShouldBeFalse).to(image.device)
+            relLossFalse = self.loss['rel'](predPairingShouldBeFalse,zeros)
+            if relLoss is None:
+                relLoss=relLossFalse
+            else:
+                relLoss+=relLossFalse
+            debug_avg_relFalse = predPairingShouldBeFalse.mean().item()
         else:
-            debug_avg_edgeFalse = 0
-        edgeLoss *= self.lossWeights['edge']
+            debug_avg_relFalse = 0
+        if relLoss is not None:
+            relLoss *= self.lossWeights['rel']
 
         if not self.model.detector_frozen:
             if targetBoxes is not None:
@@ -195,27 +217,36 @@ class GraphPairTrainer(BaseTrainer):
             #import pdb;pdb.set_trace()
             boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
             boxLoss *= self.lossWeights['box']
-            loss = edgeLoss + boxLoss
+            if relLoss is not None:
+                loss = relLoss + boxLoss
+            else:
+                loss = boxLoss
         else:
-            loss = edgeLoss
+            loss = relLoss
 
 
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
-        #gtPairing=predPairing=outputBoxes=outputOffsets=edgePred=image=targetBoxes=None
-        predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=edgePred=image=targetBoxes=None
-        edgeLoss = edgeLoss.item()
+        #gtPairing=predPairing=outputBoxes=outputOffsets=relPred=image=targetBoxes=None
+        predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
+        if relLoss is not None:
+            relLoss = relLoss.item()
+        else:
+            relLoss = 0
         if not self.model.detector_frozen:
             boxLoss = boxLoss.item()
         else:
             boxLoss = 0
-        loss.backward()
+        if loss is not None:
+            loss.backward()
 
-        torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
-        self.optimizer.step()
+            torch.nn.utils.clip_grad_value_(self.model.parameters(),1)
+            self.optimizer.step()
 
-        loss = loss.item()
+            loss = loss.item()
+        else:
+            loss=0
 
         ##toc=timeit.default_timer()
         ##print('bac: '+str(toc-tic))
@@ -238,14 +269,14 @@ class GraphPairTrainer(BaseTrainer):
         log = {
             'loss': loss,
             'boxLoss': boxLoss,
-            'edgeLoss': edgeLoss,
-            'numEdgePred':numEdgePred,
-            'edge_recall':eRecall,
-            'edge_prec': ePrec,
-            'edge_fullPrec':fullPrec,
-            'edge_F': (eRecall+ePrec)/2,
-            'debug_avg_edgeTrue': debug_avg_edgeTrue,
-            'debug_avg_edgeFalse': debug_avg_edgeFalse,
+            'relLoss': relLoss,
+            'edgePredLens':np.array([numEdgePred,lenTrue,lenFalse],dtype=np.float),
+            'rel_recall':eRecall,
+            'rel_prec': ePrec,
+            'rel_fullPrec':fullPrec,
+            'rel_F': (eRecall+ePrec)/2,
+            #'debug_avg_relTrue': debug_avg_relTrue,
+            #'debug_avg_relFalse': debug_avg_relFalse,
 
             **metrics,
         }
@@ -283,10 +314,10 @@ class GraphPairTrainer(BaseTrainer):
         self.model.eval()
         total_val_loss = 0
         total_box_loss =0
-        total_edge_loss =0
-        total_edge_recall=0
-        total_edge_prec=0
-        total_edge_fullPrec=0
+        total_rel_loss =0
+        total_rel_recall=0
+        total_rel_prec=0
+        total_rel_fullPrec=0
         total_val_metrics = np.zeros(len(self.metrics))
 
         mAP = np.zeros(self.model.numBBTypes)
@@ -300,28 +331,37 @@ class GraphPairTrainer(BaseTrainer):
 
                 image, targetBoxes, adjM = self._to_tensor(instance)
 
-                outputBoxes, outputOffsets, edgePred = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
+                outputBoxes, outputOffsets, relPred, relIndexes = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
                 
-                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec = self.alignEdgePred(targetBoxes,adjM,outputBoxes,edgePred)
-                total_edge_recall+=recall
-                total_edge_prec+=prec
-                total_edge_fullPrec+=fullPrec
-                edgeLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec = self.alignEdgePred(targetBoxes,adjM,outputBoxes,relPred,relIndexes)
+                total_rel_recall+=recall
+                total_rel_prec+=prec
+                total_rel_fullPrec+=fullPrec
+                #relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
+                relLoss=None
                 if predPairingShouldBeTrue is not None:
-                    edgeLoss += self.loss['edge'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue))
+                    relLoss = self.loss['rel'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue).to(image.device))
                 if predPairingShouldBeFalse is not None:
-                    edgeLoss += self.loss['edge'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse))
+                    relFalseLoss = self.loss['rel'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse).to(image.device))
+                    if relLoss is not None:
+                        relLoss += relFalseLoss
+                    else:
+                        relLoss = relFalseLoss
+                if relLoss is None:
+                    relLoss = torch.tensor(0.0)
+                else:
+                    relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
                     boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
-                    loss = edgeLoss*self.lossWeights['edge'] + boxLoss*self.lossWeights['box']
+                    loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
-                    loss = edgeLoss*self.lossWeights['edge']
+                    loss = relLoss*self.lossWeights['rel']
                 total_box_loss+=boxLoss.item()
-                total_edge_loss+=edgeLoss.item()
+                total_rel_loss+=relLoss.item()
                 
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
@@ -338,40 +378,43 @@ class GraphPairTrainer(BaseTrainer):
                 mPrecision += np.array(prec_5)
 
                 total_val_loss += loss.item()
-                loss=None
+                loss=relFalseLoss=relLoss=boxLoss=None
                 image=None
                 queryMask=None
                 targetBoxes=None
                 outputBoxes=None
                 outputOffsets=None
+                relPred=relIndexes=predPairingShouldBeTrue=predPairingShouldBeFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_box_loss': total_box_loss / len(self.valid_data_loader),
-            'val_edge_loss': total_edge_loss / len(self.valid_data_loader),
+            'val_rel_loss': total_rel_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
-            'val_recall':(mRecall/len(self.valid_data_loader)).tolist(),
-            'val_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
+            'val_bb_recall':(mRecall/len(self.valid_data_loader)).tolist(),
+            'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
+            'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
+            'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
             'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
-            'val_edge_recall':total_edge_recall/len(self.valid_data_loader),
-            'val_edge_prec':total_edge_prec/len(self.valid_data_loader),
-            'val_edge_F':(total_edge_prec+total_edge_recall)/(2*len(self.valid_data_loader)),
-            'val_edge_fullPrec':total_edge_fullPrec/len(self.valid_data_loader),
+            'val_rel_recall':total_rel_recall/len(self.valid_data_loader),
+            'val_rel_prec':total_rel_prec/len(self.valid_data_loader),
+            'val_rel_F':(total_rel_prec+total_rel_recall)/(2*len(self.valid_data_loader)),
+            'val_rel_fullPrec':total_rel_fullPrec/len(self.valid_data_loader),
             #'val_position_loss':total_position_loss / len(self.valid_data_loader),
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
             #'val_class_loss':tota_class_loss / len(self.valid_data_loader),
         }
 
 
-    def alignEdgePred(self,targetBoxes,adj,outputBoxes,edgePred):
-        if edgePred is None or targetBoxes is None:
+    def alignEdgePred(self,targetBoxes,adj,outputBoxes,relPred,relIndexes):
+        if relPred is None or targetBoxes is None:
             if targetBoxes is None:
-                if edgePred is not None and (edgePred[1]>self.thresh_edge).any():
+                if relPred is not None and (relPred>self.thresh_rel).any():
                     prec=0
                 else:
                     prec=1
                 recall=1
-            elif edgePred is None:
+            elif relPred is None:
                 if targetBoxes is not None:
                     recall=0
                 else:
@@ -388,20 +431,20 @@ class GraphPairTrainer(BaseTrainer):
         else:
             targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
-        #Create gt vector to match edgePred.values()
+        #Create gt vector to match relPred.values()
 
-        edges = edgePred[0] #edgePred._indices().cpu()
-        predsAll = edgePred[1] #edgePred._values()
+        rels = relIndexes #relPred._indices().cpu()
+        predsAll = relPred #relPred._values()
         sigPredsAll = torch.sigmoid(predsAll)
-        #newGT = []#torch.tensor((edges.size(0)))
+        #newGT = []#torch.tensor((rels.size(0)))
         predsPos = []
         predsNeg = []
-        #for i in range(edges.size(0)):
+        #for i in range(rels.size(0)):
         truePred=falsePred=badPred=0
         i=0
-        for n0,n1 in edges:
-            #n0 = edges[i,0]
-            #n1 = edges[i,1]
+        for n0,n1 in rels:
+            #n0 = rels[i,0]
+            #n1 = rels[i,1]
             t0 = targIndex[n0].item()
             t1 = targIndex[n1].item()
             if t0>=0 and t1>=0:
@@ -409,28 +452,28 @@ class GraphPairTrainer(BaseTrainer):
                 #preds.append(predsAll[i])
                 if (min(t0,t1),max(t0,t1)) in adj:
                     predsPos.append(predsAll[i])
-                    if sigPredsAll[i]>self.thresh_edge:
+                    if sigPredsAll[i]>self.thresh_rel:
                         truePred+=1
                 else:
                     predsNeg.append(predsAll[i])
-                    if sigPredsAll[i]>self.thresh_edge:
+                    if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
-            elif sigPredsAll[i]>self.thresh_edge:
+            elif sigPredsAll[i]>self.thresh_rel:
                 badPred+=1
             #else skip this
             i+=1
         #if len(preds)==0:
         #    return torch.tensor([]),torch.tensor([])
-        #newGT = torch.tensor(newGT).float().to(edgePred[1].device)
-        #preds = torch.cat(preds).to(edgePred[1].device)
+        #newGT = torch.tensor(newGT).float().to(relPred[1].device)
+        #preds = torch.cat(preds).to(relPred[1].device)
     
         #return newGT, preds
         if len(predsPos)>0:
-            predsPos = torch.cat(predsPos).to(edgePred[1].device)
+            predsPos = torch.cat(predsPos).to(relPred.device)
         else:
             predsPos = None
         if len(predsNeg)>0:
-            predsNeg = torch.cat(predsNeg).to(edgePred[1].device)
+            predsNeg = torch.cat(predsNeg).to(relPred.device)
         else:
             predsNeg = None
 
@@ -449,47 +492,47 @@ class GraphPairTrainer(BaseTrainer):
         return predsPos,predsNeg, recall, prec ,fullPrec
 
 
-    def prealignedEdgePred(self,adj,edgePred):
-        if edgePred is None:
-            assert(adj is None or len(adj)==0)
-            if edgePred is not None and (edgePred[1]>self.thresh_edge).any():
-                prec=0
+    def prealignedEdgePred(self,adj,relPred,relIndexes):
+        if relPred is None:
+            #assert(adj is None or len(adj)==0) this is a failure of the heuristic pairing
+            if adj is not None and len(adj)>0:
+                recall=0
             else:
-                prec=1
-            recall=1
+                recall=1
+            prec=1
 
             return torch.tensor([]),torch.tensor([]),recall,prec,prec
-        edges = edgePred[0] #edgePred._indices().cpu().t()
-        predsAll = edgePred[1]
+        rels = relIndexes #relPred._indices().cpu().t()
+        predsAll = relPred
         sigPredsAll = torch.sigmoid(predsAll)
 
-        #gt = torch.empty(len(edges))#edges.size(0))
+        #gt = torch.empty(len(rels))#rels.size(0))
         predsPos = []
         predsNeg = []
         truePred=falsePred=0
         i=0
-        for n0,n1 in edges:
-            #n0 = edges[i,0]
-            #n1 = edges[i,1]
+        for n0,n1 in rels:
+            #n0 = rels[i,0]
+            #n1 = rels[i,1]
             #gt[i] = int((n0,n1) in adj) #(adjM[ n0, n1 ])
             if (n0,n1) in adj:
                 predsPos.append(predsAll[i])
-                if sigPredsAll[i]>self.thresh_edge:
+                if sigPredsAll[i]>self.thresh_rel:
                     truePred+=1
             else:
                 predsNeg.append(predsAll[i])
-                if sigPredsAll[i]>self.thresh_edge:
+                if sigPredsAll[i]>self.thresh_rel:
                     falsePred+=1
             i+=1
     
-        #return gt.to(edgePred.device), edgePred._values().view(-1).view(-1)
-        #return gt.to(edgePred[1].device), edgePred[1].view(-1)
+        #return gt.to(relPred.device), relPred._values().view(-1).view(-1)
+        #return gt.to(relPred[1].device), relPred[1].view(-1)
         if len(predsPos)>0:
-            predsPos = torch.cat(predsPos).to(edgePred[1].device)
+            predsPos = torch.cat(predsPos).to(relPred.device)
         else:
             predsPos = None
         if len(predsNeg)>0:
-            predsNeg = torch.cat(predsNeg).to(edgePred[1].device)
+            predsNeg = torch.cat(predsNeg).to(relPred.device)
         else:
             predsNeg = None
         if len(adj)>0:

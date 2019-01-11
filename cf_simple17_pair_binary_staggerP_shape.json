@@ -1,7 +1,7 @@
 {
-    "name": "Simple17_pair_binary_staggerP",
+    "name": "Simple17_pair_binary_staggerP_shape",
     "cuda": true,
-    "gpu": 0,
+    "gpu": 1,
     "save_mode": "state_dict",
     "override": true,
     "super_computer":false,
@@ -71,7 +71,7 @@
         "val_step": 10000,
         "save_step": 50000,
         "save_step_minor": 250,
-        "log_step": 250,
+        "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
@@ -88,6 +88,7 @@
         "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
+	"use_rel_shape_feats": true,
         "graph_config": {
             "arch": "BinaryPairNet",
             "node_channels": 0,
@@ -95,7 +96,7 @@
         },
         "featurizer_start_h": 8,
         "featurizer_start_w": 8,
-        "featurizer_conv": [512,"M",512],
+        "featurizer_conv": [512,"M",496],
         "featurizer_fc": []
     }
 }

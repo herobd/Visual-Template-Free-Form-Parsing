@@ -14,7 +14,7 @@ class BinaryPairNet(nn.Module):
         super(BinaryPairNet, self).__init__()
 
 
-    def forward(self, node_features, adjacencyMatrix, edge_features):
+    def forward(self, node_features, adjacencyMatrix, numBBs):
         #expects edge_features as batch currently
 
         #adj = torch.spmm(self.weight,edge_features) + self.bias 
@@ -22,6 +22,6 @@ class BinaryPairNet(nn.Module):
 
 
         #return
-        return None,edge_features
+        return None,node_features
 
 

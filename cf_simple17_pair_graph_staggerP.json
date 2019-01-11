@@ -1,5 +1,5 @@
 {
-    "name": "Simple17_pair_binary_staggerP",
+    "name": "Simple17_pair_graph_staggerP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -55,7 +55,7 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 1,
+        "box": 1.1,
         "edge": 1
     },
     "loss_params": 
@@ -68,8 +68,8 @@
         "class": "GraphPairTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 10000,
-        "save_step": 50000,
+        "val_step": 2500,
+        "save_step": 5000,
         "save_step_minor": 250,
         "log_step": 250,
         "verbosity": 1,
@@ -89,10 +89,17 @@
         "conf_thresh": 0.5,
         "start_frozen": true,
         "graph_config": {
-            "arch": "BinaryPairNet",
-            "node_channels": 0,
-            "edge_channels": 1
+            "arch": "GraphNet",
+            "in_channels": 512,
+            "layers": [512,512],
+            "repetitions": 2,
+	    "bb_out": 0,
+            "rel_out": 1,
+            "norm": "split_norm",
+            "dropout": false
         },
+        "use_rel_rel_edges": true,
+	"use_shape_feats": true,
         "featurizer_start_h": 8,
         "featurizer_start_w": 8,
         "featurizer_conv": [512,"M",512],

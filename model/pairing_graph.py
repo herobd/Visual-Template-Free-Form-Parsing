@@ -21,6 +21,29 @@ import cv2
 MAX_CANDIDATES=400 #450
 #max seen 428, so why'd it crash on 375?
 
+def primeFactors(n): 
+    ret = [1]
+    # Print the number of two's that divide n 
+    while n % 2 == 0: 
+        if len(ret)==0:
+            ret.append(2)
+        n = n / 2
+          
+    # n must be odd at this point 
+    # so a skip of 2 ( i = i + 2) can be used 
+    for i in range(3,int(math.sqrt(n))+1,2): 
+          
+        # while i divides n , print i ad divide n 
+        while n % i== 0: 
+            ret.append(i) 
+            n = n / i 
+              
+    # Condition if n is a prime 
+    # number greater than 2 
+    if n > 2: 
+        ret.append(n)
+    return ret
+
 class PairingGraph(BaseModel):
     def __init__(self, config):
         super(PairingGraph, self).__init__(config)
@@ -116,16 +139,28 @@ class PairingGraph(BaseModel):
             #TODO un-hardcode
             #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
             #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
-            self.bbFeaturizerConv = nn.Sequential( 
-                    nn.Conv2d(self.detector.last_channels,graph_in_channels-added_featsBB,kernel_size=(2,3)),
-                    nn.GroupNorm(13,graph_in_channels-added_featsBB)
-                    )
             featurizer = config['node_featurizer'] if 'node_featurizer' in config else []
+            if len(featurizer)>0:
+                convOut=featurizer[0]
+            else:
+                convOut=graph_in_channels-added_featsBB
+            factors=primeFactors(convOut)
+            bestDist=9999
+            for f in factors:
+                if abs(f-8)<=bestDist: #favor larger
+                    bestDist=abs(f-8)
+                    bestGroup=f
+            self.bbFeaturizerConv = nn.Sequential( 
+                    nn.Conv2d(self.detector.last_channels,convOut,kernel_size=(2,3)),
+                    nn.GroupNorm(bestGroup,convOut)
+                    )
             assert(len(featurizer)==0)
-
-            #featurizer = [self.detector.last_channels] + featurizer + ['FCnR{}'.format(graph_in_channels)]
-            #layers, last_ch_node = make_layers(featurizer,norm=feat_norm)
-            #self.bbFeaturizerFC = nn.Sequential(*layers)
+            #if len(featurizer)>0:
+            #    featurizer = featurizer + ['FCnR{}'.format(graph_in_channels)]
+            #    layers, last_ch_node = make_layers(featurizer,norm=feat_norm)
+            #    self.bbFeaturizerFC = nn.Sequential(*layers)
+            #else:
+            #    self.bbFeaturizerFC = None
 
 
         #self.pairer = GraphNet(config['graph_config'])

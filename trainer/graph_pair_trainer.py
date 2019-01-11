@@ -409,7 +409,7 @@ class GraphPairTrainer(BaseTrainer):
     def alignEdgePred(self,targetBoxes,adj,outputBoxes,relPred,relIndexes):
         if relPred is None or targetBoxes is None:
             if targetBoxes is None:
-                if relPred is not None and (relPred[1]>self.thresh_rel).any():
+                if relPred is not None and (relPred>self.thresh_rel).any():
                     prec=0
                 else:
                     prec=1

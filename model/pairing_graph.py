@@ -446,7 +446,7 @@ class PairingGraph(BaseModel):
                     i+=1
                 edges = candidates+list(relEdges)
             else:
-                edges = candidates
+                edges = candidates.copy()
             #add diagonal (self edges)
             for i in range(bbAndRel_features.size(0)):
                 edges.append((i,i))

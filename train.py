@@ -71,7 +71,9 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', default=None, type=str,
                         help='config file path (default: None)')
     parser.add_argument('-r', '--resume', default=None, type=str,
-                        help='path to latest checkpoint (default: None)')
+                        help='path to checkpoint (default: None)')
+    parser.add_argument('-s', '--soft_resume', default=None, type=str,
+                        help='path to checkpoint that may or may not exist (default: None)')
     parser.add_argument('-g', '--gpu', default=None, type=int,
                         help='gpu to use (overrides config) (default: None)')
 
@@ -80,6 +82,11 @@ if __name__ == '__main__':
     config = None
     if args.config is not None:
         config = json.load(open(args.config))
+    if  args.resume is None and  args.soft_resume is not None:
+        if not os.path.exists(args.soft_resume):
+            print('WARNING: resume path ({}) was not found, starting from scratch'.format(args.soft_resume))
+        else:
+            args.resume = args.soft_resume
     if args.resume is not None and (config is None or 'override' not in config or not config['override']):
         if args.config is not None:
             logger.warning('Warning: --config overridden by --resume')
@@ -92,6 +99,7 @@ if __name__ == '__main__':
                 filename = os.fsdecode(file)
                 if filename!='config.json': 
                     assert False, "Path {} already used!".format(path)
+
     assert config is not None
 
     if args.gpu is not None:

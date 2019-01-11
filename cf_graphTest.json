@@ -4,7 +4,7 @@
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":false,
+    "super_computer":true,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "simple_dataset": true,
@@ -14,9 +14,9 @@
         "num_workers": 1,
         "crop_to_page":false,
         "color":false,
-        "Xrescale_range": [0.52,0.52],
-        "rescale_range": [0.4,0.65],
-        "crop_params": {
+        "rescale_range": [0.52,0.52],
+        "Xrescale_range": [0.4,0.65],
+        "Xcrop_params": {
             "crop_size":[652,1608],
 	    "pad":0
         },
@@ -95,10 +95,11 @@
             "arch": "GraphNet",
             "in_channels": 256,
             "layers": [256,256],
+            "repetitions": 2,
             "bb_out": 0,
             "rel_out": 1,
             "norm": "split_norm",
-            "dropout": false
+            "dropout": 0.1
         },
         "use_rel_rel_edges": true,
         "use_shape_feats": true,

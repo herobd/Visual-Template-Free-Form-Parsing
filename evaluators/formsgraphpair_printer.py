@@ -146,6 +146,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         fullPrec = 1
 
+    #import pdb;pdb.set_trace()
+
     #for b in range(len(outputBBs)):
     outputBBs = outputBBs.data.numpy()
     
@@ -254,7 +256,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
                 cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
                 numrelpred+=1
-        print('number of pred rels: {}'.format(numrelpred))
+        #print('number of pred rels: {}'.format(numrelpred))
 
         for predI in range(bbs.shape[0]):
             targI=targIndex[predI].item()
@@ -284,9 +286,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
              #  'recall':np.array(recalls_5).sum(axis=0),
              #  'prec':np.array(precs_5).sum(axis=0),
              #}, 
-             { 'bb_ap_5':ap_5,
-               'bb_recall':recall_5,
-               'bb_prec':prec_5,
+             { 'bb_ap_5':[ap_5],
+               'bb_recall':[recall_5],
+               'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
                'rel_recall':relRecall,
                'rel_prec':relPrec,

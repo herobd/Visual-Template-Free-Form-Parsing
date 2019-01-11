@@ -245,6 +245,16 @@ class BaseTrainer:
         self.monitor_best = checkpoint['monitor_best']
         #print(checkpoint['state_dict'].keys())
         if ('save_mode' not in self.config or self.config['save_mode']=='state_dict') and 'state_dict' in checkpoint:
+            ##DEBUG
+            if 'edgeFeaturizerConv.0.0.weight' in checkpoint['state_dict']:
+                keys = list(checkpoint['state_dict'].keys())
+                for key in keys:
+                    if 'edge' in key:
+                        newKey = key.replace('edge','rel')
+                        checkpoint['state_dict'][newKey] = checkpoint['state_dict'][key]
+                        del checkpoint['state_dict'][key]
+            ##DEBUG
+
             self.model.load_state_dict(checkpoint['state_dict'])
         else:
             self.model = checkpoint['model']

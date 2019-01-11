@@ -61,6 +61,15 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
 
     if 'state_dict' in checkpoint:
         model = eval(config['arch'])(config['model'])
+        ##DEBUG
+        if 'edgeFeaturizerConv.0.0.weight' in checkpoint['state_dict']:
+            keys = list(checkpoint['state_dict'].keys())
+            for key in keys:
+                if 'edge' in key:
+                    newKey = key.replace('edge','rel')
+                    checkpoint['state_dict'][newKey] = checkpoint['state_dict'][key]
+                    del checkpoint['state_dict'][key]
+        ##DEBUG
         model.load_state_dict(checkpoint['state_dict'])
     else:
         model = checkpoint['model']
@@ -104,79 +113,88 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
             val_metrics_list = defaultdict(lambda: defaultdict(list))
             val_comb_metrics = defaultdict(list)
 
-            if numberOfImages==0:
-                for i in range(len(valid_data_loader)):
-                    print('valid batch index: {}\{} (not save)'.format(i,len(valid_data_loader)),end='\r')
-                    instance=valid_iter.next()
-                    metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
+            #if numberOfImages==0:
+            #    for i in range(len(valid_data_loader)):
+            #        print('valid batch index: {}\{} (not save)'.format(i,len(valid_data_loader)),end='\r')
+            #        instance=valid_iter.next()
+            #        metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
 
-                    if type(metricsO) == dict:
-                        for typ,typeLists in metricsO.items():
-                            if type(typeLists) == dict:
-                                for name,lst in typeLists.items():
-                                    val_metrics_list[typ][name]+=lst
-                                    val_comb_metrics[typ]+=lst
-                            else:
-                                val_comb_metrics[typ]+=typeLists
-                    else:
-                        val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
-            else:
-                curVI=0
+            #        if type(metricsO) == dict:
+            #            for typ,typeLists in metricsO.items():
+            #                if type(typeLists) == dict:
+            #                    for name,lst in typeLists.items():
+            #                        val_metrics_list[typ][name]+=lst
+            #                        val_comb_metrics[typ]+=lst
+            #                else:
+            #                    if type(typeLists) is float or type(typeLists) is int:
+            #                        typeLists = [typeLists]
+            #                    val_comb_metrics[typ]+=typeLists
+            #        else:
+            #            val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
+            #else:
 
-                for index in range(0,numberOfImages,step*batchSize):
-                    for trainIndex in range(index,index+step*batchSize, batchSize):
-                        if trainIndex/batchSize < len(data_loader):
-                            print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
-                            #data, target = train_iter.next() #data_loader[trainIndex]
-                            #dataT = _to_tensor(gpu,data)
-                            #output = model(dataT)
-                            #data = data.cpu().data.numpy()
-                            #output = output.cpu().data.numpy()
-                            #target = target.data.numpy()
-                            #metricsO = _eval_metrics_ind(metrics,output, target)
-                            saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
-                    
-                    for validIndex in range(index,index+step*vBatchSize, vBatchSize):
-                        if validIndex/vBatchSize < len(valid_data_loader):
-                            print('valid batch index: {}/{}'.format(validIndex/vBatchSize,len(valid_data_loader)),end='\r')
-                            #data, target = valid_iter.next() #valid_data_loader[validIndex]
-                            curVI+=1
-                            #dataT  = _to_tensor(gpu,data)
-                            #output = model(dataT)
-                            #data = data.cpu().data.numpy()
-                            #output = output.cpu().data.numpy()
-                            #target = target.data.numpy()
-                            #metricsO = _eval_metrics_ind(metrics,output, target)
-                            metricsO,_ = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
-                            if type(metricsO) == dict:
-                                for typ,typeLists in metricsO.items():
-                                    if type(typeLists) == dict:
-                                        for name,lst in typeLists.items():
-                                            val_metrics_list[typ][name]+=lst
-                                            val_comb_metrics[typ]+=lst
-                                    else:
-                                        val_comb_metrics[typ]+=typeLists
-                            else:
-                                val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
-                            
-                if gpu is not None:
-                    try:
-                        for vi in range(curVI,len(valid_data_loader)):
-                            print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
-                            instance = valid_iter.next()
-                            metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
-                            if type(metricsO) == dict:
-                                for typ,typeLists in metricsO.items():
-                                    if type(typeLists) == dict:
-                                        for name,lst in typeLists.items():
-                                            val_metrics_list[typ][name]+=lst
-                                            val_comb_metrics[typ]+=lst
-                                    else:
-                                        val_comb_metrics[typ]+=typeLists
-                            else:
-                                val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
-                    except StopIteration:
-                        print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))
+            ####
+            curVI=0
+
+            for index in range(0,numberOfImages,step*batchSize):
+                for trainIndex in range(index,index+step*batchSize, batchSize):
+                    if trainIndex/batchSize < len(data_loader):
+                        print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
+                        #data, target = train_iter.next() #data_loader[trainIndex]
+                        #dataT = _to_tensor(gpu,data)
+                        #output = model(dataT)
+                        #data = data.cpu().data.numpy()
+                        #output = output.cpu().data.numpy()
+                        #target = target.data.numpy()
+                        #metricsO = _eval_metrics_ind(metrics,output, target)
+                        saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
+                
+                for validIndex in range(index,index+step*vBatchSize, vBatchSize):
+                    if validIndex/vBatchSize < len(valid_data_loader):
+                        print('valid batch index: {}/{}'.format(validIndex/vBatchSize,len(valid_data_loader)),end='\r')
+                        #data, target = valid_iter.next() #valid_data_loader[validIndex]
+                        curVI+=1
+                        #dataT  = _to_tensor(gpu,data)
+                        #output = model(dataT)
+                        #data = data.cpu().data.numpy()
+                        #output = output.cpu().data.numpy()
+                        #target = target.data.numpy()
+                        #metricsO = _eval_metrics_ind(metrics,output, target)
+                        metricsO,_ = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
+                        if type(metricsO) == dict:
+                            for typ,typeLists in metricsO.items():
+                                if type(typeLists) == dict:
+                                    for name,lst in typeLists.items():
+                                        val_metrics_list[typ][name]+=lst
+                                        val_comb_metrics[typ]+=lst
+                                else:
+                                    if type(typeLists) is float or type(typeLists) is int:
+                                        typeLists = [typeLists]
+                                    val_comb_metrics[typ]+=typeLists
+                        else:
+                            val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
+                        
+            if gpu is not None:
+                try:
+                    for vi in range(curVI,len(valid_data_loader)):
+                        print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
+                        instance = valid_iter.next()
+                        metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
+                        if type(metricsO) == dict:
+                            for typ,typeLists in metricsO.items():
+                                if type(typeLists) == dict:
+                                    for name,lst in typeLists.items():
+                                        val_metrics_list[typ][name]+=lst
+                                        val_comb_metrics[typ]+=lst
+                                else:
+                                    if type(typeLists) is float or type(typeLists) is int:
+                                        typeLists = [typeLists]
+                                    val_comb_metrics[typ]+=typeLists
+                        else:
+                            val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
+                except StopIteration:
+                    print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))
+            ####
                 
             val_metrics_sum /= len(valid_data_loader)
             print('Validation metrics')

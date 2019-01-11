@@ -45,6 +45,7 @@ class GraphNet(nn.Module):
                 node_featuresX = self.graph_conv(node_featuresX,adjacencyMatrix)
                 return node_featuresX
         
+        self.useRes = config['use_res'] if 'use_res' in config else True
         #how many times to re-apply graph conv layers
         self.repetitions = config['repetitions'] if 'repetitions' in config else 1 
 
@@ -96,7 +97,10 @@ class GraphNet(nn.Module):
             side=node_featuresX
             for graph_conv in self.layers:
                 side = graph_conv(side,adjacencyMatrix,numBBs)
-            node_featuresX=side+node_featuresX
+            if self.useRes:
+                node_featuresX=side+node_featuresX
+            else:
+                node_featuresX=side
         #the graph conv layers are residual, so activation is applied here
         if self.split_normBB is not None:
             bb = self.split_normBB(node_featuresX[:numBBs])

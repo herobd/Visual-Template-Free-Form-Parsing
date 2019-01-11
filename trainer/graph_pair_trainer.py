@@ -62,6 +62,8 @@ class GraphPairTrainer(BaseTrainer):
         self.train_hard_detect_limit = config['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
         self.val_hard_detect_limit = config['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
 
+        self.useBadBBPredForRelLoss = config['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
+
         #Name change
         if 'edge' in self.lossWeights:
             self.lossWeights['rel'] = self.lossWeights['edge']
@@ -228,7 +230,6 @@ class GraphPairTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
-        #gtPairing=predPairing=outputBoxes=outputOffsets=relPred=image=targetBoxes=None
         predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
         if relLoss is not None:
             relLoss = relLoss.item()
@@ -427,9 +428,9 @@ class GraphPairTrainer(BaseTrainer):
         #should this be the same as AP_?
         numClasses = 2
         if self.model.rotation:
-            targIndex = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
+            targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
         else:
-            targIndex = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
+            targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
         #Create gt vector to match relPred.values()
 
@@ -460,6 +461,8 @@ class GraphPairTrainer(BaseTrainer):
                         falsePred+=1
             elif sigPredsAll[i]>self.thresh_rel:
                 badPred+=1
+                if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
+                    predsNeg.append(predsAll[i])
             #else skip this
             i+=1
         #if len(preds)==0:

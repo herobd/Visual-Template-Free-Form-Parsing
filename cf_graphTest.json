@@ -1,6 +1,6 @@
 {
     "name": "graphTest",
-    "cuda": true,
+    "cuda": false,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
@@ -80,9 +80,11 @@
         "Xconf_thresh_init": 0.9,
         "Xconf_thresh_change_iters": 2000,
 
-        "unfreeze_detector": 10,
-        "partial_from_gt": 100,
-        "stop_from_gt": 5000
+        "unfreeze_detector": 1,
+        "partial_from_gt": 1,
+        "stop_from_gt": 1,
+
+        "use_bad_bb_pred_for_rel_loss": true
     },
     "arch": "PairingGraph", 
     "model": {
@@ -93,6 +95,7 @@
         "start_frozen": true,
         "graph_config": {
             "arch": "GraphNet",
+            "use_res": false,
             "in_channels": 256,
             "layers": [256,256],
             "bb_out": 0,

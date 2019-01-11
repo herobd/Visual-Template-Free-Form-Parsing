@@ -268,7 +268,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
 
-        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_edges_prec:{:.2f}_recall:{:.2f}_fullPrec:{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],edgePrec,edgeRecall,fullPrec)
+        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_prec:{:.2f}_recall:{:.2f}_fullPrec:{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],edgePrec,edgeRecall,fullPrec)
         #for j in range(metricsOut.shape[1]):
         #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
         saveName+='.png'
@@ -284,9 +284,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
              #  'recall':np.array(recalls_5).sum(axis=0),
              #  'prec':np.array(precs_5).sum(axis=0),
              #}, 
-             { 'ap_5':ap_5,
-               'recall':recall_5,
-               'prec':prec_5,
+             { 'bb_ap_5':ap_5,
+               'bb_recall':recall_5,
+               'bb_prec':prec_5,
+               'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
+               'rel_recall':edgeRecall,
+               'rel_prec':edgePrec,
+               'rel_Fm':(edgeRecall+edgePrec)/2,
+               'rel_fullPrec':fullPrec,
+               'rel_fullFm':(edgeRecall+fullPrec)/2,
+
              }, 
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)
             )

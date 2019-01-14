@@ -461,8 +461,9 @@ class GraphPairTrainer(BaseTrainer):
                     predsNeg.append(predsAll[i])
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
-            elif sigPredsAll[i]>self.thresh_rel:
-                badPred+=1
+            else:
+                if sigPredsAll[i]>self.thresh_rel:
+                    badPred+=1
                 if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
                     predsNeg.append(predsAll[i])
             #else skip this

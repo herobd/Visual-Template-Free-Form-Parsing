@@ -451,12 +451,11 @@ class GraphPairTrainer(BaseTrainer):
 
     def prealignedEdgePred(self,adj,edgePred):
         if edgePred is None:
-            assert(adj is None or len(adj)==0)
-            if edgePred is not None and (edgePred[1]>self.thresh_edge).any():
-                prec=0
+            if adj is not None and len(adj)>0:
+                recall=1
             else:
-                prec=1
-            recall=1
+                recall=0
+            prec=1
 
             return torch.tensor([]),torch.tensor([]),recall,prec,prec
         edges = edgePred[0] #edgePred._indices().cpu().t()

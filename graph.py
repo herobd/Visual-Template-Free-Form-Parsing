@@ -6,11 +6,12 @@ import logging
 import argparse
 import torch
 from collections import defaultdict
+import numpy as np
 
 logging.basicConfig(level=logging.INFO, format='')
 
 
-def graph(log,plot=True):
+def graph(log,plot=True,prefix=None):
     graphs=defaultdict(lambda:{'iters':[], 'values':[]})
     for index, entry in log.entries.items():
         iteration = entry['iteration']
@@ -21,13 +22,17 @@ def graph(log,plot=True):
     
     print('summed')
     for metric, data in graphs.items():
-        print('{} max: {}, min {}'.format(metric,max(data['values']),min(data['values'])))
+        #print('{} max: {}, min {}'.format(metric,max(data['values']),min(data['values'])))
+        ndata = np.array(data['values'])
+        maxV = ndata.max(axis=0)
+        minV = ndata.min(axis=0)
+        print('{} max: {}, min {}'.format(metric,maxV,minV))
 
     if plot:
         import matplotlib.pyplot as plt
         i=1
         for metric, data in graphs.items():
-            if metric[:3]=='avg' or metric[:3]=='val':
+            if (prefix is None and metric[:3]=='avg' or metric[:3]=='val') or (prefix is not None and metric[:len(prefix)]==prefix):
                 plt.figure(i)
                 i+=1
                 plt.plot(data['iters'], data['values'], '.-')
@@ -54,6 +59,8 @@ if __name__ == '__main__':
                         help='checkpoint file path (default: None)')
     parser.add_argument('-p', '--plot', default=1, type=int,
                         help='plot (default: True)')
+    parser.add_argument('-o', '--only', default=None, type=str,
+                        help='only stats with this prefix (default: True)')
 
     args = parser.parse_args()
 
@@ -65,4 +72,4 @@ if __name__ == '__main__':
 
     print(args.plot)
 
-    graph(log,args.plot)
+    graph(log,args.plot,args.only)

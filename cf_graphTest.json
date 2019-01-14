@@ -1,6 +1,6 @@
 {
-    "name": "Simple17_pair_binary_staggerP",
-    "cuda": true,
+    "name": "graphTest",
+    "cuda": false,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
@@ -8,12 +8,13 @@
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "simple_dataset": true,
-        "data_dir": "../data/forms",
+        "data_dir": "../data/test",
         "batch_size": 1,
         "shuffle": true,
         "num_workers": 1,
         "crop_to_page":false,
         "color":false,
+        "Xrescale_range": [0.52,0.52],
         "rescale_range": [0.4,0.65],
         "crop_params": {
             "crop_size":[652,1608],
@@ -47,16 +48,16 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.008,
+        "lr": 0.1,
         "weight_decay": 0
     },
     "loss": {
         "box": "YoloLoss",
-        "edge": "sigmoid_BCE_loss"
+        "rel": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 1,
-        "edge": 1
+        "box": 0.2,
+        "rel": 0.1
     },
     "loss_params": 
         {
@@ -66,36 +67,47 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 200000,
+        "iterations": 20000,
         "save_dir": "saved/",
         "val_step": 10000,
-        "save_step": 50000,
-        "save_step_minor": 250,
-        "log_step": 250,
+        "save_step": 5000,
+        "save_step_minor": 50,
+        "log_step": 50,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
         "warmup_steps": 1000,
-        "conf_thresh_init": 0.9,
-        "conf_thresh_change_iters": 5000,
+        "Xconf_thresh_init": 0.9,
+        "Xconf_thresh_change_iters": 2000,
 
-        "unfreeze_detector": 4000,
-        "partial_from_gt": 8000,
-        "stop_from_gt": 200000
+        "unfreeze_detector": 1,
+        "partial_from_gt": 1,
+        "stop_from_gt": 1,
+
+        "use_bad_bb_pred_for_rel_loss": true
     },
     "arch": "PairingGraph", 
     "model": {
+        "xDEBUG":1,
+        "xdetector_config": "cf_cfTest.json",
         "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
         "graph_config": {
-            "arch": "BinaryPairNet",
-            "node_channels": 0,
-            "edge_channels": 1
+            "arch": "GraphNet",
+            "use_res": false,
+            "in_channels": 256,
+            "layers": [256,256],
+            "bb_out": 0,
+            "rel_out": 1,
+            "norm": "split_norm",
+            "dropout": false
         },
+        "use_rel_rel_edges": true,
+        "use_shape_feats": true,
         "featurizer_start_h": 8,
         "featurizer_start_w": 8,
-        "featurizer_conv": [512,"M",512],
+        "featurizer_conv": [256,"M",256],
         "featurizer_fc": []
     }
 }

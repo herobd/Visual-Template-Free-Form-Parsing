@@ -184,6 +184,7 @@ class GraphPairTrainer(BaseTrainer):
                 lenFalse = 0
         else:
             numEdgePred = lenTrue = lenFalse = 0
+        numBoxPred = outputBoxes.size(0)
         #if iteration>25:
         #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
@@ -271,7 +272,7 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'relLoss': relLoss,
-            'edgePredLens':np.array([numEdgePred,lenTrue,lenFalse],dtype=np.float),
+            'predLens':np.array([numBoxPred,numEdgePred,lenTrue,lenFalse],dtype=np.float),
             'rel_recall':eRecall,
             'rel_prec': ePrec,
             'rel_fullPrec':fullPrec,

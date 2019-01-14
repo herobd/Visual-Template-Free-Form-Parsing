@@ -1,7 +1,7 @@
 {
     "name": "Simple17_pair_graphUseBadNoResNoLoopNoR2R_staggerP",
     "cuda": true,
-    "gpu": 1,
+    "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
     "super_computer":false,

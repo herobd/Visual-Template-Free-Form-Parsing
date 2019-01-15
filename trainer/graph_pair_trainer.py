@@ -171,7 +171,7 @@ class GraphPairTrainer(BaseTrainer):
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
         if relPred is not None:
-            numEdgePred = len(relPred[0])
+            numEdgePred = relPred.size(0)
             if predPairingShouldBeTrue is not None:
                 lenTrue = predPairingShouldBeTrue.size(0)
             else:

@@ -41,13 +41,14 @@ class GraphPairTrainer(BaseTrainer):
         #self.log_step = int(np.sqrt(self.batch_size))
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
-        warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
-        #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
-        lr_lambda = lambda step_num: min(((step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
-        #y=((x-(2000-3))/100)^-0.1 and y=x*(1.485/2000)+0.01
-        self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
-
         self.useLearningSchedule = 'use_learning_schedule' in config['trainer'] and config['trainer']['use_learning_schedule']
+        if self.useLearningSchedule:
+            warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
+            #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
+            lr_lambda = lambda step_num: min((max(0,step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
+            #y=((x-(2000-3))/100)^-0.1 and y=x*(1.485/2000)+0.01
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+
 
         #default is unfrozen, can be frozen by setting 'start_froze' in the PairingGraph models params
         self.unfreeze_detector = config['trainer']['unfreeze_detector'] if 'unfreeze_detector' in config['trainer'] else None
@@ -178,7 +179,7 @@ class GraphPairTrainer(BaseTrainer):
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
         if relPred is not None:
-            numEdgePred = relPred.size(0)
+            numEdgePred = len(relPred[0])
             if predPairingShouldBeTrue is not None:
                 lenTrue = predPairingShouldBeTrue.size(0)
             else:
@@ -189,7 +190,6 @@ class GraphPairTrainer(BaseTrainer):
                 lenFalse = 0
         else:
             numEdgePred = lenTrue = lenFalse = 0
-        numBoxPred = outputBoxes.size(0)
         #if iteration>25:
         #    import pdb;pdb.set_trace()
         #if len(predPairing.size())>0 and predPairing.size(0)>0:
@@ -277,7 +277,7 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'relLoss': relLoss,
-            'predLens':np.array([numBoxPred,numEdgePred,numBoxPred+numEdgePred,-1],dtype=np.float),
+            'edgePredLens':np.array([numEdgePred,lenTrue,lenFalse],dtype=np.float),
             'rel_recall':eRecall,
             'rel_prec': ePrec,
             'rel_fullPrec':fullPrec,
@@ -467,9 +467,8 @@ class GraphPairTrainer(BaseTrainer):
                     predsNeg.append(predsAll[i])
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
-            else:
-                if sigPredsAll[i]>self.thresh_rel:
-                    badPred+=1
+            elif sigPredsAll[i]>self.thresh_rel:
+                badPred+=1
                 if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
                     predsNeg.append(predsAll[i])
             #else skip this

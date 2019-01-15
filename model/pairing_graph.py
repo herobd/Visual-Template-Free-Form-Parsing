@@ -17,8 +17,8 @@ import json
 import timeit
 import cv2
 
-#MAX_CANDIDATES=330 #450
-MAX_GRAPH_SIZE=350
+MAX_CANDIDATES=330 #450
+MAX_GRAPH_SIZE=380
 #max seen 428, so why'd it crash on 375?
 
 def primeFactors(n): 
@@ -700,7 +700,7 @@ class PairingGraph(BaseModel):
             #print('candidates:{} ({})'.format(len(candidates),distMul))
             #if len(candidates)>1:
             #    drawIt()
-            if len(candidates)+numBoxes<MAX_GRAPH_SIZE:
+            if len(candidates)+numBoxes<MAX_GRAPH_SIZE and len(candidates)<MAX_CANDIDATES:
                 return list(candidates)
             else:
                 distMul*=0.85

@@ -116,9 +116,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     numClasses=2
     if model.rotation:
-        targIndex = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
+        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
     else:
-        targIndex = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
+        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
     truePred=falsePred=badPred=0
     i=0
     for n0,n1 in relCand:

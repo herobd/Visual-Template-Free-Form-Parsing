@@ -86,7 +86,8 @@ class PairingGraph(BaseModel):
         self.pool_w = config['featurizer_start_w']
 
 
-        assert('use_rel_shape_feats' not in config)
+        if 'use_rel_shape_feats' in config:
+             config['use_shape_feats'] =  config['use_rel_shape_feats']
         self.useShapeFeats= config['use_shape_feats'] if 'use_shape_feats' in config else False
         #HACK, fixed values
         self.normalizeHorz=400
@@ -704,7 +705,7 @@ class PairingGraph(BaseModel):
                 distMul*=0.85
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {}".format(len(candidates)))
-        return candidates[:MAX_CANDIDATES]
+        return list(candidates)[:MAX_CANDIDATES]
 
     def setDEBUG(self):
         self.debug=True

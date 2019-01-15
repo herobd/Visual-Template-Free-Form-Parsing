@@ -337,6 +337,10 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
     #import pdb; pdb.set_trace()
     #first get all IOUs, then process by class
     allIOUs = getLoc(target[:,0:],pred[:,1:])
+    #This isn't going to work of dist as 0 is perfect
+    maxIOUsForPred,_ = allIOUs.max(dim=0)
+    predsWithNoIntersection=maxIOUsForPred==0
+
     hits = allIOUs>iou_thresh
     allIOUs *= hits.float()
 
@@ -362,4 +366,4 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
             targIndex[clsPredInd] =  targIndexes
             
     #import pdb;pdb.set_trace()
-    return targIndex
+    return targIndex, predsWithNoIntersection

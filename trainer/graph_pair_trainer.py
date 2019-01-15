@@ -42,8 +42,12 @@ class GraphPairTrainer(BaseTrainer):
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
         warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
-        lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
+        #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
+        lr_lambda = lambda step_num: min(((step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
+        #y=((x-(2000-3))/100)^-0.1 and y=x*(1.485/2000)+0.01
         self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+
+        self.useLearningSchedule = 'use_learning_schedule' in config['trainer'] and config['trainer']['use_learning_schedule']
 
         #default is unfrozen, can be frozen by setting 'start_froze' in the PairingGraph models params
         self.unfreeze_detector = config['trainer']['unfreeze_detector'] if 'unfreeze_detector' in config['trainer'] else None
@@ -126,7 +130,8 @@ class GraphPairTrainer(BaseTrainer):
         self.model.train()
         #self.model.eval()
         #print("WARNING EVAL")
-        #self.lr_schedule.step()
+        if self.useLearningSchedule:
+            self.lr_schedule.step()
 
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)

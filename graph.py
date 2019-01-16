@@ -60,16 +60,26 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--plot', default=1, type=int,
                         help='plot (default: True)')
     parser.add_argument('-o', '--only', default=None, type=str,
-                        help='only stats with this prefix (default: True)')
+                        help='only stats with this prefix (default: None)')
+    parser.add_argument('-e', '--extract', default=None, type=str,
+                        help='instead of ploting, save a new file with only the log (default: None)')
 
     args = parser.parse_args()
 
     assert args.checkpoint is not None
     saved = torch.load(args.checkpoint,map_location=lambda storage, loc: storage)
     log = saved['logger']
-    print('loaded iteration {}'.format(saved['iteration']))
+    iteration = saved['iteration']
+    print('loaded iteration {}'.format(iteration))
     saved=None
 
-    print(args.plot)
-
-    graph(log,args.plot,args.only)
+    if args.extract is None:
+        graph(log,args.plot,args.only)
+    else:
+        new_save = {
+                'iteration': iteration,
+                'logger': log
+                }
+        new_file = args.extract #args.checkpoint+'.ex'
+        torch.save(new_save,new_file)
+        print('saved '+new_file)

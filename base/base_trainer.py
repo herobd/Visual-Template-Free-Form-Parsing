@@ -52,7 +52,7 @@ class BaseTrainer:
         self.monitor_mode = config['trainer']['monitor_mode']
         #assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
         self.monitor_best = math.inf if self.monitor_mode == 'min' else -math.inf
-        self.retry_count = config['retry_count'] if 'retry_count' in config else 1
+        self.retry_count = config['trainer']['retry_count'] if 'retry_count' in config['trainer'] else 1
         self.start_iteration = 1
         self.checkpoint_dir = os.path.join(config['trainer']['save_dir'], self.name)
         ensure_dir(self.checkpoint_dir)
@@ -85,6 +85,8 @@ class BaseTrainer:
                     torch.cuda.empty_cache() #this is primarily to catch rare CUDA out of memory errors
                     lastErr = err
             if result is None:
+                if self.retry_count>1:
+                    print('Failed all {} times!'.format(self.retry_count))
                 raise lastErr
 
             elapsed_time = timeit.default_timer() - t

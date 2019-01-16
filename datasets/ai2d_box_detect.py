@@ -9,6 +9,7 @@ import os
 import math
 from utils.util import get_image_size
 from .box_detect import BoxDetectDataset, collate
+import random
 
 
 class AI2DBoxDetect(BoxDetectDataset):
@@ -37,11 +38,11 @@ class AI2DBoxDetect(BoxDetectDataset):
             with open(os.path.join(dirPath,'categories.json')) as f:
                 imageToCategories = json.loads(f.read())
             with open(os.path.join(dirPath,'traintestplit_categories.json')) as f:
-                #if split=='valid' or split=='validation':
-                #    trainTest='train'
-                #else:
-                #    trainTest=split
-                categoriesToUse = json.loads(f.read())[split]
+                if split=='valid' or split=='validation':
+                    trainTest='train'
+                else:
+                    trainTest=split
+                categoriesToUse = json.loads(f.read())[trainTest]
             self.images=[]
             for image, category in imageToCategories.items():
                 if category in categoriesToUse:
@@ -65,6 +66,14 @@ class AI2DBoxDetect(BoxDetectDataset):
                                     interpolation = cv2.INTER_CUBIC)
                             cv2.imwrite(path,resized)
                     self.images.append({'id':image, 'imagePath':imagePath, 'annotationPath':jsonPath, 'rescaled':rescale, 'imageName':image[:image.rfind('.')]})
+
+            random.seed(a=123)
+            random.shuffle(self.images)
+            splitPoint = int(len(self.images)*0.1)
+            if split=='valid' or split=='validation':
+                self.images = self.images[:splitPoint]
+            else:
+                self.images = self.images[splitPoint:]
 
 
     def parseAnn(self,image,annotations,scale,imageName):

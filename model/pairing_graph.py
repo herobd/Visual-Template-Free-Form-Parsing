@@ -18,8 +18,8 @@ import json
 import timeit
 import cv2
 
-MAX_CANDIDATES=330 #450
-MAX_GRAPH_SIZE=380
+MAX_CANDIDATES=325 #450
+MAX_GRAPH_SIZE=370
 #max seen 428, so why'd it crash on 375?
 
 def primeFactors(n): 

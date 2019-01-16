@@ -76,6 +76,9 @@ def convertBBs(bbs,rotate,numClasses):
     rightX = rX
     rightY = rY
 
+    height[ np.logical_or(np.isnan(height),height==0) ] =1
+    width[ np.logical_or(np.isnan(width),width==0) ] =1
+
     new_bbs[:,:,0]=cX
     new_bbs[:,:,1]=cY
     new_bbs[:,:,2]=rot
@@ -91,6 +94,8 @@ def convertBBs(bbs,rotate,numClasses):
     new_bbs[:,:,12]=botY
     #print("{} {}, {} {}".format(new_bbs.shape,new_bbs[:,:,13:].shape,bbs.shape,bbs[:,:,-numClasses].shape))
     new_bbs[:,:,13:]=bbs[:,:,-numClasses:]
+
+    assert(not np.isnan(new_bbs).any())
 
 
     return torch.from_numpy(new_bbs)

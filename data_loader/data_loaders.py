@@ -7,6 +7,7 @@ from datasets import forms_detect
 from datasets.forms_detect import FormsDetect
 from datasets import forms_box_detect
 from datasets.forms_box_detect import FormsBoxDetect
+from datasets import ai2d_box_detect
 from datasets import forms_graph_pair
 from datasets import forms_box_pair
 from datasets.forms_box_pair import FormsBoxPair
@@ -87,6 +88,8 @@ def getDataLoader(config,split):
             return withCollate(FormsDetect,forms_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsBoxDetect':
             return withCollate(FormsBoxDetect,forms_box_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
+        elif data_set_name=='AI2DBoxDetect':
+            return withCollate(ai2d_box_detect.AI2DBoxDetect,ai2d_box_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsBoxPair':
             return withCollate(FormsBoxPair,forms_box_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsGraphPair':
@@ -106,7 +109,7 @@ def getDataLoader(config,split):
                 validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
                 return trainLoader, validLoader
         else:
-            print('Error, no set for {}'.format(data_set_name))
+            print('Error, no dataloader has no set for {}'.format(data_set_name))
             exit()
 
 

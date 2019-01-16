@@ -170,7 +170,7 @@ class BaseTrainer:
                 #    print()#clear inplace text
                 #self.logger.info('Minor checkpoint saved for iteration '+str(self.iteration))
 
-            #LR ADJUST
+            #LR ADJUST (I use a seperate scheduler for most training)
             if self.lr_scheduler and self.iteration % self.epoch_size == 0:
                 self.lr_scheduler.step(self.iteration/self.epoch_size)
                 lr = self.lr_scheduler.get_lr()[0]

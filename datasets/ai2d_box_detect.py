@@ -73,16 +73,18 @@ class AI2DBoxDetect(BoxDetectDataset):
             bbs.append( self.transformBB(blob,scale,0) )
         for arrowId, arrow in annotations['arrows'].items():
             bbs.append( self.transformBB(arrow,scale,1) )
+        for headId, arrow in annotations['arrowHeads'].items():
+            bbs.append( self.transformBB(arrow,scale,2) )
         for textId, text in annotations['text'].items():
-            bbs.append( self.transformBB(text,scale,2) )
+            bbs.append( self.transformBB(text,scale,3) )
         
         bbs = np.array(bbs)[None,:,:] #add batch dim on front
-        return bbs,{},{},None,3
+        return bbs,{},{},None,4
 
 
     def transformBB(self,item,scale,classNum):
         #This has no rotation
-        if classNum==2:
+        if classNum==2 or classNum==3:
             rect = item['rectangle']
             poly = [ rect[0], [rect[1][0],rect[0][1]], rect[1], [rect[0][0],rect[1][1]] ]
         else:
@@ -93,7 +95,7 @@ class AI2DBoxDetect(BoxDetectDataset):
         blY = brY = max([p[1] for p in poly])
 
 
-        bb=[0]*(8+8+3) #2x4 corners, 2x4 cross-points, 3 classes
+        bb=[0]*(8+8+4) #2x4 corners, 2x4 cross-points, 3 classes
 
         bb[0]=tlX*scale
         bb[1]=tlY*scale
@@ -117,5 +119,6 @@ class AI2DBoxDetect(BoxDetectDataset):
         bb[16]=1 if classNum==0 else 0
         bb[17]=1 if classNum==1 else 0
         bb[18]=1 if classNum==2 else 0
+        bb[19]=1 if classNum==3 else 0
 
         return bb

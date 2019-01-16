@@ -78,6 +78,7 @@
         "warmup_steps": 1000,
         "conf_thresh_init": 0.9,
         "conf_thresh_change_iters": 5000,
+        "retry_count":5,
 
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,

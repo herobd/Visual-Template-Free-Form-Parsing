@@ -1,5 +1,5 @@
 {
-    "name": "Simple17_pair_graphUseBadNoResNoLoopNoR2R_staggerP",
+    "name": "Simple17_pair_graphUseSchUseBadNoResNoLoopNoR2R_staggerP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -76,9 +76,9 @@
         "monitor": "loss",
         "monitor_mode": "none",
         "warmup_steps": 1000,
+        "use_learning_schedule": true,
         "conf_thresh_init": 0.9,
         "conf_thresh_change_iters": 5000,
-        "retry_count":5,
 
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,

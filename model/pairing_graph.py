@@ -17,7 +17,8 @@ import json
 import timeit
 import cv2
 
-MAX_CANDIDATES=330 #450
+MAX_CANDIDATES=325 #450
+MAX_GRAPH_SIZE=370
 #max seen 428, so why'd it crash on 375?
 
 def primeFactors(n): 
@@ -699,13 +700,13 @@ class PairingGraph(BaseModel):
             #print('candidates:{} ({})'.format(len(candidates),distMul))
             #if len(candidates)>1:
             #    drawIt()
-            if len(candidates)<MAX_CANDIDATES:
+            if len(candidates)+numBoxes<MAX_GRAPH_SIZE and len(candidates)<MAX_CANDIDATES:
                 return list(candidates)
             else:
                 distMul*=0.85
         #This is a problem, we couldn't prune down enough
-        print("ERROR: could not prune number of candidates down: {}".format(len(candidates)))
-        return list(candidates)[:MAX_CANDIDATES]
+        print("ERROR: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
+        return list(candidates)[:MAX_GRAPH_SIZE-numBoxes]
 
     def setDEBUG(self):
         self.debug=True

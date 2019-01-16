@@ -52,6 +52,7 @@ class BaseTrainer:
         self.monitor_mode = config['trainer']['monitor_mode']
         #assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
         self.monitor_best = math.inf if self.monitor_mode == 'min' else -math.inf
+        self.retry_count = config['trainer']['retry_count'] if 'retry_count' in config['trainer'] else 1
         self.start_iteration = 1
         self.checkpoint_dir = os.path.join(config['trainer']['save_dir'], self.name)
         ensure_dir(self.checkpoint_dir)
@@ -74,7 +75,20 @@ class BaseTrainer:
                 print('iteration: {}'.format(self.iteration), end='\r')
 
             t = timeit.default_timer()
-            result = self._train_iteration(self.iteration)
+            result=None
+            lastErr=None
+            for attempt in range(self.retry_count):
+                try:
+                    result = self._train_iteration(self.iteration)
+                    break
+                except RuntimeError as err:
+                    torch.cuda.empty_cache() #this is primarily to catch rare CUDA out of memory errors
+                    lastErr = err
+            if result is None:
+                if self.retry_count>1:
+                    print('Failed all {} times!'.format(self.retry_count))
+                raise lastErr
+
             elapsed_time = timeit.default_timer() - t
             sumLog['sec_per_iter'] += elapsed_time
             #print('iter: '+str(elapsed_time))
@@ -156,7 +170,7 @@ class BaseTrainer:
                 #    print()#clear inplace text
                 #self.logger.info('Minor checkpoint saved for iteration '+str(self.iteration))
 
-            #LR ADJUST
+            #LR ADJUST (I use a seperate scheduler for most training)
             if self.lr_scheduler and self.iteration % self.epoch_size == 0:
                 self.lr_scheduler.step(self.iteration/self.epoch_size)
                 lr = self.lr_scheduler.get_lr()[0]

@@ -8,50 +8,13 @@ import skimage.transform as sktransform
 import os
 import math
 from utils.util import get_image_size
-from .graph_pair import GraphPairDataset
-
-def collate(batch):
-    assert(len(batch)==1)
-    return batch[0]
+from .box_detect import BoxDetectDataset, collate
 
 
-class AI2DGraphPair(GraphPairDataset):
+class AI2DBoxDetect(BoxDetectDataset):
     """
-    Class for reading AI2D dataset and creating query/result masks from bounding polygons
+    Class for reading AI2D dataset and creating bb gt for detection
     """
-
-    def getResponseBBIdList(self,queryId,annotations):
-        responsePolyList=[]
-        for relId in annotations['relationships']:
-            if queryId in relId:
-                #print('query: '+queryId)
-                #print('rel:   '+relId)
-                pos = relId.find(queryId)
-                if pos+len(queryId)<len(relId) and relId[pos+len(queryId)]!='+': #ensure 'B1' doesnt match 'B10'
-                    continue
-                #only the objects listed immediatley before or after this one are important
-                if pos>0 and relId[pos-1]=='+':
-                    nextPlus = relId.rfind('+',0,pos-1)
-                    #print('nextP: '+str(nextPlus))
-                    neighborId = relId[nextPlus+1:pos-1]
-                    #print('neBe:  '+neighborId)
-                    poly = self.__getResponsePoly(neighborId,annotations)
-                    if poly is not None:
-                        #responsePolyList.append(poly)
-                        responsePolyList.append(neighborId)
-                if pos+len(queryId)+1<len(relId) and relId[pos+len(queryId)]=='+':
-                    nextPlus = relId.find('+',pos+len(queryId)+1)
-                    if nextPlus==-1:
-                        neighborId=relId[pos+len(queryId)+1:]
-                        #print('neAf1: '+neighborId)
-                    else:
-                        neighborId=relId[pos+len(queryId)+1:nextPlus]
-                        #print('neAf2: '+neighborId)
-                    poly = self.__getResponsePoly(neighborId,annotations)
-                    if poly is not None:
-                        #responsePolyList.append(poly)
-                        responsePolyList.append(neighborId)
-        return responsePolyList
 
     def __getResponsePoly(self, neighborId,annotations):
         if neighborId[0]=='T':
@@ -66,7 +29,8 @@ class AI2DGraphPair(GraphPairDataset):
             return None
 
     def __init__(self, dirPath=None, split=None, config=None, images=None, test=False):
-        super(AI2DGraphPair, self).__init__(dirPath,split,config,images)
+        super(AI2DBoxDetect, self).__init__(dirPath,split,config,images)
+        self.only_types = {"boxes":True}
         if images is not None:
             self.images=images
         else:
@@ -79,10 +43,6 @@ class AI2DGraphPair(GraphPairDataset):
                 #    trainTest=split
                 categoriesToUse = json.loads(f.read())[split]
             self.images=[]
-            if test:
-                aH=0
-                aW=0
-                aA=0
             for image, category in imageToCategories.items():
                 if category in categoriesToUse:
                     imagePath_orig = os.path.join(dirPath,'images',image)
@@ -107,21 +67,17 @@ class AI2DGraphPair(GraphPairDataset):
                     self.images.append({'id':image, 'imagePath':imagePath, 'annotationPath':jsonPath, 'rescaled':rescale, 'imageName':image[:image.rfind('.')]})
 
 
-    def parseAnn(self,annotations,scale):
-        ids=[]
+    def parseAnn(self,image,annotations,scale,imageName):
         bbs=[]
         for blobId, blob in annotations['blobs'].items():
-            ids.append(blobId)
             bbs.append( self.transformBB(blob,scale,0) )
         for arrowId, arrow in annotations['arrows'].items():
-            ids.append(arrowId)
             bbs.append( self.transformBB(arrow,scale,1) )
         for textId, text in annotations['text'].items():
-            ids.append(textId)
             bbs.append( self.transformBB(text,scale,2) )
         
         bbs = np.array(bbs)[None,:,:] #add batch dim on front
-        return bbs,ids,3
+        return bbs,{},{},None,3
 
 
     def transformBB(self,item,scale,classNum):

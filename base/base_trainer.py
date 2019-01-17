@@ -85,6 +85,8 @@ class BaseTrainer:
                     torch.cuda.empty_cache() #this is primarily to catch rare CUDA out of memory errors
                     lastErr = err
             if result is None:
+                if self.retry_count>1:
+                    print('Failed all {} times!'.format(self.retry_count))
                 raise lastErr
 
             elapsed_time = timeit.default_timer() - t
@@ -168,7 +170,7 @@ class BaseTrainer:
                 #    print()#clear inplace text
                 #self.logger.info('Minor checkpoint saved for iteration '+str(self.iteration))
 
-            #LR ADJUST
+            #LR ADJUST (I use a seperate scheduler for most training)
             if self.lr_scheduler and self.iteration % self.epoch_size == 0:
                 self.lr_scheduler.step(self.iteration/self.epoch_size)
                 lr = self.lr_scheduler.get_lr()[0]

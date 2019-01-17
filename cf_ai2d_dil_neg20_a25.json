@@ -1,6 +1,6 @@
 {
     "name": "ai2d_dil_neg20_a25",
-    "cuda": false,
+    "cuda": true,
     "gpu": 0,
     "super_computer":true,
     "save_mode": "state_dict",

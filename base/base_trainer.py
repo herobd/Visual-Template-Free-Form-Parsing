@@ -231,11 +231,14 @@ class BaseTrainer:
                 os.remove(filename_late)
             except FileNotFoundError:
                 pass
+            os.link(filename,filename_late) #this way checkpoint-latest always does have the latest
+
         if save_best:
             os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))
             self.logger.info("Saved current best: {} ...".format('model_best.pth.tar'))
         else:
             self.logger.info("Saved checkpoint: {} ...".format(filename))
+
 
         ######DEBUG
         #checkpoint = torch.load(filename)

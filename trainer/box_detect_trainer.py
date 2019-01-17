@@ -181,8 +181,8 @@ class BoxDetectTrainer(BaseTrainer):
             this_loss*=self.loss_weight['box']
             loss+=this_loss
             losses['box_loss']=this_loss.item()
-            print('boxLoss:{}'.format(this_loss))
-            display(thisInstance)
+            #print('boxLoss:{}'.format(this_loss))
+            #display(thisInstance)
         else:
             position_loss=0
             conf_loss=0

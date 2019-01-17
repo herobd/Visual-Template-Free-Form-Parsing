@@ -1,5 +1,5 @@
 {
-    "name": "Simple17_pair_graph_staggerP",
+    "name": "Simple17_pair_graphUseSchUseBadNoResNoLoopNoR2R_staggerP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -47,7 +47,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.008,
+        "lr": 0.016,
         "weight_decay": 0
     },
     "loss": {
@@ -66,7 +66,7 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 200000,
+        "iterations": 300000,
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 25000,
@@ -76,12 +76,15 @@
         "monitor": "loss",
         "monitor_mode": "none",
         "warmup_steps": 1000,
+        "use_learning_schedule": true,
         "conf_thresh_init": 0.9,
         "conf_thresh_change_iters": 5000,
 
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,
-        "stop_from_gt": 200000
+        "stop_from_gt": 250000,
+
+        "use_bad_bb_pred_for_rel_loss": true
     },
     "arch": "PairingGraph", 
     "model": {
@@ -90,15 +93,16 @@
         "start_frozen": true,
         "graph_config": {
             "arch": "GraphNet",
+            "use_res": false,
             "in_channels": 512,
-            "layers": [512,512],
-            "repetitions": 2,
+            "layers": [512,512,512,512],
+            "repetitions": 1,
 	    "bb_out": 0,
             "rel_out": 1,
             "norm": "split_norm",
-            "dropout": false
+            "dropout": 0.1
         },
-        "use_rel_rel_edges": true,
+        "use_rel_rel_edges": false,
 	"use_shape_feats": true,
         "featurizer_start_h": 8,
         "featurizer_start_w": 8,

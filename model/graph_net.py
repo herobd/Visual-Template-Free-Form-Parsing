@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import math
 import json
-from .graphconvolution import GraphConvolution
+from .graphconvolution import GraphConvolution, GraphResConv, GraphConvWithAct
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 
@@ -11,41 +11,8 @@ class GraphNet(nn.Module):
     def __init__(self, config): # predCount, base_0, base_1):
         super(GraphNet, self).__init__()
 
-        class GraphConvWithAct(nn.Module):
-            def __init__(self,in_ch,out_ch,config):
-                super(GraphConvWithAct, self).__init__()
-                self.graph_conv=GraphConvolution(in_ch,out_ch)
-                self.split_normBB=None
-                act_layers = []
-                if 'norm' in config:
-                    if config['norm']=='batch_norm':
-                        act_layers.append(nn.BatchNorm1d(out_ch)) #essentially all the nodes compose a batch. There aren't enough some times
-                    elif config['norm']=='group_norm':
-                        act_layers.append(nn.GroupNorm(4,out_ch)) 
-                    elif config['norm']=='split_norm':
-                        #act_layers.append(nn.InstanceNorm1d(out_ch))
-                        self.split_normBB = nn.GroupNorm(4,out_ch)
-                        self.split_normRel = nn.GroupNorm(4,out_ch)
-                if 'dropout' in config:
-                    if type(config['dropout']) is float:
-                        act_layers.append(nn.Dropout(p=config['dropout'],inplace=True))
-                    elif config['dropout']:
-                        act_layers.append(nn.Dropout(p=0.3,inplace=True))
-                act_layers.append(nn.ReLU(inplace=True))
-                self.act_layers = nn.Sequential(*act_layers)
-
-            def forward(self,node_features,adjacencyMatrix,numBBs):
-                if self.split_normBB is not None:
-                    bb = self.split_normBB(node_features[:numBBs])
-                    rel = self.split_normRel(node_features[numBBs:])
-                    node_featuresX = torch.cat((bb,rel),dim=0)
-                else:
-                    node_featuresX = node_features
-                node_featuresX = self.act_layers(node_featuresX)
-                node_featuresX = self.graph_conv(node_featuresX,adjacencyMatrix)
-                return node_featuresX
         
-        self.useRes = config['use_res'] if 'use_res' in config else True
+        self.useRes = config['use_res'] if 'use_res' in config else 'loop'
         #how many times to re-apply graph conv layers
         self.repetitions = config['repetitions'] if 'repetitions' in config else 1 
 
@@ -56,7 +23,11 @@ class GraphNet(nn.Module):
                 assert(n==prevCh)
         self.layers=nn.ModuleList()
         for ch in layer_desc:
-            self.layers.append( GraphConvWithAct(prevCh,ch,config) )
+            if type(self.useRes)==str and 'layer' in self.useRes:
+                assert(prevCh==ch)
+                self.layers.append( GraphResConv(prevCh,config['norm'],config['dropout']) )
+            else:
+                self.layers.append( GraphConvWithAct(prevCh,ch,config['norm'],config['dropout']) )
             prevCh=ch
         numBBOut = config['bb_out'] if 'bb_out' in config else 0
         numRelOut = config['rel_out'] if 'rel_out' in config else 1
@@ -97,7 +68,7 @@ class GraphNet(nn.Module):
             side=node_featuresX
             for graph_conv in self.layers:
                 side = graph_conv(side,adjacencyMatrix,numBBs)
-            if self.useRes:
+            if type(self.useRes)==str and 'loop' in self.useRes:
                 node_featuresX=side+node_featuresX
             else:
                 node_featuresX=side

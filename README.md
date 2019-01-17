@@ -5,6 +5,12 @@ based on victoresque pytorch template
 * Python 3.x
 * PyTorch
 
+# Installing to get it to work with pytorch 1
+`conda instal $`
+* `ipython`
+* `pytorch torchvision -c pytorch`
+* `opencv`
+* `scikit-image`
 
 ## Folder Structure
   ```

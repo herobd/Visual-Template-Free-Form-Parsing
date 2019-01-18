@@ -433,8 +433,19 @@ class PairingGraph(BaseModel):
             numBB=0
             bbAndRel_features=relFeats
             adjacencyMatrix = None
+            numOfNeighbors = None
         else:
             bbAndRel_features = torch.cat((bb_features,relFeats),dim=0)
+            numOfNeighbors = torch.ones(bbs.size(0)+len(candidates)) #starts at one for yourself
+            edges=[]
+            i=0
+            for bb1,bb2 in candidates:
+                edges.append( (bb1,numBB+i) )
+                edges.append( (bb2,numBB+i) )
+                numOfNeighbors[bb1]+=1
+                numOfNeighbors[bb2]+=1
+                numOfNeighbors[numBB+i]+=2
+                i+=1
             if self.includeRelRelEdges:
                 relEdges=set()
                 i=0
@@ -445,12 +456,17 @@ class PairingGraph(BaseModel):
                             relEdges.add( (numBB+i,numBB+j) ) #i<j always
                         j+=1   
                     i+=1
-                edges = candidates+list(relEdges)
-            else:
-                edges = candidates.copy()
+                relEdges = list(relEdges)
+                for r1, r2 in relEdges:
+                    numOfNeighbors[r1]+=1
+                    numOfNeighbors[r2]+=1
+                edges += relEdges
+            #add reverse edges
+            edges+=[(y,x) for x,y in edges]
             #add diagonal (self edges)
             for i in range(bbAndRel_features.size(0)):
                 edges.append((i,i))
+
             edgeLocs = torch.LongTensor(edges).t().to(relFeats.device)
             ones = torch.ones(len(edges)).to(relFeats.device)
             adjacencyMatrix = torch.sparse.FloatTensor(edgeLocs,ones,torch.Size([bbAndRel_features.size(0),bbAndRel_features.size(0)]))
@@ -459,7 +475,7 @@ class PairingGraph(BaseModel):
         #adjacencyMatrix = None
         ##print('create graph: {}'.format(timeit.default_timer()-tic))
         #return bb_features, adjacencyMatrix, rel_features
-        return bbAndRel_features, adjacencyMatrix, numBB, numRel, relIndexes
+        return bbAndRel_features, (adjacencyMatrix,numOfNeighbors), numBB, numRel, relIndexes
 
 
 

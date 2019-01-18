@@ -47,7 +47,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.016,
+        "lr": 0.16,
         "weight_decay": 0
     },
     "loss": {

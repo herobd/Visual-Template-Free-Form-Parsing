@@ -62,6 +62,7 @@ class GraphNet(nn.Module):
 
 
     def forward(self, node_features, adjacencyMatrix, numBBs):
+
         #it is assumed these features are not activated
         node_featuresX = node_features
         for i in range(self.repetitions):

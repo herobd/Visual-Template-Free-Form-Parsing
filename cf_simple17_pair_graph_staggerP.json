@@ -90,6 +90,7 @@
         "start_frozen": true,
         "graph_config": {
             "arch": "GraphNet",
+            "use_res": false,
             "in_channels": 512,
             "layers": [512,512],
             "repetitions": 2,

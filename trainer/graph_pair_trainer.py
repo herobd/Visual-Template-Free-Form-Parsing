@@ -350,9 +350,9 @@ class GraphPairTrainer(BaseTrainer):
                 total_rel_fullPrec+=fullPrec
                 #relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
                 relLoss=None
-                if predPairingShouldBeTrue is not None:
+                if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
                     relLoss = self.loss['rel'](predPairingShouldBeTrue,torch.ones_like(predPairingShouldBeTrue).to(image.device))
-                if predPairingShouldBeFalse is not None:
+                if predPairingShouldBeFalse is not None  and predPairingShouldBeFalse.size(0)>0:
                     relFalseLoss = self.loss['rel'](predPairingShouldBeFalse,torch.zeros_like(predPairingShouldBeFalse).to(image.device))
                     if relLoss is not None:
                         relLoss += relFalseLoss

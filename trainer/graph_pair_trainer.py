@@ -389,12 +389,7 @@ class GraphPairTrainer(BaseTrainer):
 
                 total_val_loss += loss.item()
                 loss=relFalseLoss=relLoss=boxLoss=None
-                image=None
-                queryMask=None
-                targetBoxes=None
-                outputBoxes=None
-                outputOffsets=None
-                relPred=relIndexes=predPairingShouldBeTrue=predPairingShouldBeFalse=None
+                instance=predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),

@@ -90,13 +90,14 @@
         "start_frozen": true,
         "graph_config": {
             "arch": "GraphNet",
+            "use_res": false,
             "in_channels": 512,
             "layers": [512,512],
             "repetitions": 2,
 	    "bb_out": 0,
             "rel_out": 1,
             "norm": "split_norm",
-            "dropout": false
+            "dropout": 0.1
         },
         "use_rel_rel_edges": true,
 	"use_shape_feats": true,

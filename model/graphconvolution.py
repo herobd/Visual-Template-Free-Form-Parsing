@@ -33,7 +33,7 @@ class GraphConvolution(nn.Module):
         support = torch.mm(input, self.weight)
         output = torch.spmm(adj[0], support)
         #normalize based on how many things are summed
-        output /= adj[1]
+        output /= adj[1][:,None]
         if self.bias is not None:
             return output + self.bias
         else:

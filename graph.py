@@ -21,17 +21,23 @@ def graph(log,plot=True,prefix=None):
                 graphs[metric]['values'].append(value)
     
     print('summed')
+    skip=[]
     for metric, data in graphs.items():
         #print('{} max: {}, min {}'.format(metric,max(data['values']),min(data['values'])))
         ndata = np.array(data['values'])
-        maxV = ndata.max(axis=0)
-        minV = ndata.min(axis=0)
-        print('{} max: {}, min {}'.format(metric,maxV,minV))
+        if ndata.dtype is not np.dtype(object):
+            maxV = ndata.max(axis=0)
+            minV = ndata.min(axis=0)
+            print('{} max: {}, min {}'.format(metric,maxV,minV))
+        else:
+            skip.append(metric)
 
     if plot:
         import matplotlib.pyplot as plt
         i=1
         for metric, data in graphs.items():
+            if metric in skip:
+                continue
             if (prefix is None and metric[:3]=='avg' or metric[:3]=='val') or (prefix is not None and metric[:len(prefix)]==prefix):
                 plt.figure(i)
                 i+=1

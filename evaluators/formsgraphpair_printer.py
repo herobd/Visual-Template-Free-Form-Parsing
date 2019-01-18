@@ -93,12 +93,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #TODO rel loss
 
     relCand = relIndexes
-    relPred = torch.sigmoid(relPred)
+    if relPred is not None:
+        relPred = torch.sigmoid(relPred)
+    if relCand is None:
+        relCand=[]
 
     data = data.numpy()
     #threshed in model
-    maxConf = outputBBs[:,0].max().item()
-    minConf = outputBBs[:,0].min().item()
+    if outputBBs.size(0)>0:
+        maxConf = outputBBs[:,0].max().item()
+        minConf = outputBBs[:,0].min().item()
     #threshConf = max(maxConf*THRESH,0.5)
     #if model.rotation:
     #    outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,3)

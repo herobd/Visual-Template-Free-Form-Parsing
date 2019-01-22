@@ -424,17 +424,21 @@ class GraphPairTrainer(BaseTrainer):
             if targetBoxes is None:
                 if relPred is not None and (relPred>self.thresh_rel).any():
                     prec=0
+                    ap=0
                 else:
                     prec=1
+                    ap=1
                 recall=1
             elif relPred is None:
                 if targetBoxes is not None:
                     recall=0
+                    ap=0
                 else:
                     recall=1
+                    ap=1
                 prec=1
 
-            return torch.tensor([]),torch.tensor([]),recall,prec,prec
+            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
         targetBoxes = targetBoxes.cpu()
         #decide which predicted boxes belong to which target boxes
         #should this be the same as AP_?
@@ -522,11 +526,13 @@ class GraphPairTrainer(BaseTrainer):
             #assert(adj is None or len(adj)==0) this is a failure of the heuristic pairing
             if adj is not None and len(adj)>0:
                 recall=0
+                ap=0
             else:
                 recall=1
+                ap=1
             prec=1
 
-            return torch.tensor([]),torch.tensor([]),recall,prec,prec
+            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
         rels = relIndexes #relPred._indices().cpu().t()
         predsAll = relPred
         sigPredsAll = torch.sigmoid(predsAll)

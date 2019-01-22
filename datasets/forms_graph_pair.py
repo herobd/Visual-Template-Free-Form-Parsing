@@ -41,13 +41,15 @@ class FormsGraphPair(GraphPairDataset):
         else:
             self.swapCircle = False
 
-        self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
+        self.special_dataset = config['special_dataset'] if 'special_dataset' in config else None
+        if 'simple_dataset' in config and config['simple_dataset']:
+            self.special_dataset='simple'
 
         if images is not None:
             self.images=images
         else:
-            if self.simple_dataset:
-                splitFile = 'simple_train_valid_test_split.json'
+            if self.special_dataset is not None:
+                splitFile = self.special_dataset+'_train_valid_test_split.json'
             else:
                 splitFile = 'train_valid_test_split.json'
             with open(os.path.join(dirPath,splitFile)) as f:

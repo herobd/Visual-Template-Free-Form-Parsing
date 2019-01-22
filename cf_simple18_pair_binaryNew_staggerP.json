@@ -1,5 +1,5 @@
 {
-    "name": "Simple17_pair_graph_staggerP",
+    "name": "Simple18_pair_binaryNew_staggerP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -7,7 +7,7 @@
     "super_computer":false,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
-        "simple_dataset": true,
+        "special_dataset": "simple",
         "data_dir": "../data/forms",
         "batch_size": 1,
         "shuffle": true,
@@ -55,7 +55,7 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 1.1,
+        "box": 1,
         "edge": 1
     },
     "loss_params": 
@@ -68,10 +68,10 @@
         "class": "GraphPairTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 5000,
-        "save_step": 25000,
+        "val_step": 10000,
+        "save_step": 50000,
         "save_step_minor": 250,
-        "log_step": 250,
+        "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
@@ -89,22 +89,16 @@
         "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
+	"use_rel_shape_feats": "corner",
+        "expand_rel_context": 100,
         "graph_config": {
-            "arch": "GraphNet",
-            "use_res": false,
-            "in_channels": 512,
-            "layers": [512,512],
-            "repetitions": 2,
-	    "bb_out": 0,
-            "rel_out": 1,
-            "norm": "split_norm",
-            "dropout": 0.1
+            "arch": "BinaryPairNet",
+            "node_channels": 0,
+            "edge_channels": 1
         },
-        "use_rel_rel_edges": true,
-	"use_shape_feats": true,
-        "featurizer_start_h": 8,
-        "featurizer_start_w": 8,
-        "featurizer_conv": [512,"M",512],
-        "featurizer_fc": []
+        "featurizer_start_h": 12,
+        "featurizer_start_w": 12,
+        "featurizer_conv": [128,128,"M",256,256,"M"],
+        "featurizer_fc": ["FC256"]
     }
 }

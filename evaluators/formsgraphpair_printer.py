@@ -8,7 +8,7 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
+from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
 
 
 def plotRect(img,color,xyrhw):
@@ -120,19 +120,30 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
     truePred=falsePred=badPred=0
+    scores=[]
+    matches=0
     i=0
     for n0,n1 in relCand:
-        if relPred[i]>EDGE_THRESH:
-            t0 = targIndex[n0].item()
-            t1 = targIndex[n1].item()
-            if t0>=0 and t1>=0:
-                if (min(t0,t1),max(t0,t1)) in adjacency:
+        t0 = targIndex[n0].item()
+        t1 = targIndex[n1].item()
+        if t0>=0 and t1>=0:
+            if (min(t0,t1),max(t0,t1)) in adjacency:
+                matches+=1
+                scores.append( (relPred[i],True) )
+                if relPred[i]>EDGE_THRESH:
                     truePred+=1
-                else:
-                    falsePred+=1
             else:
+                scores.append( (relPred[i],False) )
+                if relPred[i]>EDGE_THRESH:
+                    falsePred+=1
+        else:
+            scores.append( (relPred[i],False) )
+            if relPred[i]>EDGE_THRESH:
                 badPred+=1
         i+=1
+    for i in range(len(adjacency)-matches):
+        scores.append( (0.0,True) )
+    rel_ap=computeAP(scores)
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
     else:
@@ -270,7 +281,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
 
-        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_prec:{:.2f}_recall:{:.2f}_fullPrec:{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],relPrec,relRecall,fullPrec)
+        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_AP{:.3f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],rel_ap)
         #for j in range(metricsOut.shape[1]):
         #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
         saveName+='.png'
@@ -295,6 +306,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_Fm':(relRecall+relPrec)/2,
                'rel_fullPrec':fullPrec,
                'rel_fullFm':(relRecall+fullPrec)/2,
+               'rel_AP': rel_ap
 
              }, 
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)

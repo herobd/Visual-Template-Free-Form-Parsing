@@ -289,15 +289,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #print('saved: '+os.path.join(outDir,saveName))
 
         
-    #return metricsOut
-    return (
-             #{ 'ap_5':np.array(aps_5).sum(axis=0),
-             #  'ap_3':np.array(aps_3).sum(axis=0),
-             #  'ap_7':np.array(aps_7).sum(axis=0),
-             #  'recall':np.array(recalls_5).sum(axis=0),
-             #  'prec':np.array(precs_5).sum(axis=0),
-             #}, 
-             { 'bb_ap_5':[ap_5],
+    retData= { 'bb_ap_5':[ap_5],
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
@@ -306,9 +298,12 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_Fm':(relRecall+relPrec)/2,
                'rel_fullPrec':fullPrec,
                'rel_fullFm':(relRecall+fullPrec)/2,
-               'rel_AP': rel_ap
 
-             }, 
+             }
+    if rel_ap>=0: #-1 ap if no relationships
+        retData['rel_AP']=rel_ap
+    return (
+             retData,
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)
             )
 

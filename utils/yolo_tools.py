@@ -366,6 +366,8 @@ def computeAP(scores):
                 elif conf2==conf:
                     equal+=1
             rank.append(better+math.floor(equal/2.0))
+    if len(rank)==0:
+        return -1
     rank.sort()
     ap=0.0
     for i in range(len(rank)):

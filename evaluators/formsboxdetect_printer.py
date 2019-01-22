@@ -156,19 +156,23 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     aps_7=[]
     recalls_5=[]
     precs_5=[]
+    numClasses = model.numBBTypes
+    if 'no_blanks' in config['data_loader'] and not config['data_loader']['no_blanks']:
+        numClasses-=1
+    
     for b in range(batchSize):
         if targetBBs is not None:
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
             target_for_b = torch.empty(0)
         if model.rotation:
-            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.9,model.numBBTypes)
-            ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],1.3,model.numBBTypes)
-            ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.5,model.numBBTypes)
+            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.9,numClasses)
+            ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],1.3,numClasses)
+            ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.5,numClasses)
         else:
-            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,model.numBBTypes)
-            ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
-            ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
+            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,numClasses)
+            ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,numClasses)
+            ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,numClasses)
 
 
         aps_5.append(ap_5 )
@@ -265,9 +269,11 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                     #elif name=='field_end_gt' or name=='field_start_gt':
                     #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
                     if bbs[j,6] > bbs[j,7]:
-                        color=(0,0,shade) #text
+                        color=[0,0,shade] #text
                     else:
-                        color=(shade,0,0) #field
+                        color=[shade,0,0] #field
+                    if numClasses==2 and model.numBBTypes==3 and bbs[j,8] > 0.5:
+                        color[1]=shade
                     plotRect(image,color,bbs[j,1:6])
 
             #for j in alignmentBBsTarg[name][b]:

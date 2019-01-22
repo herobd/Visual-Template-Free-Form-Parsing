@@ -213,7 +213,8 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
     if ignoreClasses:
         numClasses=1
     if len(target.size())>1:
-        numClasses=target.size(1)-13
+        #numClasses=target.size(1)-13
+        pass
     elif len(pred.size())>1 and pred.size(0)>0:
         #if there are no targets, we shouldn't be pred anything
         if ignoreClasses:
@@ -221,7 +222,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
             precisions.append(0)
             recalls.append(1)
         else:
-            numClasses=pred.size(1)-6
+            #numClasses=pred.size(1)-6
             for cls in range(numClasses):
                 if (torch.argmax(pred[:,cls+6:],dim=1)==cls).any():
                     aps.append(0) #but we did for this class :(

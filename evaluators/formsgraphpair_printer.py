@@ -9,6 +9,7 @@ import math
 from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
+from model.optimize import optimizeRelationships
 
 
 def plotRect(img,color,xyrhw):
@@ -95,6 +96,28 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     relCand = relIndexes
     relPred = torch.sigmoid(relPred)
 
+    numClasses=2
+    if model.rotation:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
+    else:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
+    if targetBBs is not None:
+        target_for_b = targetBBs[0,:,:]
+    else:
+        target_for_b = torch.empty(0)
+    if 'optimize' in config and config['optimize']:
+        numNeighbors=[0]*len(relCand)
+        rev={}
+        for ind in range(outputBBs.size(0)):
+            rev[targIndex[ind]]=ind
+        for t0,t1 in adjacency:
+            if t0 in rev:
+                numNeighbors[rev[t0]]+=1
+            if t1 in rev:
+                numNeighbors[rev[t1]]+=1
+        relPred *= torch.from_numpy( optimizeRelationships(relPred,relCand,numNeighbors) )
+        EDGE_THRESH=0
+
     data = data.numpy()
     #threshed in model
     maxConf = outputBBs[:,0].max().item()
@@ -105,20 +128,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #else:
     #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
-    if targetBBs is not None:
-        target_for_b = targetBBs[0,:,:]
-    else:
-        target_for_b = torch.empty(0)
     if model.rotation:
         ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes)
     else:
         ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes)
 
-    numClasses=2
-    if model.rotation:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
-    else:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
     truePred=falsePred=badPred=0
     scores=[]
     matches=0

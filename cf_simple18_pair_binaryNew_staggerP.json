@@ -90,14 +90,14 @@
         "conf_thresh": 0.5,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",
-        "expand_rel_context": 200,
+        "expand_rel_context": 100,
         "graph_config": {
             "arch": "BinaryPairNet",
             "node_channels": 0,
             "edge_channels": 1
         },
-        "featurizer_start_h": 16,
-        "featurizer_start_w": 16,
+        "featurizer_start_h": 12,
+        "featurizer_start_w": 12,
         "featurizer_conv": [128,128,"M",256,256,"M"],
         "featurizer_fc": ["FC256"]
     }

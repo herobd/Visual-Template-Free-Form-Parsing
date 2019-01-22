@@ -353,7 +353,7 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
     #import pdb;pdb.set_trace()
     return targIndex, predsWithNoIntersection
 
-def compuateAP(scores):
+def computeAP(scores):
     rank=[]
     for conf,rel in scores:
         if rel:

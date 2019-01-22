@@ -6,7 +6,7 @@ import timeit
 from utils import util
 from collections import defaultdict
 from evaluators import FormsBoxDetect_printer
-from utils.yolo_tools import non_max_sup_iou, AP_iou
+from utils.yolo_tools import non_max_sup_iou, AP_iou, computeAP
 
 
 class FeaturePairTrainer(Trainer):
@@ -175,14 +175,15 @@ class FeaturePairTrainer(Trainer):
                     print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
 
                 data,label = self._to_tensor(instance['data'],instance['label'])
-                output = self.model(data)
+                output = torch.sigmoid(self.model(data))
                 loss = self.loss(output,label)
                 
                 
                 for b in range(len(output)):
                     image = instance['imgName'][b]
                     images.add(image)
-                    if output[b]<0:
+                    scores[image].append( (output[b],label[b]) )
+                    if output[b]<0.5:
                         if label[b]==0:
                             tn_image[image]+=1
                         else:
@@ -197,8 +198,10 @@ class FeaturePairTrainer(Trainer):
 
         mRecall=0
         mPrecision=0
+        mAP=0
         
         for image in images:
+            mAP += computeAP(scores[image])
             if tp_image[image]+fn_image[image]>0:
                 mRecall += tp_image[image]/(tp_image[image]+fn_image[image])
             else:
@@ -209,10 +212,12 @@ class FeaturePairTrainer(Trainer):
                 mPrecision += 1
         mRecall /= len(images)
         mPrecision /= len(images)
+        mAP /= len(images)
 
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
             'val_recall':mRecall,
             'val_precision':mPrecision,
+            'val_aAP': mAP
         }

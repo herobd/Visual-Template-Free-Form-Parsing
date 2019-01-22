@@ -167,6 +167,7 @@ class FeaturePairTrainer(Trainer):
         tn_image=defaultdict(lambda:0)
         fn_image=defaultdict(lambda:0)
         images=set()
+        scores=defaultdict(list)
 
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
@@ -219,5 +220,5 @@ class FeaturePairTrainer(Trainer):
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
             'val_recall':mRecall,
             'val_precision':mPrecision,
-            'val_aAP': mAP
+            'val_mAP': mAP
         }

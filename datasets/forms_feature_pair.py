@@ -84,7 +84,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
         self.swapCircle = config['swap_circle'] if 'swap_circle' in config else True
         self.onlyFormStuff = config['only_form_stuff'] if 'only_form_stuff' in config else False
-        self.only_opposite_pairs = False
+        self.only_opposite_pairs = config['only_opposite_pairs'] if 'only_opposite_pairs' in config else False
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
 

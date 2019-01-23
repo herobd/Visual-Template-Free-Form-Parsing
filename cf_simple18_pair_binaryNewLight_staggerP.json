@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binaryNew_staggerP",
+    "name": "Simple18_pair_binaryNewLight_staggerP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -98,7 +98,7 @@
         },
         "featurizer_start_h": 12,
         "featurizer_start_w": 12,
-        "featurizer_conv": [128,128,"M",256,256,"M"],
-        "featurizer_fc": ["FC256"]
+        "featurizer_conv": [128,128,"M",256,"M"],
+        "featurizer_fc": []
     }
 }

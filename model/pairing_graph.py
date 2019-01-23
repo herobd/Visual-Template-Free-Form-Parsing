@@ -241,7 +241,7 @@ class PairingGraph(BaseModel):
                 useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>1:
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
-            bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,final_features,image.size(-2),image.size(-1))
+            bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,final_features,image.size(-2),image.size(-1), debug_image=None)
             if bbAndRel_features is None:
                 return bbPredictions, offsetPredictions, None, None
 
@@ -305,10 +305,10 @@ class PairingGraph(BaseModel):
             maxY = max(tlY[index1],tlY[index2],trY[index1],trY[index2],blY[index1],blY[index2],brY[index1],brY[index2])
             minY = min(tlY[index1],tlY[index2],trY[index1],trY[index2],blY[index1],blY[index2],brY[index1],brY[index2])
             if self.expandedRelContext is not None:
-                maxX = min(maxX+self.expandedRelContext,imageWidth-1)
-                minX = max(minX-self.expandedRelContext,0)
-                maxY = min(maxY+self.expandedRelContext,imageHeight-1)
-                minY = max(minY-self.expandedRelContext,0)
+                maxX = min(maxX.item()+self.expandedRelContext,imageWidth-1)
+                minX = max(minX.item()-self.expandedRelContext,0)
+                maxY = min(maxY.item()+self.expandedRelContext,imageHeight-1)
+                minY = max(minY.item()-self.expandedRelContext,0)
             rois[i,1]=minX
             rois[i,2]=minY
             rois[i,3]=maxX
@@ -324,12 +324,12 @@ class PairingGraph(BaseModel):
                 #print('crop {}: ({},{}), ({},{})'.format(i,minX.item(),maxX.item(),minY.item(),maxY.item()))
                 #print(bbs[index1])
                 #print(bbs[index2])
-                crop = debug_image[0,:,int(minY.item()):int(maxY.item()),int(minX.item()):int(maxX.item())+1].cpu()
+                crop = debug_image[0,:,int(minY):int(maxY),int(minX):int(maxX)+1].cpu()
                 crop = (2-crop)/2
                 if crop.size(0)==1:
                     crop = crop.expand(3,crop.size(1),crop.size(2))
-                crop[0,int(tlY[index1].item()-minY.item()):int(brY[index1].item()-minY.item())+1,int(tlX[index1].item()-minX.item()):int(brX[index1].item()-minX.item())+1]*=0.5
-                crop[1,int(tlY[index2].item()-minY.item()):int(brY[index2].item()-minY.item())+1,int(tlX[index2].item()-minX.item()):int(brX[index2].item()-minX.item())+1]*=0.5
+                crop[0,int(tlY[index1].item()-minY):int(brY[index1].item()-minY)+1,int(tlX[index1].item()-minX):int(brX[index1].item()-minX)+1]*=0.5
+                crop[1,int(tlY[index2].item()-minY):int(brY[index2].item()-minY)+1,int(tlX[index2].item()-minX):int(brX[index2].item()-minX)+1]*=0.5
                 crop = crop.numpy().transpose([1,2,0])
                 cv2.imshow('crop {}'.format(i),crop)
                 #import pdb;pdb.set_trace()

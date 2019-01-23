@@ -283,12 +283,13 @@ class GraphPairTrainer(BaseTrainer):
             'rel_prec': ePrec,
             'rel_fullPrec':fullPrec,
             'rel_F': (eRecall+ePrec)/2,
-            'rel_AP': ap,
             #'debug_avg_relTrue': debug_avg_relTrue,
             #'debug_avg_relFalse': debug_avg_relFalse,
 
             **metrics,
         }
+        if ap>=0:
+            log['rel_AP']=ap
 
         #if iteration%10==0:
         #image=None
@@ -327,6 +328,8 @@ class GraphPairTrainer(BaseTrainer):
         total_rel_recall=0
         total_rel_prec=0
         total_rel_fullPrec=0
+        total_AP=0
+        AP_count=0
         total_val_metrics = np.zeros(len(self.metrics))
 
         mAP = np.zeros(self.model.numBBTypes)
@@ -349,7 +352,9 @@ class GraphPairTrainer(BaseTrainer):
                 total_rel_recall+=recall
                 total_rel_prec+=prec
                 total_rel_fullPrec+=fullPrec
-                total_AP+=ap
+                if ap>=0:
+                    total_AP+=ap
+                    AP_count+=1
                 #relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
                 relLoss=None
                 if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
@@ -402,12 +407,12 @@ class GraphPairTrainer(BaseTrainer):
             'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
             'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
             'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
-            'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
+            'val_bb_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_rel_recall':total_rel_recall/len(self.valid_data_loader),
             'val_rel_prec':total_rel_prec/len(self.valid_data_loader),
             'val_rel_F':(total_rel_prec+total_rel_recall)/(2*len(self.valid_data_loader)),
             'val_rel_fullPrec':total_rel_fullPrec/len(self.valid_data_loader),
-            'val_rel_mAP': total_AP/len(self.valid_data_loader)
+            'val_rel_mAP': total_AP/AP_count
             #'val_position_loss':total_position_loss / len(self.valid_data_loader),
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
             #'val_class_loss':tota_class_loss / len(self.valid_data_loader),
@@ -419,17 +424,21 @@ class GraphPairTrainer(BaseTrainer):
             if targetBoxes is None:
                 if relPred is not None and (relPred>self.thresh_rel).any():
                     prec=0
+                    ap=0
                 else:
                     prec=1
+                    ap=1
                 recall=1
             elif relPred is None:
                 if targetBoxes is not None:
                     recall=0
+                    ap=0
                 else:
                     recall=1
+                    ap=1
                 prec=1
 
-            return torch.tensor([]),torch.tensor([]),recall,prec,prec
+            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
         targetBoxes = targetBoxes.cpu()
         #decide which predicted boxes belong to which target boxes
         #should this be the same as AP_?
@@ -517,11 +526,13 @@ class GraphPairTrainer(BaseTrainer):
             #assert(adj is None or len(adj)==0) this is a failure of the heuristic pairing
             if adj is not None and len(adj)>0:
                 recall=0
+                ap=0
             else:
                 recall=1
+                ap=1
             prec=1
 
-            return torch.tensor([]),torch.tensor([]),recall,prec,prec
+            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
         rels = relIndexes #relPred._indices().cpu().t()
         predsAll = relPred
         sigPredsAll = torch.sigmoid(predsAll)

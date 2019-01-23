@@ -16,20 +16,28 @@ from datasets import forms_detect
 logging.basicConfig(level=logging.INFO, format='')
 
 
-def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None, thresh=None):
+def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None, thresh=None, addToConfig=None):
     np.random.seed(1234)
     torch.manual_seed(1234)
-    #if gpu is None:
-    #    loc = 
     checkpoint = torch.load(resume, map_location=lambda storage, location: storage)
     if config is None:
         config = checkpoint['config']
     else:
         config = json.load(open(config))
 
+    if gpu is None:
+        config['cuda']=False
+    else:
+        config['cuda']=True
+        condif['gpu']=gpu
     if thresh is not None:
         config['THRESH'] = thresh
         print('Threshold at {}'.format(thresh))
+    if addToConfig is not None:
+        for addKey, addValue in addToConfig:
+            config[addKey]=addValue
+            print('added config[{}]={}'.format(addKey,addValue))
+
         
     #config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
     
@@ -78,6 +86,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
 
     if gpu is not None:
         model = model.to(gpu)
+    else:
+        model = model.cpu()
 
     metrics = [eval(metric) for metric in config['metrics']]
 
@@ -266,8 +276,16 @@ if __name__ == '__main__':
                         help='specify image')
     parser.add_argument('-t', '--thresh', default=None, type=float,
                         help='Confidence threshold for detections')
+    parser.add_argument('-a', '--addtoconfig', default=None, type=str,
+                        help='Arbitrary key-value pairs to add to config of the form "k1=v1,k2=v2,...kn=vn"')
 
     args = parser.parse_args()
+
+    addtoconfig=[]
+    split = args.addtoconfig.split(',')
+    for kv in split:
+        split2=kv.split('=')
+        addtoconfig.append(split2)
 
     config = None
     if args.checkpoint is None or args.savedir is None:
@@ -282,6 +300,6 @@ if __name__ == '__main__':
         index = args.imgname
     if args.gpu is not None:
         with torch.cuda.device(args.gpu):
-            main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh)
+            main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh, addToConfig=addtoconfig)
     else:
-        main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh)
+        main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh, addToConfig=addtoconfig)

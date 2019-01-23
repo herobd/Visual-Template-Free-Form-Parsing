@@ -3,14 +3,21 @@ based on victoresque pytorch template
 
 ## Requirements
 * Python 3.x
-* PyTorch
+* PyTorch 1.0+
 
 # Installing to get it to work with pytorch 1
+First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower)
+If upgrading cuda, remove the old version first either with apt-get or uninstall script in /usr/cuda/bin.
+    (Be sure CUDA_HOME and PATH are right after installation)
+
 `conda instal $`
 * `ipython`
-* `pytorch torchvision -c pytorch`
+* `pytorch torchvision -c pytorch` or what ever the command is on pytorch.org given cuda version, etc
 * `opencv`
 * `scikit-image`
+
+# Install
+`python setup.py build develop`
 
 ## Folder Structure
   ```
@@ -24,8 +31,8 @@ based on victoresque pytorch template
   │   ├── base_model.py - abstract base class for models
   │   └── base_trainer.py - abstract base class for trainers
   │
-  ├── data_loader/ - anything about data loading goes here
-  │   └── data_loaders.py
+  ├── data_loader/ - 
+  │   └── data_loaders.py - This provides access to all the dataset objects
   │
   ├── datasets/ - default datasets folder
   │   └── ai2d.py - loads AI2D dataset for query-response masking
@@ -56,7 +63,10 @@ Config files are in `.json` format:
   {
     "name": "Mnist_LeNet",        // training session name
     "cuda": true,                 // use cuda
-    "override": false,            // if resuming, whether to replace the previous config with this one
+    "gpu": 0,                       //gpu to use (only single device is supportted right now)
+    "override": true,            // if resuming, whether to replace the previous config with this one
+    "save_mode": "state_dict",  //whether to save just the state dict (recommended) or the whole model object (doesn't always work)
+    "super_computer":false,     //whether to print inplace iteration number (doesn't work with slurm logging)
     "data_loader": {
         "data_set_name":          // the name of the dataset
         "data_dir": "datasets/",  // dataset path

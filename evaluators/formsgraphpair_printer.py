@@ -9,7 +9,6 @@ import math
 from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
-from model.optimize import optimizeRelationships
 
 
 def plotRect(img,color,xyrhw):
@@ -109,6 +108,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         target_for_b = torch.empty(0)
     if 'optimize' in config and config['optimize']:
+        from model.optimize import optimizeRelationships
         numNeighbors=[0]*len(relCand)
         rev={}
         for ind in range(outputBBs.size(0)):
@@ -309,8 +309,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         
     retData= { 'bb_ap_5':[ap_5],
                'bb_recall':[recall_5],
-c              'bb_prec':[prec_5],
-m_numpy( optimizeRelationships(relPred,relCand,numNeighbors) ).float()
+               'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
                'rel_recall':relRecall,
                'rel_prec':relPrec,

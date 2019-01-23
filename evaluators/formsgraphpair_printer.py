@@ -115,7 +115,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 numNeighbors[rev[t0]]+=1
             if t1 in rev:
                 numNeighbors[rev[t1]]+=1
-        relPred *= torch.from_numpy( optimizeRelationships(relPred,relCand,numNeighbors) )
+        relPred[:,0] *= torch.from_numpy( optimizeRelationships(relPred,relCand,numNeighbors) ).float()
         EDGE_THRESH=0
 
     data = data.numpy()
@@ -295,7 +295,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
 
-        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_AP{:.3f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],rel_ap)
+        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_AP:{:.3f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],rel_ap)
         #for j in range(metricsOut.shape[1]):
         #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
         saveName+='.png'
@@ -305,7 +305,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         
     retData= { 'bb_ap_5':[ap_5],
                'bb_recall':[recall_5],
-               'bb_prec':[prec_5],
+c              'bb_prec':[prec_5],
+m_numpy( optimizeRelationships(relPred,relCand,numNeighbors) ).float()
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
                'rel_recall':relRecall,
                'rel_prec':relPrec,

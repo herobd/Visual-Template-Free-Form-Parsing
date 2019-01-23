@@ -5,7 +5,7 @@ import timeit
 from utils import util
 from collections import defaultdict
 from evaluators import FormsBoxDetect_printer
-from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
+from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
 from datasets.testforms_graph_pair import display
 import random
 
@@ -172,12 +172,12 @@ class GraphPairTrainer(BaseTrainer):
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
-            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.prealignedEdgePred(adj,relPred,relIndexes)
+            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.prealignedEdgePred(adj,relPred,relIndexes)
         else:
             outputBoxes, outputOffsets, relPred, relIndexes = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred)
-            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
+            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
         if relPred is not None:
             numEdgePred = relPred.size(0)
             if predPairingShouldBeTrue is not None:
@@ -288,6 +288,8 @@ class GraphPairTrainer(BaseTrainer):
 
             **metrics,
         }
+        if ap>=0:
+            log['rel_AP']=ap
 
         #if iteration%10==0:
         #image=None
@@ -326,6 +328,8 @@ class GraphPairTrainer(BaseTrainer):
         total_rel_recall=0
         total_rel_prec=0
         total_rel_fullPrec=0
+        total_AP=0
+        AP_count=0
         total_val_metrics = np.zeros(len(self.metrics))
 
         mAP = np.zeros(self.model.numBBTypes)
@@ -344,10 +348,13 @@ class GraphPairTrainer(BaseTrainer):
                 loss = 0
                 index=0
                 
-                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec = self.alignEdgePred(targetBoxes,adjM,outputBoxes,relPred,relIndexes)
+                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec, ap = self.alignEdgePred(targetBoxes,adjM,outputBoxes,relPred,relIndexes)
                 total_rel_recall+=recall
                 total_rel_prec+=prec
                 total_rel_fullPrec+=fullPrec
+                if ap>=0:
+                    total_AP+=ap
+                    AP_count+=1
                 #relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
                 relLoss=None
                 if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
@@ -389,12 +396,7 @@ class GraphPairTrainer(BaseTrainer):
 
                 total_val_loss += loss.item()
                 loss=relFalseLoss=relLoss=boxLoss=None
-                image=None
-                queryMask=None
-                targetBoxes=None
-                outputBoxes=None
-                outputOffsets=None
-                relPred=relIndexes=predPairingShouldBeTrue=predPairingShouldBeFalse=None
+                instance=predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
@@ -405,11 +407,12 @@ class GraphPairTrainer(BaseTrainer):
             'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
             'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
             'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
-            'val_mAP':(mAP/len(self.valid_data_loader)).tolist(),
+            'val_bb_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_rel_recall':total_rel_recall/len(self.valid_data_loader),
             'val_rel_prec':total_rel_prec/len(self.valid_data_loader),
             'val_rel_F':(total_rel_prec+total_rel_recall)/(2*len(self.valid_data_loader)),
             'val_rel_fullPrec':total_rel_fullPrec/len(self.valid_data_loader),
+            'val_rel_mAP': total_AP/AP_count
             #'val_position_loss':total_position_loss / len(self.valid_data_loader),
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
             #'val_class_loss':tota_class_loss / len(self.valid_data_loader),
@@ -421,17 +424,21 @@ class GraphPairTrainer(BaseTrainer):
             if targetBoxes is None:
                 if relPred is not None and (relPred>self.thresh_rel).any():
                     prec=0
+                    ap=0
                 else:
                     prec=1
+                    ap=1
                 recall=1
             elif relPred is None:
                 if targetBoxes is not None:
                     recall=0
+                    ap=0
                 else:
                     recall=1
+                    ap=1
                 prec=1
 
-            return torch.tensor([]),torch.tensor([]),recall,prec,prec
+            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
         targetBoxes = targetBoxes.cpu()
         #decide which predicted boxes belong to which target boxes
         #should this be the same as AP_?
@@ -449,6 +456,8 @@ class GraphPairTrainer(BaseTrainer):
         #newGT = []#torch.tensor((rels.size(0)))
         predsPos = []
         predsNeg = []
+        scores = []
+        matches=0
         #for i in range(rels.size(0)):
         truePred=falsePred=badPred=0
         i=0
@@ -461,19 +470,27 @@ class GraphPairTrainer(BaseTrainer):
                 #newGT.append( int((t0,t1) in adj) )#adjM[ min(t0,t1), max(t0,t1) ])
                 #preds.append(predsAll[i])
                 if (min(t0,t1),max(t0,t1)) in adj:
+                    matches+=1
                     predsPos.append(predsAll[i])
+                    scores.append( (sigPredsAll[i],True) )
                     if sigPredsAll[i]>self.thresh_rel:
                         truePred+=1
                 else:
                     predsNeg.append(predsAll[i])
+                    scores.append( (sigPredsAll[i],False) )
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
-            elif sigPredsAll[i]>self.thresh_rel:
-                badPred+=1
-                if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
-                    predsNeg.append(predsAll[i])
+            else:
+                scores.append( (sigPredsAll[i],False) )
+                if sigPredsAll[i]>self.thresh_rel:
+                    badPred+=1
+                    if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
+                        predsNeg.append(predsAll[i])
             #else skip this
             i+=1
+        #Add score 0 for instances we didn't predict
+        for i in range(len(adj)-matches):
+            scores.append( (0.0,True) )
         #if len(preds)==0:
         #    return torch.tensor([]),torch.tensor([])
         #newGT = torch.tensor(newGT).float().to(relPred[1].device)
@@ -501,7 +518,7 @@ class GraphPairTrainer(BaseTrainer):
             fullPrec = truePred/(truePred+falsePred+badPred)
         else:
             fullPrec = 1
-        return predsPos,predsNeg, recall, prec ,fullPrec
+        return predsPos,predsNeg, recall, prec ,fullPrec, computeAP(scores)
 
 
     def prealignedEdgePred(self,adj,relPred,relIndexes):
@@ -509,11 +526,13 @@ class GraphPairTrainer(BaseTrainer):
             #assert(adj is None or len(adj)==0) this is a failure of the heuristic pairing
             if adj is not None and len(adj)>0:
                 recall=0
+                ap=0
             else:
                 recall=1
+                ap=1
             prec=1
 
-            return torch.tensor([]),torch.tensor([]),recall,prec,prec
+            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
         rels = relIndexes #relPred._indices().cpu().t()
         predsAll = relPred
         sigPredsAll = torch.sigmoid(predsAll)
@@ -521,6 +540,7 @@ class GraphPairTrainer(BaseTrainer):
         #gt = torch.empty(len(rels))#rels.size(0))
         predsPos = []
         predsNeg = []
+        scores = []
         truePred=falsePred=0
         i=0
         for n0,n1 in rels:
@@ -529,10 +549,12 @@ class GraphPairTrainer(BaseTrainer):
             #gt[i] = int((n0,n1) in adj) #(adjM[ n0, n1 ])
             if (n0,n1) in adj:
                 predsPos.append(predsAll[i])
+                scores.append( (sigPredsAll[i],True) )
                 if sigPredsAll[i]>self.thresh_rel:
                     truePred+=1
             else:
                 predsNeg.append(predsAll[i])
+                scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     falsePred+=1
             i+=1
@@ -555,4 +577,4 @@ class GraphPairTrainer(BaseTrainer):
             prec = truePred/(truePred+falsePred)
         else:
             prec = 1
-        return predsPos,predsNeg, recall, prec, prec
+        return predsPos,predsNeg, recall, prec, prec, computeAP(scores)

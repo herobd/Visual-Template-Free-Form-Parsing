@@ -8,7 +8,8 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
+from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
+from model.optimize import optimizeRelationships
 
 
 def plotRect(img,color,xyrhw):
@@ -98,6 +99,28 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if relCand is None:
         relCand=[]
 
+    numClasses=2
+    if model.rotation:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
+    else:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
+    if targetBBs is not None:
+        target_for_b = targetBBs[0,:,:]
+    else:
+        target_for_b = torch.empty(0)
+    if 'optimize' in config and config['optimize']:
+        numNeighbors=[0]*len(relCand)
+        rev={}
+        for ind in range(outputBBs.size(0)):
+            rev[targIndex[ind]]=ind
+        for t0,t1 in adjacency:
+            if t0 in rev:
+                numNeighbors[rev[t0]]+=1
+            if t1 in rev:
+                numNeighbors[rev[t1]]+=1
+        relPred[:,0] *= torch.from_numpy( optimizeRelationships(relPred,relCand,numNeighbors) ).float()
+        EDGE_THRESH=0
+
     data = data.numpy()
     #threshed in model
     if outputBBs.size(0)>0:
@@ -109,34 +132,36 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #else:
     #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
-    if targetBBs is not None:
-        target_for_b = targetBBs[0,:,:]
-    else:
-        target_for_b = torch.empty(0)
     if model.rotation:
         ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes)
     else:
         ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes)
 
-    numClasses=2
-    if model.rotation:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
-    else:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
     truePred=falsePred=badPred=0
+    scores=[]
+    matches=0
     i=0
     for n0,n1 in relCand:
-        if relPred[i]>EDGE_THRESH:
-            t0 = targIndex[n0].item()
-            t1 = targIndex[n1].item()
-            if t0>=0 and t1>=0:
-                if (min(t0,t1),max(t0,t1)) in adjacency:
+        t0 = targIndex[n0].item()
+        t1 = targIndex[n1].item()
+        if t0>=0 and t1>=0:
+            if (min(t0,t1),max(t0,t1)) in adjacency:
+                matches+=1
+                scores.append( (relPred[i],True) )
+                if relPred[i]>EDGE_THRESH:
                     truePred+=1
-                else:
-                    falsePred+=1
             else:
+                scores.append( (relPred[i],False) )
+                if relPred[i]>EDGE_THRESH:
+                    falsePred+=1
+        else:
+            scores.append( (relPred[i],False) )
+            if relPred[i]>EDGE_THRESH:
                 badPred+=1
         i+=1
+    for i in range(len(adjacency)-matches):
+        scores.append( (0.0,True) )
+    rel_ap=computeAP(scores)
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
     else:
@@ -274,7 +299,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
 
-        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_prec:{:.2f}_recall:{:.2f}_fullPrec:{:.2f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],relPrec,relRecall,fullPrec)
+        saveName = '{}_boxes_prec:{:.2f},{:.2f}_recall:{:.2f},{:.2f}_rels_AP:{:.3f}'.format(imageName,prec_5[0],prec_5[1],recall_5[0],recall_5[1],rel_ap)
         #for j in range(metricsOut.shape[1]):
         #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
         saveName+='.png'
@@ -282,17 +307,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #print('saved: '+os.path.join(outDir,saveName))
 
         
-    #return metricsOut
-    return (
-             #{ 'ap_5':np.array(aps_5).sum(axis=0),
-             #  'ap_3':np.array(aps_3).sum(axis=0),
-             #  'ap_7':np.array(aps_7).sum(axis=0),
-             #  'recall':np.array(recalls_5).sum(axis=0),
-             #  'prec':np.array(precs_5).sum(axis=0),
-             #}, 
-             { 'bb_ap_5':[ap_5],
+    retData= { 'bb_ap_5':[ap_5],
                'bb_recall':[recall_5],
-               'bb_prec':[prec_5],
+c              'bb_prec':[prec_5],
+m_numpy( optimizeRelationships(relPred,relCand,numNeighbors) ).float()
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
                'rel_recall':relRecall,
                'rel_prec':relPrec,
@@ -300,7 +318,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_fullPrec':fullPrec,
                'rel_fullFm':(relRecall+fullPrec)/2,
 
-             }, 
+             }
+    if rel_ap>=0: #-1 ap if no relationships
+        retData['rel_AP']=rel_ap
+    return (
+             retData,
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)
             )
 

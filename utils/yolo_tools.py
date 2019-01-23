@@ -213,7 +213,8 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
     if ignoreClasses:
         numClasses=1
     if len(target.size())>1:
-        numClasses=target.size(1)-13
+        #numClasses=target.size(1)-13
+        pass
     elif len(pred.size())>1 and pred.size(0)>0:
         #if there are no targets, we shouldn't be pred anything
         if ignoreClasses:
@@ -221,7 +222,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
             precisions.append(0)
             recalls.append(1)
         else:
-            numClasses=pred.size(1)-6
+            #numClasses=pred.size(1)-6
             for cls in range(numClasses):
                 if (torch.argmax(pred[:,cls+6:],dim=1)==cls).any():
                     aps.append(0) #but we did for this class :(
@@ -274,22 +275,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
             for i in range(left_conf.size(0)):
                 scores.append( (left_conf[i],False) )
             
-            rank=[]
-            for conf,rel in scores:
-                if rel:
-                    better=0
-                    equal=-1 # as we'll iterate over this instance here
-                    for conf2,rel2 in scores:
-                        if conf2>conf:
-                            better+=1
-                        elif conf2==conf:
-                            equal+=1
-                    rank.append(better+math.floor(equal/2.0))
-            rank.sort()
-            ap=0.0
-            for i in range(len(rank)):
-                ap += float(i+1)/(rank[i]+1)
-            ap/=len(rank)
+            ap = computeAP(scores)
             aps.append(ap)
 
             precisions.append( truePos/max(clsPred.size(0),truePos) )
@@ -367,3 +353,24 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
             
     #import pdb;pdb.set_trace()
     return targIndex, predsWithNoIntersection
+
+def computeAP(scores):
+    rank=[]
+    for conf,rel in scores:
+        if rel:
+            better=0
+            equal=-1 # as we'll iterate over this instance here
+            for conf2,rel2 in scores:
+                if conf2>conf:
+                    better+=1
+                elif conf2==conf:
+                    equal+=1
+            rank.append(better+math.floor(equal/2.0))
+    if len(rank)==0:
+        return -1
+    rank.sort()
+    ap=0.0
+    for i in range(len(rank)):
+        ap += float(i+1)/(rank[i]+1)
+    ap/=len(rank)
+    return ap

@@ -163,18 +163,21 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                             'label': pair,
                                             'imgName': imageName,
                                             'qXY' : (qX,qY),
-                                            'iXY' : (iX,iY)
+                                            'iXY' : (iX,iY),
+                                            'ids' : (id,id2)
                                             } )
                         if self.eval:
                             datas=[]
                             labels=[]
                             qXYs=[]
                             iXYs=[]
+                            nodeIds=[]
                             for inst in pair_instances:
                                 datas.append(inst['data'])
                                 labels.append(inst['label'])
                                 qXYs.append(inst['qXY'])
                                 iXYs.append(inst['iXY'])
+                                nodeIds.append(inst['ids'])
                             if len(datas)>0:
                                 data = torch.cat(datas,dim=0),
                             else:
@@ -185,7 +188,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 'imgName': imageName,
                                 'imgPath' : path,
                                 'qXY' : qXYs,
-                                'iXY' : iXYs
+                                'iXY' : iXYs,
+                                'nodeIds' : nodeIds
                                 } )
                             pair_instances=[]
             self.instances = notpair_instances

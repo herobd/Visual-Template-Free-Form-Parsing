@@ -64,9 +64,32 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     relNodeIds = instance['nodeIds']
 
     pred = model(dataT)
+    #pred = predAll[:,0]
     pred = torch.sigmoid(pred)
 
-    #merge
+    
+
+    #merge, as we have mirrored relationships here
+    newPred=torch.FloatTensor(pred.size(0)//2).to(pred.device)
+    newLabel=torch.FloatTensor(pred.size(0)//2).to(pred.device)
+    newData=torch.FloatTensor(pred.size(0)//2,data.size(1))
+    newNodeIds=[]
+    newi=0
+    for i in range(len(relNodeIds)):
+        id1,id2=relNodeIds[i]
+        if id1 is not None:
+            j = relNodeIds.index((id2,id1),i+1)
+            newPred[newi]=(pred[i]+pred[j])/2 #we average the two predictions
+            #newNNPred[newi]=(nnPred[i]+nnPred[j])/2
+            newLabel[newi]=label[i]
+            newNodeIds.append(relNodeIds[i]) #ensure order is the same
+            newData[newi]=data[i]
+            relNodeIds[j]=(None,None)
+            newi+1
+    pred=newPred
+    #nnPred=newNNPred
+    relNodeIds=newNodeIds
+    label=newLabel
  
     if 'optimize' in config and config['optimize']:
         #We first need to prune down as there are far too many possible pairings
@@ -107,7 +130,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     #image[40:50,40:50,0]=255
     #image[50:60,50:60,1]=255
     assert(image.shape[2]==3)
-    batchSize = data.size(0)
+    batchSize = pred.size(0) #data.size(0)
     #draw GT
     for b in range(batchSize):
         x,y = qXY[b]

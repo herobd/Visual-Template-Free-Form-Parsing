@@ -9,12 +9,13 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou, AP_iou
+from utils.yolo_tools import computeAP
+from model.optimize import optimizeRelationships
 
 #THRESH=0
-THRESH=0.9
 
 def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
+    THRESH=0.9
     def plotRect(img,color,xyrhw):
         xc=xyrhw[0]
         yc=xyrhw[1]
@@ -60,16 +61,76 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     iXY = instance['iXY']
     label = instance['label']
     dataT = data.to(gpu)#__to_tensor(data,gpu)
+    relNodeIds = instance['nodeIds']
 
     pred = model(dataT)
-    pred = F.sigmoid(pred)
+    #pred = predAll[:,0]
+    pred = torch.sigmoid(pred)
+
     
+
+    #merge, as we have mirrored relationships here
+    newPred=torch.FloatTensor(pred.size(0)//2).to(pred.device)
+    newLabel=torch.FloatTensor(pred.size(0)//2).to(pred.device)
+    newData=torch.FloatTensor(pred.size(0)//2,data.size(1))
+    newNodeIds=[]
+    newi=0
+    for i in range(len(relNodeIds)):
+        id1,id2=relNodeIds[i]
+        if id1 is not None:
+            j = relNodeIds.index((id2,id1),i+1)
+            newPred[newi]=(pred[i]+pred[j])/2 #we average the two predictions
+            #newNNPred[newi]=(nnPred[i]+nnPred[j])/2
+            newLabel[newi]=label[i]
+            newNodeIds.append(relNodeIds[i]) #ensure order is the same
+            newData[newi]=data[i]
+            relNodeIds[j]=(None,None)
+            newi+1
+    pred=newPred
+    #nnPred=newNNPred
+    relNodeIds=newNodeIds
+    label=newLabel
+ 
+    if 'optimize' in config and config['optimize']:
+        #We first need to prune down as there are far too many possible pairings
+        keep = pred>0.3
+        newPred=pred[keep]
+        newIds=[]
+        newLabel=label[keep]
+        for i in range(keep.size(0)):
+            if keep[i]:
+                newIds.append(relNodeIds[i])
+        
+        numNeighborsD=defaultdict(lambda: 0)
+        i=0
+        for id1,id2 in newIds:
+            if newLabel[i]:
+                numNeighborsD[id1]+=1
+                numNeighborsD[id2]+=1
+            else:
+                numNeighborsD[id1]+=0
+                numNeighborsD[id2]+=0
+            i+=1
+        numNeighbors=[0]*len(numNeighborsD)
+        idNum=0
+        idNumMap={}
+        numIds=[]
+        for id,count in numNeighborsD.items():
+            numNeighbors[idNum]=count
+            idNumMap[id]=idNum
+            idNum+=1
+        numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
+        print('size being optimized: {}'.format(newPred.size(0)))
+        pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors) ).float()
+        pred[1-keep] *= 0
+        THRESH=0
+   
     #ossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
     image = cv2.imread(imagePath,1)
     #image[40:50,40:50,0]=255
     #image[50:60,50:60,1]=255
     assert(image.shape[2]==3)
-    batchSize = data.size(0)
+    batchSize = pred.size(0) #data.size(0)
     #draw GT
     for b in range(batchSize):
         x,y = qXY[b]
@@ -91,6 +152,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     totalPreds=0
     totalGTs=0
     truePs=0
+    scores=[]
     for b in range(batchSize):
         x,y = qXY[b]
         x2,y2 = iXY[b]
@@ -101,7 +163,10 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             color = int(255*(pred[b].item()-THRESH)/(1-THRESH))
             cv2.line(image,(int(x),int(y+3)),(int(x2),int(y2-3)),(color,0,0),1)
         if label[b].item()>0:
+            scores.append( (pred[b],True) )
             totalGTs+=1
+        else:
+            scores.append( (pred[b],False) )
     
     if totalGTs>0:
         recall = truePs/float(totalGTs)
@@ -117,6 +182,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         #cv2.imshow('dfsdf',image)
         #cv2.waitKey()
 
+    ap=computeAP(scores)
+
         
     #return metricsOut
     return (
@@ -129,8 +196,9 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
              { 
                'recall':[recall],
                'prec':[prec],
+               'AP':[ap],
              }, 
-             (recall, prec)
+             (recall, prec,ap)
             )
 
 

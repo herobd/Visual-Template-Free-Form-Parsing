@@ -170,7 +170,9 @@ def fixAnnotations(this,annotations):
     parasLinkedTo=defaultdict(list)
     pairsToRemove=[]
     for i,pair in enumerate(annotations['pairs']):
-        if pair[0] in idsToFix and annotations['byId'][pair[1]]['type'][-1]=='P':
+        if pair[0] not in annotations['byId'] or pair[1] not in annotations['byId']:
+            pairsToRemove.append(i)
+        elif pair[0] in idsToFix and annotations['byId'][pair[1]]['type'][-1]=='P':
             parasLinkedTo[pair[0]].append(pair[1])
             pairsToRemove.append(i)
         elif pair[1] in idsToFix and annotations['byId'][pair[0]]['type'][-1]=='P':

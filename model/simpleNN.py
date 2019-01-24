@@ -12,7 +12,7 @@ class SimpleNN(BaseModel):
         featSize = config['feat_size'] if 'feat_size' in config else 10
         numLayers = config['num_layers'] if 'num_layers' in config else 2
         hiddenSize = config['hidden_size'] if 'hidden_size' in config else 1024
-        outSize = 1
+        outSize = config['out_size'] if 'out_size' in config else 1
 
         layers= []
         for i in range(numLayers):
@@ -31,4 +31,4 @@ class SimpleNN(BaseModel):
 
     def forward(self,input):
         out = self.layers(input)
-        return out[:,0]
+        return out[:]

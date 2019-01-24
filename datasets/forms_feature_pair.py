@@ -27,17 +27,20 @@ def collate(batch):
     imageNames=[]
     data=[]
     labels=torch.ByteTensor(batch_size)
+    NNs=[]
     bi=0
     for b in batch:
         imageNames.append(b['imgName'])
         data.append(b['data'])
         labels[bi] = int(b['label'])
+        NNs.append(b['numNeighbors'])
         bi+=1
 
     return {
         "imgName": imageNames,
         'data': torch.cat(data,dim=0),
-        'label': labels
+        'label': labels,
+        'numNeighbors' : torch.cat(NNs,dim=0)
     }
 
 class FormsFeaturePair(torch.utils.data.Dataset):
@@ -80,8 +83,13 @@ class FormsFeaturePair(torch.utils.data.Dataset):
             self.no_print_fields = config['no_print_fields']
         else:
             self.no_print_fields = False
+        numFeats=10
         self.use_corners = config['corners'] if 'corners' in config else False
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
+        if self.use_corners=='xy':
+            numFeats=18
+        elif self.use_corners:
+            numFeats=14
         self.swapCircle = config['swap_circle'] if 'swap_circle' in config else True
         self.onlyFormStuff = config['only_form_stuff'] if 'only_form_stuff' in config else False
         self.only_opposite_pairs = config['only_opposite_pairs'] if 'only_opposite_pairs' in config else False
@@ -137,8 +145,20 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                             fixAnnotations(self,annotations)
 
                         #print(path)
+                        numNeighbors=defaultdict(lambda:0)
                         for id,bb in annotations['byId'].items():
                             if not self.onlyFormStuff or ('paired' in bb and bb['paired']):
+                                responseBBList = self.__getResponseBBList(id,annotations)
+                                responseIds = [bb['id'] for bb in responseBBList]
+                                for id2,bb2 in annotations['byId'].items():
+                                    if id!=id2:
+                                        pair = id2 in responseIds
+                                        if pair:
+                                            numNeighbors[id]+=1
+                                            #well catch id2 on it's own pass
+                        for id,bb in annotations['byId'].items():
+                            if not self.onlyFormStuff or ('paired' in bb and bb['paired']):
+                                numN1 = numNeighbors[id]-1
                                 qX, qY, qH, qW, qR, qIsText = getBBInfo(bb,self.rotate,useBlankClass=not self.no_blanks)
                                 tlX = bb['poly_points'][0][0]
                                 tlY = bb['poly_points'][0][1]
@@ -155,6 +175,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 responseIds = [bb['id'] for bb in responseBBList]
                                 for id2,bb2 in annotations['byId'].items():
                                     if id!=id2:
+                                        numN2 = numNeighbors[id2]-1
                                         iX, iY, iH, iW, iR, iIsText = getBBInfo(bb2,self.rotate,useBlankClass=not self.no_blanks)
                                         tlX2 = bb2['poly_points'][0][0]
                                         tlY2 = bb2['poly_points'][0][1]
@@ -199,7 +220,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                             'imgName': imageName,
                                             'qXY' : (qX,qY),
                                             'iXY' : (iX,iY),
-                                            'ids' : (id,id2)
+                                            'ids' : (id,id2),
+                                            'numNeighbors': torch.tensor([ [numN1,numN2] ])
                                             } )
                         if self.eval:
                             datas=[]
@@ -207,16 +229,22 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                             qXYs=[]
                             iXYs=[]
                             nodeIds=[]
+                            NNs=[]
                             for inst in pair_instances:
                                 datas.append(inst['data'])
                                 labels.append(inst['label'])
                                 qXYs.append(inst['qXY'])
                                 iXYs.append(inst['iXY'])
                                 nodeIds.append(inst['ids'])
+                                NNs.append(inst['numNeighbors'])
                             if len(datas)>0:
                                 data = torch.cat(datas,dim=0),
                             else:
-                                data = torch.FloatTensor((0,10))
+                                data = torch.FloatTensor((0,numFeats))
+                            if len(NNs)>0:
+                                NNs = torch.cat(NNs,dim=0)
+                            else:
+                                NNs = torch.FloatTensor((0,2))
                             notpair_instances.append( {
                                 'data': data,
                                 'label': torch.ByteTensor(labels),
@@ -224,7 +252,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 'imgPath' : path,
                                 'qXY' : qXYs,
                                 'iXY' : iXYs,
-                                'nodeIds' : nodeIds
+                                'nodeIds' : nodeIds,
+                                'numNeighbors' : NNs
                                 } )
                             pair_instances=[]
             self.instances = notpair_instances

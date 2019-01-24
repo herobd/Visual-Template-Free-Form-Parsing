@@ -27,17 +27,20 @@ def collate(batch):
     imageNames=[]
     data=[]
     labels=torch.ByteTensor(batch_size)
+    NNs=[]
     bi=0
     for b in batch:
         imageNames.append(b['imgName'])
         data.append(b['data'])
         labels[bi] = int(b['label'])
+        NNs.append(b['numNeighbors'])
         bi+=1
 
     return {
         "imgName": imageNames,
         'data': torch.cat(data,dim=0),
-        'label': labels
+        'label': labels,
+        'numNeighbors' : torch.cat(NNs,dim=0)
     }
 
 class FormsFeaturePair(torch.utils.data.Dataset):
@@ -80,10 +83,16 @@ class FormsFeaturePair(torch.utils.data.Dataset):
             self.no_print_fields = config['no_print_fields']
         else:
             self.no_print_fields = False
+        numFeats=10
+        self.use_corners = config['corners'] if 'corners' in config else False
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
+        if self.use_corners=='xy':
+            numFeats=18
+        elif self.use_corners:
+            numFeats=14
         self.swapCircle = config['swap_circle'] if 'swap_circle' in config else True
         self.onlyFormStuff = config['only_form_stuff'] if 'only_form_stuff' in config else False
-        self.only_opposite_pairs = False
+        self.only_opposite_pairs = config['only_opposite_pairs'] if 'only_opposite_pairs' in config else False
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
 
@@ -97,6 +106,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
         #height_mean=47.9102279201
         xScale=400
         yScale=50
+        xyScale=(xScale+yScale)/2
 
         if instances is not None:
             self.instances=instances
@@ -135,9 +145,29 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                             fixAnnotations(self,annotations)
 
                         #print(path)
+                        numNeighbors=defaultdict(lambda:0)
                         for id,bb in annotations['byId'].items():
                             if not self.onlyFormStuff or ('paired' in bb and bb['paired']):
+                                responseBBList = self.__getResponseBBList(id,annotations)
+                                responseIds = [bb['id'] for bb in responseBBList]
+                                for id2,bb2 in annotations['byId'].items():
+                                    if id!=id2:
+                                        pair = id2 in responseIds
+                                        if pair:
+                                            numNeighbors[id]+=1
+                                            #well catch id2 on it's own pass
+                        for id,bb in annotations['byId'].items():
+                            if not self.onlyFormStuff or ('paired' in bb and bb['paired']):
+                                numN1 = numNeighbors[id]-1
                                 qX, qY, qH, qW, qR, qIsText = getBBInfo(bb,self.rotate,useBlankClass=not self.no_blanks)
+                                tlX = bb['poly_points'][0][0]
+                                tlY = bb['poly_points'][0][1]
+                                trX = bb['poly_points'][1][0]
+                                trY = bb['poly_points'][1][1]
+                                brX = bb['poly_points'][2][0]
+                                brY = bb['poly_points'][2][1]
+                                blX = bb['poly_points'][3][0]
+                                blY = bb['poly_points'][3][1]
                                 qH /= yScale #math.log( (qH+0.375*height_mean)/height_mean ) #rescaling so 0 height is -1, big height is 1+
                                 qW /= xScale #math.log( (qW+0.375*width_mean)/width_mean ) #rescaling so 0 width is -1, big width is 1+
                                 qR = qR/math.pi
@@ -145,7 +175,16 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 responseIds = [bb['id'] for bb in responseBBList]
                                 for id2,bb2 in annotations['byId'].items():
                                     if id!=id2:
+                                        numN2 = numNeighbors[id2]-1
                                         iX, iY, iH, iW, iR, iIsText = getBBInfo(bb2,self.rotate,useBlankClass=not self.no_blanks)
+                                        tlX2 = bb2['poly_points'][0][0]
+                                        tlY2 = bb2['poly_points'][0][1]
+                                        trX2 = bb2['poly_points'][1][0]
+                                        trY2 = bb2['poly_points'][1][1]
+                                        brX2 = bb2['poly_points'][2][0]
+                                        brY2 = bb2['poly_points'][2][1]
+                                        blX2 = bb2['poly_points'][3][0]
+                                        blY2 = bb2['poly_points'][3][1]
                                         iH /=yScale #math.log( (iH+0.375*height_mean)/height_mean ) 
                                         iW /=xScale #math.log( (iW+0.375*width_mean)/width_mean ) 
                                         iR = iR/math.pi
@@ -153,39 +192,68 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                         yDiff=iY-qY
                                         yDiff /= yScale #math.log( (yDiff+0.375*yDiffScale)/yDiffScale ) 
                                         xDiff /= xScale #math.log( (xDiff+0.375*xDiffScale)/xDiffScale ) 
+                                        tlDiff = math.sqrt( (tlX-tlX2)**2 + (tlY-tlY2)**2 )/xyScale
+                                        trDiff = math.sqrt( (trX-trX2)**2 + (trY-trY2)**2 )/xyScale
+                                        brDiff = math.sqrt( (brX-brX2)**2 + (brY-brY2)**2 )/xyScale
+                                        blDiff = math.sqrt( (blX-blX2)**2 + (blY-blY2)**2 )/xyScale
+                                        tlXDiff = (tlX2-tlX)/xScale
+                                        trXDiff = (trX2-trX)/xScale
+                                        brXDiff = (brX2-brX)/xScale
+                                        blXDiff = (blX2-blX)/xScale
+                                        tlYDiff = (tlY2-tlY)/yScale
+                                        trYDiff = (trY2-trY)/yScale
+                                        brYDiff = (brY2-brY)/yScale
+                                        blYDiff = (blY2-blY)/yScale
                                         pair = id2 in responseIds
                                         if pair or self.eval:
                                             instances = pair_instances
                                         else:
                                             instances = notpair_instances
+                                        data=[qH,qW,qR,qIsText, iH,iW,iR,iIsText, xDiff, yDiff]
+                                        if self.use_corners=='xy':
+                                            data+=[tlXDiff,trXDiff,brXDiff,blXDiff,tlYDiff,trYDiff,brYDiff,blYDiff]
+                                        elif self.use_corners:
+                                            data+=[tlDiff, trDiff, brDiff, blDiff]
                                         instances.append( {
-                                            'data': torch.tensor([ [qH,qW,qR,qIsText, iH,iW,iR,iIsText, xDiff, yDiff] ]),
+                                            'data': torch.tensor([ data ]),
                                             'label': pair,
                                             'imgName': imageName,
                                             'qXY' : (qX,qY),
-                                            'iXY' : (iX,iY)
+                                            'iXY' : (iX,iY),
+                                            'ids' : (id,id2),
+                                            'numNeighbors': torch.tensor([ [numN1,numN2] ])
                                             } )
                         if self.eval:
                             datas=[]
                             labels=[]
                             qXYs=[]
                             iXYs=[]
+                            nodeIds=[]
+                            NNs=[]
                             for inst in pair_instances:
                                 datas.append(inst['data'])
                                 labels.append(inst['label'])
                                 qXYs.append(inst['qXY'])
                                 iXYs.append(inst['iXY'])
+                                nodeIds.append(inst['ids'])
+                                NNs.append(inst['numNeighbors'])
                             if len(datas)>0:
                                 data = torch.cat(datas,dim=0),
                             else:
-                                data = torch.FloatTensor((0,10))
+                                data = torch.FloatTensor((0,numFeats))
+                            if len(NNs)>0:
+                                NNs = torch.cat(NNs,dim=0)
+                            else:
+                                NNs = torch.FloatTensor((0,2))
                             notpair_instances.append( {
                                 'data': data,
                                 'label': torch.ByteTensor(labels),
                                 'imgName': imageName,
                                 'imgPath' : path,
                                 'qXY' : qXYs,
-                                'iXY' : iXYs
+                                'iXY' : iXYs,
+                                'nodeIds' : nodeIds,
+                                'numNeighbors' : NNs
                                 } )
                             pair_instances=[]
             self.instances = notpair_instances

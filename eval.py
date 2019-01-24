@@ -34,9 +34,23 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         config['THRESH'] = thresh
         print('Threshold at {}'.format(thresh))
     if addToConfig is not None:
-        for addKey, addValue in addToConfig:
-            config[addKey]=addValue
-            print('added config[{}]={}'.format(addKey,addValue))
+        for add in addToConfig:
+            addTo=config
+            printM='added config['
+            for i in range(len(add)-2):
+                addTo = addTo[add[i]]
+                printM+=add[i]+']['
+            value = add[-1]
+            try:
+                value = int(value)
+            except ValueError:
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass
+            addTo[add[-2]] = value
+            printM+=add[-2]+']='+add[-1]
+            print(printM)
 
         
     #config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
@@ -184,26 +198,26 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         else:
                             val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                         
-            if gpu is not None:
-                try:
-                    for vi in range(curVI,len(valid_data_loader)):
-                        print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
-                        instance = valid_iter.next()
-                        metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
-                        if type(metricsO) == dict:
-                            for typ,typeLists in metricsO.items():
-                                if type(typeLists) == dict:
-                                    for name,lst in typeLists.items():
-                                        val_metrics_list[typ][name]+=lst
-                                        val_comb_metrics[typ]+=lst
-                                else:
-                                    if type(typeLists) is float or type(typeLists) is int:
-                                        typeLists = [typeLists]
-                                    val_comb_metrics[typ]+=typeLists
-                        else:
-                            val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
-                except StopIteration:
-                    print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))
+            #if gpu is not None or numberOfImages==0:
+            try:
+                for vi in range(curVI,len(valid_data_loader)):
+                    print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
+                    instance = valid_iter.next()
+                    metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
+                    if type(metricsO) == dict:
+                        for typ,typeLists in metricsO.items():
+                            if type(typeLists) == dict:
+                                for name,lst in typeLists.items():
+                                    val_metrics_list[typ][name]+=lst
+                                    val_comb_metrics[typ]+=lst
+                            else:
+                                if type(typeLists) is float or type(typeLists) is int:
+                                    typeLists = [typeLists]
+                                val_comb_metrics[typ]+=typeLists
+                    else:
+                        val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
+            except StopIteration:
+                print('ERROR: ran out of valid batches early. Expected {} more'.format(len(valid_data_loader)-vi))
             ####
                 
             val_metrics_sum /= len(valid_data_loader)
@@ -282,10 +296,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     addtoconfig=[]
-    split = args.addtoconfig.split(',')
-    for kv in split:
-        split2=kv.split('=')
-        addtoconfig.append(split2)
+    if args.addtoconfig is not None:
+        split = args.addtoconfig.split(',')
+        for kv in split:
+            split2=kv.split('=')
+            addtoconfig.append(split2)
 
     config = None
     if args.checkpoint is None or args.savedir is None:

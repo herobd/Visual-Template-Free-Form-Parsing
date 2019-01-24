@@ -1,7 +1,8 @@
-
-import cvxpy
+import sys
 
 def optimizeRelationships(relPred,relNodes,gtNodeNeighbors):
+    #if 'cvxpy' not in sys.modules:
+    import cvxpy
     penalty=490
     useRel = cvxpy.Variable(relPred.size(0),boolean=True)
 

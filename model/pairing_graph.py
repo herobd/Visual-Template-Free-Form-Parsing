@@ -263,7 +263,7 @@ class PairingGraph(BaseModel):
 
     def createGraph(self,bbs,features,imageHeight,imageWidth,debug_image=None):
         ##tic=timeit.default_timer()
-        candidates = self.selectCandidateEdges(bbs)
+        candidates = self.selectCandidateEdges(bbs,imageHeight,imageWidth)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
         if len(candidates)==0:
             return None,None,None,None,None
@@ -520,7 +520,7 @@ class PairingGraph(BaseModel):
 
 
 
-    def selectCandidateEdges(self,bbs):
+    def selectCandidateEdges(self,bbs,imageHeight,imageWidth):
         if bbs.size(0)<2:
             return []
         #return list of index pairs
@@ -549,6 +549,12 @@ class PairingGraph(BaseModel):
         minY = min( torch.min(trY), torch.min(tlY), torch.min(blY), torch.min(brY) )
         maxX = max( torch.max(trX), torch.max(tlX), torch.max(blX), torch.max(brX) )
         maxY = max( torch.max(trY), torch.max(tlY), torch.max(blY), torch.max(brY) )
+        #if (math.isinf(minX) or math.isinf(minY) or math.isinf(maxX) or math.isinf(maxY) ):
+        #    import pdb;pdb.set_trace()
+        minX = max(minX.item(),0)
+        minY = max(minY.item(),0)
+        maxX = min(maxX.item(),imageWidth)
+        maxY = min(maxY.item(),imageHeight)
 
         lx-=minX 
         ly-=minY 

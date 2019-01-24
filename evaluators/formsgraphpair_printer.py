@@ -108,7 +108,6 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         target_for_b = torch.empty(0)
     if 'optimize' in config and config['optimize']:
-        from model.optimize import optimizeRelationships
         numNeighbors=[0]*len(relCand)
         rev={}
         for ind in range(outputBBs.size(0)):

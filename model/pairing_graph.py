@@ -611,9 +611,15 @@ class PairingGraph(BaseModel):
                 #cv2.line( boxesDrawn, (int(trX[i]),int(trY[i])),(int(brX[i]),int(brY[i])),i,1)
                 #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(brX[i]),int(brY[i])),i,1)
                 #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(tlX[i]),int(tlY[i])),i,1)
-
-                rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])],boxesDrawn.shape,True)
-                boxesDrawn[rr,cc]=i+1
+                if max(int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i]))>0 and min(int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i]))<imageHeight*scaleCand and max(int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i]))>0 and min(int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i]))<imageWidth*scaleCand:
+                    try:
+                        rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])],boxesDrawn.shape,True)
+                    except IndexError:
+                        print([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])])
+                        print([int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])])
+                        print(boxesDrawn.shape)
+                        assert(False)
+                    boxesDrawn[rr,cc]=i+1
 
             #how to walk?
             #walk until number found.

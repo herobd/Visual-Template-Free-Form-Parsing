@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.nn import functional as F
 #from base import BaseTrainer
 from .trainer import Trainer
 import timeit
@@ -91,7 +92,16 @@ class FeaturePairTrainer(Trainer):
         #else:
         data,label = self._to_tensor(thisInstance['data'],thisInstance['label'])
         output = self.model(data)
-        loss = self.loss(output,label)
+        outputRel = output[:,0]
+        if output.size(1)==3:
+            outputNN = output[:,1:]
+            gtNN = self._to_tensor(thisInstance['numNeighbors'])
+            lossNN = F.mse_loss(outputNN,gtNN[0])
+        else:
+            lossNN=0
+        lossRel = self.loss(outputRel,label)
+
+        loss = lossRel+lossNN
 
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
@@ -123,6 +133,9 @@ class FeaturePairTrainer(Trainer):
 
         ##tic=timeit.default_timer()
         loss = loss.item()
+        lossRel=lossRel.item()
+        if type(lossNN) is not int:
+            lossNN=lossNN.item()
         ##toc=timeit.default_timer()
         ##print('item: '+str(toc-tic))
         #perAnchor={}
@@ -131,6 +144,8 @@ class FeaturePairTrainer(Trainer):
 
         log = {
             'loss': loss,
+            'lossRel':lossRel,
+            'lossNN':lossNN,
 
             **metrics,
             **losses
@@ -160,6 +175,8 @@ class FeaturePairTrainer(Trainer):
         """
         self.model.eval()
         total_val_loss = 0
+        total_val_lossRel = 0
+        total_val_lossNN = 0
         total_val_metrics = np.zeros(len(self.metrics))
 
         tp_image=defaultdict(lambda:0)
@@ -176,15 +193,24 @@ class FeaturePairTrainer(Trainer):
                     print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
 
                 data,label = self._to_tensor(instance['data'],instance['label'])
-                output = torch.sigmoid(self.model(data))
-                loss = self.loss(output,label)
+                output = self.model(data)
+                outputRel = output[:,0]
+                if output.size(1)==3:
+                    outputNN = output[:,1:]
+                    gtNN = self._to_tensor(instance['numNeighbors'])
+                    lossNN = F.mse_loss(outputNN,gtNN[0])
+                else:
+                    lossNN=0
+                lossRel = self.loss(outputRel,label)
+
+                loss = lossRel+lossNN
                 
                 
                 for b in range(len(output)):
                     image = instance['imgName'][b]
                     images.add(image)
-                    scores[image].append( (output[b],label[b]) )
-                    if output[b]<0.5:
+                    scores[image].append( (outputRel[b],label[b]) )
+                    if outputRel[b]<0.5:
                         if label[b]==0:
                             tn_image[image]+=1
                         else:
@@ -196,6 +222,10 @@ class FeaturePairTrainer(Trainer):
                             tp_image[image]+=1
 
                 total_val_loss += loss.item()
+                total_val_lossRel += lossRel.item()
+                if type(lossNN) is not int:
+                    lossNN=lossNN.item()
+                total_val_lossNN += lossNN
 
         mRecall=0
         mPrecision=0
@@ -217,6 +247,8 @@ class FeaturePairTrainer(Trainer):
 
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
+            'val_lossRel': total_val_lossRel / len(self.valid_data_loader),
+            'val_lossNN': total_val_lossNN / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
             'val_recall':mRecall,
             'val_precision':mPrecision,

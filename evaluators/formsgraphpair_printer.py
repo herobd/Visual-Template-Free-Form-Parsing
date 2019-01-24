@@ -305,8 +305,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         
     retData= { 'bb_ap_5':[ap_5],
                'bb_recall':[recall_5],
-c              'bb_prec':[prec_5],
-m_numpy( optimizeRelationships(relPred,relCand,numNeighbors) ).float()
+               'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
                'rel_recall':relRecall,
                'rel_prec':relPrec,

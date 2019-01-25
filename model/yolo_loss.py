@@ -129,12 +129,14 @@ class YoloLoss (nn.Module):
             else:
                 loss_nn = 0
             loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls + loss_nn
+            if target_num_neighbors is not None:
+                loss_nn=loss_nn.item()
             return (
                 loss,
                 loss_x.item()+loss_y.item()+loss_w.item()+loss_h.item(),
                 loss_conf.item(),
                 loss_cls.item(),
-                loss_nn.item(),
+                loss_nn,
                 recall,
                 precision,
             )
@@ -303,7 +305,7 @@ def build_targets(
             #target_label = int(target[b, t, 0])
             tcls[b, best_n, gj, gi] = target[b, t,13:]
             if target_num_neighbors is not None:
-                tneighbor[b, best_n, gj, gi] = target_num_neighbors[b, t]
+                tneighbors[b, best_n, gj, gi] = target_num_neighbors[b, t]
             tconf[b, best_n, gj, gi] = 1
 
             # Calculate iou between ground truth and best matching prediction

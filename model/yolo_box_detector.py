@@ -20,7 +20,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
         self.numBBTypes = config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
         self.numLineParams = 5 #conf,x-off,y-off,h-scale,rot
-        if 'pred_num_neighbots' in config and config['pred_num_neighbots']:
+        if 'pred_num_neighbors' in config and config['pred_num_neighbors']:
             self.predNumNeighbors=True
             self.numBBParams+=1
         else:

@@ -266,7 +266,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             out, cropPoint = self.transform({
                 "img": np_img,
                 "bb_gt": bbs,
-                "bb_aux": numNeighbors,
+                "bb_auxs": numNeighbors,
                 "line_gt": line_gts,
                 "point_gt": point_gts,
                 "pixel_gt": pixel_gt,
@@ -274,7 +274,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             }, cropPoint)
             np_img = out['img']
             bbs = out['bb_gt']
-            numNeighbors = out['bb_aux']
+            numNeighbors = out['bb_auxs']
             #if 'table_points' in out['point_gt']:
             #    table_points = out['point_gt']['table_points']
             #else:
@@ -314,8 +314,11 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
         bbs = convertBBs(bbs,self.rotate,numClasses)
-        numNeighbors = torch.tensor(numNeighbors)[None,:] #add batch dim
-        #start_of_line = convertLines(start_of_line,numClasses)
+        if len(numNeighbors)>0:
+            numNeighbors = torch.tensor(numNeighbors)[None,:] #add batch dim
+        else:
+            numNeighbors=None
+            #start_of_line = convertLines(start_of_line,numClasses)
         #end_of_line = convertLines(end_of_line,numClasses)
         for name in point_gts:
             #if table_points is not None:
@@ -328,7 +331,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             return {
                 "img": img,
                 "bb_gt": bbs,
-                "num_neigbors": numNeighbors,
+                "num_neighbors": numNeighbors,
                 "line_gt": line_gts,
                 "point_gt": point_gts,
                 "pixel_gt": pixel_gt,
@@ -386,6 +389,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             return {
                 "img": img,
                 "bb_gt": bbs,
+                "num_neighbors": numNeighbors,
                 "line_gt": line_gt,
                 "point_gt": point_gt,
                 "pixel_gt": pixel_gtR,

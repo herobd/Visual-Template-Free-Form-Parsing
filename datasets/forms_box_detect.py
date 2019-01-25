@@ -107,13 +107,15 @@ class FormsBoxDetect(BoxDetectDataset):
         else:
             self.swapCircle = False
 
-        self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
+        self.special_dataset = config['special_dataset'] if 'special_dataset' in config else None
+        if 'simple_dataset' in config and config['simple_dataset']:
+            self.special_dataset='simple'
 
         if images is not None:
             self.images=images
         else:
-            if self.simple_dataset:
-                splitFile = 'simple_train_valid_test_split.json'
+            if self.special_dataset is not None:
+                splitFile = self.special_dataset+'_train_valid_test_split.json'
             else:
                 splitFile = 'train_valid_test_split.json'
             with open(os.path.join(dirPath,splitFile)) as f:
@@ -196,6 +198,7 @@ class FormsBoxDetect(BoxDetectDataset):
             self.no_print_fields = False
         self.no_graphics =  config['no_graphics'] if 'no_graphics' in config else False
         self.only_opposite_pairs = config['only_opposite_pairs'] if 'only_opposite_pairs' in config else False
+        self.onlyFormStuff = False
         self.errors=[]
 
 
@@ -246,7 +249,7 @@ class FormsBoxDetect(BoxDetectDataset):
                         pair = id2 in responseIds
                         if pair:
                             numNeighbors[id]+=1
-        numNeighbors = [numNeighbros[bb['id']] for bb in full_bbs]
+        numNeighbors = [numNeighbors[bb['id']] for bb in full_bbs]
         #if self.pred_neighbors:
         #    bbs = torch.cat(bbs,
 

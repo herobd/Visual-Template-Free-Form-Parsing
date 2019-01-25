@@ -63,8 +63,13 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     dataT = data.to(gpu)#__to_tensor(data,gpu)
     relNodeIds = instance['nodeIds']
 
-    pred = model(dataT)
-    #pred = predAll[:,0]
+    predAll = model(dataT)
+    pred = predAll[:,0]
+    if predAll.size(1)==3:
+        predNN = predAll[:,1:]
+        newPredNN={}
+    else:
+        predNN=newPredNN = None
     pred = torch.sigmoid(pred)
 
     
@@ -84,12 +89,16 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             newLabel[newi]=label[i]
             newNodeIds.append(relNodeIds[i]) #ensure order is the same
             newData[newi]=data[i]
+            if predNN is not None:
+                newPredNN[id1]= (predNN[i,0]+predNN[j,1])/2
+                newPredNN[id2]= (predNN[i,1]+predNN[j,0])/2
             relNodeIds[j]=(None,None)
             newi+1
     pred=newPred
     #nnPred=newNNPred
     relNodeIds=newNodeIds
     label=newLabel
+    predNN=newPredNN
  
     if 'optimize' in config and config['optimize']:
         #We first need to prune down as there are far too many possible pairings
@@ -97,29 +106,45 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         newPred=pred[keep]
         newIds=[]
         newLabel=label[keep]
-        for i in range(keep.size(0)):
-            if keep[i]:
-                newIds.append(relNodeIds[i])
-        
-        numNeighborsD=defaultdict(lambda: 0)
-        i=0
-        for id1,id2 in newIds:
-            if newLabel[i]:
-                numNeighborsD[id1]+=1
-                numNeighborsD[id2]+=1
-            else:
-                numNeighborsD[id1]+=0
-                numNeighborsD[id2]+=0
-            i+=1
-        numNeighbors=[0]*len(numNeighborsD)
-        idNum=0
-        idNumMap={}
-        numIds=[]
-        for id,count in numNeighborsD.items():
-            numNeighbors[idNum]=count
-            idNumMap[id]=idNum
-            idNum+=1
-        numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
+        if predNN is not None:
+            idMap={}
+            newId=0
+            numIds=[]
+            numNeighbors=[]
+            for id1,id2 in newNodeIds:
+                if id1 not in idMap:
+                    idMap[id1]=newId
+                    numNeighbors.append(predNN[id1])
+                    newId+=1
+                if id2 not in idMap:
+                    idMap[id2]=newId
+                    numNeighbors.append(predNN[id2])
+                    newId+=1
+                numIds.append( [idMap[id1],idMap[id2]] )
+        else:
+            for i in range(keep.size(0)):
+                if keep[i]:
+                    newIds.append(relNodeIds[i])
+            
+            numNeighborsD=defaultdict(lambda: 0)
+            i=0
+            for id1,id2 in newIds:
+                if newLabel[i]:
+                    numNeighborsD[id1]+=1
+                    numNeighborsD[id2]+=1
+                else:
+                    numNeighborsD[id1]+=0
+                    numNeighborsD[id2]+=0
+                i+=1
+            numNeighbors=[0]*len(numNeighborsD)
+            idNum=0
+            idNumMap={}
+            numIds=[]
+            for id,count in numNeighborsD.items():
+                numNeighbors[idNum]=count
+                idNumMap[id]=idNum
+                idNum+=1
+            numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
         print('size being optimized: {}'.format(newPred.size(0)))
         pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors) ).float()
         pred[1-keep] *= 0
@@ -138,8 +163,12 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         h = data[b,0].item()*50/2
         w = data[b,1].item()*400/2
         plotRect(image,(0,0,255),(x,y,r,h,w))
-
         x2,y2 = iXY[b]
+        r = data[b,6].item()*math.pi
+        h = data[b,4].item()*50/2
+        w = data[b,5].item()*400/2
+        plotRect(image,(0,0,255),(x2,y2,r,h,w))
+
         #r = data[b,2].item()
         #h = data[b,0].item()
         #w = data[b,1].item()
@@ -154,6 +183,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     truePs=0
     scores=[]
     for b in range(batchSize):
+        id1,id2 = relNodesIds[b]
         x,y = qXY[b]
         x2,y2 = iXY[b]
         if (pred[b].item()>THRESH):
@@ -167,6 +197,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             totalGTs+=1
         else:
             scores.append( (pred[b],False) )
+        cv2.putText(img,'{}'.format(predNN[id1]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(30,0,0),2,cv2.LINE_AA)
+        cv2.putText(img,'{}'.format(predNN[id2]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 3,(30,0,0),2,cv2.LINE_AA)
     
     if totalGTs>0:
         recall = truePs/float(totalGTs)

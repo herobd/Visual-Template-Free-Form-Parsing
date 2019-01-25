@@ -23,6 +23,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
         if 'pred_num_neighbors' in config and config['pred_num_neighbors']:
             self.predNumNeighbors=True
             self.numBBParams+=1
+            print("Detecting number of neighbors!")
         else:
             self.predNumNeighbors=False
 

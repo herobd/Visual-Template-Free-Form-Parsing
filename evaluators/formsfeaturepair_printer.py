@@ -63,8 +63,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     dataT = data.to(gpu)#__to_tensor(data,gpu)
     relNodeIds = instance['nodeIds']
 
-    pred = model(dataT)
-    #pred = predAll[:,0]
+    predAll = model(dataT)
+    pred = predAll[:,0]
     pred = torch.sigmoid(pred)
 
     
@@ -85,7 +85,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             newNodeIds.append(relNodeIds[i]) #ensure order is the same
             newData[newi]=data[i]
             relNodeIds[j]=(None,None)
-            newi+1
+            newi+=1
     pred=newPred
     #nnPred=newNNPred
     relNodeIds=newNodeIds

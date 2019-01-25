@@ -30,5 +30,4 @@ class SimpleNN(BaseModel):
         self.layers=nn.Sequential(*layers)
 
     def forward(self,input):
-        out = self.layers(input)
-        return out[:]
+        return self.layers(input)

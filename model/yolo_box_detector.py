@@ -20,6 +20,11 @@ class YoloBoxDetector(nn.Module): #BaseModel
         self.numBBTypes = config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
         self.numLineParams = 5 #conf,x-off,y-off,h-scale,rot
+        if 'pred_num_neighbots' in config and config['pred_num_neighbots']:
+            self.predNumNeighbors=True
+            self.numBBParams+=1
+        else:
+            self.predNumNeighbors=False
 
         self.predPointCount = config['number_of_point_types'] if 'number_of_point_types' in config else 0
         self.predPixelCount = config['number_of_pixel_types'] if 'number_of_pixel_types' in config else 0
@@ -170,8 +175,13 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH                    #scale (half-height),
                 
             ]
+            if self.predNumNeighbors:
+                stackedPred.append(1+y[:,5+offset:6+offset,:,:])
+                extra=1
+            else:
+                extra=0
             for j in range(self.numBBTypes):
-                stackedPred.append(y[:,5+j+offset:6+j+offset,:,:])         #x. class prediction
+                stackedPred.append(y[:,5+j+extra+offset:6+j+extra+offset,:,:])         #x. class prediction
 
             predictions = torch.cat(stackedPred, dim=1)
             predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]

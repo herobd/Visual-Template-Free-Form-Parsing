@@ -10,7 +10,7 @@ from utils.crop_transform import CropBoxTransform
 from utils import augmentation
 from collections import defaultdict, OrderedDict
 from .box_detect import BoxDetectDataset, collate
-from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT
+from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT, getResponseBBIdList_
 import timeit
 
 import cv2
@@ -203,11 +203,13 @@ class FormsBoxDetect(BoxDetectDataset):
         fieldBBs = annotations['fieldBBs']
         fixAnnotations(self,annotations)
 
-        bbs = getBBWithPoints(annotations['byId'].values(),s,useBlankClass=(not self.no_blanks),usePairedClass=self.use_paired_class)
+        full_bbs=annotations['byId'].values()
+
+        bbs = getBBWithPoints(full_bbs,s,useBlankClass=(not self.no_blanks),usePairedClass=self.use_paired_class)
         numClasses = bbs.shape[2]-16
         #field_bbs = getBBWithPoints(annotations['fieldBBs'],s)
         #bbs = np.concatenate([text_bbs,field_bbs],axis=1) #has batch dim
-        start_of_line, end_of_line = getStartEndGT(annotations['byId'].values(),s)
+        start_of_line, end_of_line = getStartEndGT(full_bbs,s)
         try:
             table_points, table_pixels = self.getTables(
                     fieldBBs,
@@ -234,7 +236,21 @@ class FormsBoxDetect(BoxDetectDataset):
         point_gts = {
                         "table_points": table_points
                         }
-        return bbs,line_gts,point_gts,pixel_gt,numClasses
+        
+        numNeighbors=defaultdict(lambda:0)
+        for id,bb in annotations['byId'].items():
+            if not self.onlyFormStuff or ('paired' in bb and bb['paired']):
+                responseIds = getResponseBBIdList_(self,id,annotations)
+                for id2,bb2 in annotations['byId'].items():
+                    if id!=id2:
+                        pair = id2 in responseIds
+                        if pair:
+                            numNeighbors[id]+=1
+        numNeighbors = [numNeighbros[bb['id']] for bb in full_bbs]
+        #if self.pred_neighbors:
+        #    bbs = torch.cat(bbs,
+
+        return bbs,line_gts,point_gts,pixel_gt,numClasses,numNeighbors
 
 
 

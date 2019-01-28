@@ -524,3 +524,16 @@ def getBBInfo(bb,rotate,useBlankClass=False):
     width = d
 
     return cX,cY,height,width,rot,text
+
+def getResponseBBIdList_(this,queryId,annotations):
+    responseBBList=[]
+    for pair in annotations['pairs']: #done already +annotations['samePairs']:
+        if queryId in pair:
+            if pair[0]==queryId:
+                otherId=pair[1]
+            else:
+                otherId=pair[0]
+            if otherId in annotations['byId'] and (not this.onlyFormStuff or ('paired' in bb and bb['paired'])):
+                #responseBBList.append(annotations['byId'][otherId])
+                responseBBList.append(otherId)
+    return responseBBList

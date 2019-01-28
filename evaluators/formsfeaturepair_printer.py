@@ -10,7 +10,7 @@ import math
 from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import computeAP
-from model.optimize import optimizeRelationships,optimizeRelationshipsSoft
+from model.optimize import optimizeRelationships,optimizeRelationshipsSoft,optimizeRelationshipsBlind
 
 #THRESH=0
 
@@ -116,7 +116,22 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             thresh-=0.01
         newIds=[]
         newLabel=label[keep]
-        if predNN is not None:
+        if config['optimize']=='blind':
+            idNum=0
+            numIds=[]
+            idNumMap={}
+            for index,(id1,id2) in enumerate(relNodeIds):
+                if keep[index]:
+                    if id1 not in idNumMap:
+                        idNumMap[id1]=idNum
+                        idNum+=1
+                    if id2 not in idNumMap:
+                        idNumMap[id2]=idNum
+                        idNum+=1
+                    numIds.append( [idNumMap[id1],idNumMap[id2]] )
+            print('size being optimized: {}'.format(newPred.size(0)))
+            pred[keep] *= torch.from_numpy( optimizeRelationshipsBlind(newPred,numIds) ).float()
+        elif predNN is not None:
             idMap={}
             newId=0
             numIds=[]

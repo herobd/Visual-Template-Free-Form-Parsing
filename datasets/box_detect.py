@@ -101,13 +101,16 @@ def collate(batch):
 
     if largest_bb_count != 0:
         bbs = torch.zeros(batch_size, largest_bb_count, bb_dim)
+        numNeighbors = torch.zeros(batch_size, largest_bb_count)
+        for i, b in enumerate(batch):
+            gt = b['bb_gt']
+            if bb_sizes[i] == 0:
+                continue
+            bbs[i, :bb_sizes[i]] = gt
+            numNeighbors[i, :bb_sizes[i]] = b['num_neighbors']
     else:
         bbs=None
-    for i, b in enumerate(batch):
-        gt = b['bb_gt']
-        if bb_sizes[i] == 0:
-            continue
-        bbs[i, :bb_sizes[i]] = gt
+        numNeighbors=None
 
     line_labels = {}
     for name,count in largest_line_label.items():
@@ -144,10 +147,12 @@ def collate(batch):
     else:
         pixel_gt = None
 
+
     ##print('collate: '+str(timeit.default_timer()-tic))
     return {
         'img': imgs,
         'bb_gt': bbs,
+        'num_neighbors':numNeighbors,
         "bb_sizes": bb_sizes,
         'line_gt': line_labels,
         "line_label_sizes": line_label_sizes,
@@ -254,13 +259,14 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
 
-        bbs,line_gts,point_gts,pixel_gt,numClasses = self.parseAnn(np_img,annotations,s,imagePath)
+        bbs,line_gts,point_gts,pixel_gt,numClasses,numNeighbors = self.parseAnn(np_img,annotations,s,imagePath)
 
         ##ticTr=timeit.default_timer()
         if self.transform is not None:
             out, cropPoint = self.transform({
                 "img": np_img,
                 "bb_gt": bbs,
+                "bb_auxs": numNeighbors,
                 "line_gt": line_gts,
                 "point_gt": point_gts,
                 "pixel_gt": pixel_gt,
@@ -268,6 +274,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             }, cropPoint)
             np_img = out['img']
             bbs = out['bb_gt']
+            numNeighbors = out['bb_auxs']
             #if 'table_points' in out['point_gt']:
             #    table_points = out['point_gt']['table_points']
             #else:
@@ -307,7 +314,11 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         #import pdb; pdb.set_trace()
         #bbs = None if bbs.shape[1] == 0 else torch.from_numpy(bbs)
         bbs = convertBBs(bbs,self.rotate,numClasses)
-        #start_of_line = convertLines(start_of_line,numClasses)
+        if len(numNeighbors)>0:
+            numNeighbors = torch.tensor(numNeighbors)[None,:] #add batch dim
+        else:
+            numNeighbors=None
+            #start_of_line = convertLines(start_of_line,numClasses)
         #end_of_line = convertLines(end_of_line,numClasses)
         for name in point_gts:
             #if table_points is not None:
@@ -320,6 +331,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             return {
                 "img": img,
                 "bb_gt": bbs,
+                "num_neighbors": numNeighbors,
                 "line_gt": line_gts,
                 "point_gt": point_gts,
                 "pixel_gt": pixel_gt,
@@ -377,6 +389,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             return {
                 "img": img,
                 "bb_gt": bbs,
+                "num_neighbors": numNeighbors,
                 "line_gt": line_gt,
                 "point_gt": point_gt,
                 "pixel_gt": pixel_gtR,

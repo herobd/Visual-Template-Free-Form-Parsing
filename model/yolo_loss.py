@@ -20,8 +20,9 @@ class YoloLoss (nn.Module):
         self.mse_loss = nn.MSELoss(reduction='elementwise_mean')  # Coordinate loss
         self.bce_loss = nn.BCEWithLogitsLoss(reduction='elementwise_mean')  # Confidence loss
         self.ce_loss = nn.CrossEntropyLoss(reduction='elementwise_mean')  # Class loss
+        self.mse_loss = nn.MSELoss(reduction='elementwise_mean')  # Num neighbor regression
 
-    def forward(self,prediction, target, target_sizes ):
+    def forward(self,prediction, target, target_sizes, target_num_neighbors=None ):
 
         nA = self.num_anchors
         nB = prediction.size(0)
@@ -39,7 +40,11 @@ class YoloLoss (nn.Module):
         h = prediction[..., 4]  # Height
         #r = prediction[..., 3]  # Rotation (not used here)
         pred_conf = prediction[..., 0]  # Conf 
-        pred_cls = prediction[..., 6:]  # Cls pred.
+        if target_num_neighbors is not None: #self.predNumNeighbors:
+            pred_neighbors = 1+prediction[..., 6]  # num of neighbors
+            pred_cls = prediction[..., 7:]  # Cls pred.
+        else:
+            pred_cls = prediction[..., 6:]  # Cls pred.
 
         grid_x = torch.arange(nW).repeat(nH, 1).view([1, 1, nH, nW]).type(FloatTensor).to(prediction.device)
         grid_y = torch.arange(nH).repeat(nW, 1).t().view([1, 1, nH, nW]).type(FloatTensor).to(prediction.device)
@@ -59,7 +64,7 @@ class YoloLoss (nn.Module):
         #    target[:,:,[0,4]] /= self.scale[0]
         #    target[:,:,[1,3]] /= self.scale[1]
 
-        nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, distances, ious = build_targets(
+        nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, tneighbors, distances, ious = build_targets(
             pred_boxes=pred_boxes.cpu().data,
             pred_conf=pred_conf.cpu().data,
             pred_cls=pred_cls.cpu().data,
@@ -72,7 +77,8 @@ class YoloLoss (nn.Module):
             grid_sizeW=nW,
             ignore_thres=self.ignore_thresh,
             scale=self.scale,
-            calcIOUAndDist=self.use_special_loss
+            calcIOUAndDist=self.use_special_loss,
+            target_num_neighbors=target_num_neighbors
         )
 
         nProposals = int((pred_conf > 0).sum().item())
@@ -93,6 +99,8 @@ class YoloLoss (nn.Module):
         th = th.type(FloatTensor).to(prediction.device)
         tconf = tconf.type(FloatTensor).to(prediction.device)
         tcls = tcls.type(LongTensor).to(prediction.device)
+        if target_num_neighbors is not None:
+            tneighbors = tneighbors.type(FloatTensor).to(prediction.device)
 
         # Get conf mask where gt and where there is no gt
         conf_mask_true = mask
@@ -118,12 +126,19 @@ class YoloLoss (nn.Module):
             else:
                 loss_cls =  self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1)) *(1 / nB) #this multiply is erronous
             loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
-            loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls
+            if target_num_neighbors is not None: #if self.predNumNeighbors:
+                loss_nn = self.mse_loss(pred_neighbors[mask],tneighbors[mask])
+            else:
+                loss_nn = 0
+            loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls + loss_nn
+            if target_num_neighbors is not None:
+                loss_nn=loss_nn.item()
             return (
                 loss,
                 loss_x.item()+loss_y.item()+loss_w.item()+loss_h.item(),
                 loss_conf.item(),
                 loss_cls.item(),
+                loss_nn,
                 recall,
                 precision,
             )
@@ -132,6 +147,7 @@ class YoloLoss (nn.Module):
                 loss_conf,
                 0,
                 loss_conf.item(),
+                0,
                 0,
                 recall,
                 precision,
@@ -214,7 +230,7 @@ def get_closest_anchor_iou(anchors,gh,gw):
     return best_n, anch_ious
 
 def build_targets(
-    pred_boxes, pred_conf, pred_cls, target, target_sizes, anchors, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale, calcIOUAndDist=False
+    pred_boxes, pred_conf, pred_cls, target, target_sizes, anchors, num_anchors, num_classes, grid_sizeH, grid_sizeW, ignore_thres, scale, calcIOUAndDist=False, target_num_neighbors=None
 ):
     nB = pred_boxes.size(0)
     nA = num_anchors
@@ -229,6 +245,10 @@ def build_targets(
     th = torch.zeros(nB, nA, nH, nW)
     tconf = torch.ByteTensor(nB, nA, nH, nW).fill_(0)
     tcls = torch.ByteTensor(nB, nA, nH, nW, nC).fill_(0)
+    if target_num_neighbors is not None:
+        tneighbors = torch.FloatTensor(nB, nA, nH, nW).fill_(0)
+    else:
+        tneighbors=None
     if calcIOUAndDist:
         distances = torch.ones(nB,nA, nH, nW) #distance to closest target
         ious = torch.zeros(nB,nA, nH, nW) #max iou to target
@@ -286,6 +306,8 @@ def build_targets(
             # One-hot encoding of label
             #target_label = int(target[b, t, 0])
             tcls[b, best_n, gj, gi] = target[b, t,13:]
+            if target_num_neighbors is not None:
+                tneighbors[b, best_n, gj, gi] = target_num_neighbors[b, t]
             tconf[b, best_n, gj, gi] = 1
 
             # Calculate iou between ground truth and best matching prediction
@@ -300,7 +322,7 @@ def build_targets(
             if iou > 0.5 and pred_label == torch.argmax(target[b,t,13:]) and score > 0:
                 nCorrect += 1
 
-    return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, distances, ious
+    return nGT, nCorrect, mask, conf_mask, tx, ty, tw, th, tconf, tcls, tneighbors, distances, ious
 
 
 

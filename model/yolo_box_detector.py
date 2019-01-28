@@ -133,18 +133,14 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)   as we scale the anchors in training
             ]
 
-            #stackedOffsets = [
-            #        y[:,0+offset:1+offset,:,:],
-            #        y[:,1+offset:2+offset,:,:],
-            #        y[:,2+offset:3+offset,:,:],
-            #        y[:,4+offset:5+offset,:,:],
-            #        y[:,4+offset:5+offset,:,:]
-            #]
-            #if self.rotation:
-            #    stackedOffsets.append( rot_dif )
 
+            if self.predNumNeighbors:
+                stackedPred.append(1+y[:,6+offset:7+offset,:,:])
+                extra=1
+            else:
+                extra=0
             for j in range(self.numBBTypes):
-                stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
+                stackedPred.append(y[:,6+j+extra+offset:7+j+extra+offset,:,:])         #x. class prediction
                 #stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
             pred_boxes.append(torch.cat(stackedPred, dim=1))
             #pred_offsets.append(torch.cat(stackedOffsets, dim=1))
@@ -176,13 +172,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.exp(y[:,4+offset:5+offset,:,:])*self.meanH                    #scale (half-height),
                 
             ]
-            if self.predNumNeighbors:
-                stackedPred.append(1+y[:,5+offset:6+offset,:,:])
-                extra=1
-            else:
-                extra=0
             for j in range(self.numBBTypes):
-                stackedPred.append(y[:,5+j+extra+offset:6+j+extra+offset,:,:])         #x. class prediction
+                stackedPred.append(y[:,5+j+offset:6+j+offset,:,:])         #x. class prediction
 
             predictions = torch.cat(stackedPred, dim=1)
             predictions = predictions.transpose(1,3).contiguous()#from [batch, channel, rows, cols] to [batch, cols, rows, channels]

@@ -10,7 +10,7 @@ import math
 from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import computeAP
-from model.optimize import optimizeRelationships
+from model.optimize import optimizeRelationships,optimizeRelationshipsSoft
 
 #THRESH=0
 
@@ -62,12 +62,13 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     label = instance['label']
     dataT = data.to(gpu)#__to_tensor(data,gpu)
     relNodeIds = instance['nodeIds']
+    gtNumNeighbors=instance['numNeighbors']
 
     predAll = model(dataT)
     pred = predAll[:,0]
 
     if predAll.size(1)==3:
-        predNN = predAll[:,1:]
+        predNN = predAll[:,1:]+1
         newPredNN={}
     else:
         predNN=newPredNN = None
@@ -79,6 +80,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     newPred=torch.FloatTensor(pred.size(0)//2).to(pred.device)
     newLabel=torch.FloatTensor(pred.size(0)//2).to(pred.device)
     newData=torch.FloatTensor(pred.size(0)//2,data.size(1))
+    newGtNumNeighbors=torch.FloatTensor(pred.size(0)//2,2)
     newNodeIds=[]
     newi=0
     for i in range(len(relNodeIds)):
@@ -93,6 +95,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             if predNN is not None:
                 newPredNN[id1]= (predNN[i,0]+predNN[j,1])/2
                 newPredNN[id2]= (predNN[i,1]+predNN[j,0])/2
+            newGtNumNeighbors[newi]=gtNumNeighbors[i]
             relNodeIds[j]=(None,None)
             newi+=1
     pred=newPred
@@ -100,11 +103,17 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     relNodeIds=newNodeIds
     label=newLabel
     predNN=newPredNN
+    gtNumNeighbors=newGtNumNeighbors
  
     if 'optimize' in config and config['optimize']:
         #We first need to prune down as there are far too many possible pairings
-        keep = pred>0.3
-        newPred=pred[keep]
+        thresh=0.3
+        while thresh>0:
+            keep = pred>thresh
+            newPred=pred[keep]
+            if newPred.size(0)<1500:
+                break
+            thresh-=0.01
         newIds=[]
         newLabel=label[keep]
         if predNN is not None:
@@ -112,16 +121,20 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             newId=0
             numIds=[]
             numNeighbors=[]
-            for id1,id2 in newNodeIds:
-                if id1 not in idMap:
-                    idMap[id1]=newId
-                    numNeighbors.append(predNN[id1])
-                    newId+=1
-                if id2 not in idMap:
-                    idMap[id2]=newId
-                    numNeighbors.append(predNN[id2])
-                    newId+=1
-                numIds.append( [idMap[id1],idMap[id2]] )
+            for index,(id1,id2) in enumerate(newNodeIds):
+                if keep[index]:
+                    if id1 not in idMap:
+                        idMap[id1]=newId
+                        numNeighbors.append(predNN[id1].item())
+                        newId+=1
+                    if id2 not in idMap:
+                        idMap[id2]=newId
+                        numNeighbors.append(predNN[id2].item())
+                        newId+=1
+                    numIds.append( [idMap[id1],idMap[id2]] )
+            assert((newPred.size(0))<1500)
+            print('size being optimized soft: {}'.format(newPred.size(0)))
+            pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors) ).float()
         else:
             for i in range(keep.size(0)):
                 if keep[i]:
@@ -146,8 +159,10 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
                 idNumMap[id]=idNum
                 idNum+=1
             numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
-        print('size being optimized: {}'.format(newPred.size(0)))
-        pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors) ).float()
+            print('size being optimized: {}'.format(newPred.size(0)))
+            pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors) ).float()
+
+
         pred[1-keep] *= 0
         THRESH=0
    
@@ -184,22 +199,28 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     truePs=0
     scores=[]
     for b in range(batchSize):
-        id1,id2 = relNodesIds[b]
+        id1,id2 = relNodeIds[b]
         x,y = qXY[b]
         x2,y2 = iXY[b]
+        x=int(x)
+        y=int(y)
+        x2=int(x2)
+        y2=int(y2)
         if (pred[b].item()>THRESH):
             totalPreds+=1
             if label[b].item()>0:
                 truePs+=1
             color = int(255*(pred[b].item()-THRESH)/(1-THRESH))
-            cv2.line(image,(int(x),int(y+3)),(int(x2),int(y2-3)),(color,0,0),1)
+            cv2.line(image,(x,y+3),(x2,y2-3),(color,0,0),1)
         if label[b].item()>0:
             scores.append( (pred[b],True) )
             totalGTs+=1
         else:
             scores.append( (pred[b],False) )
-        cv2.putText(img,'{}'.format(predNN[id1]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(30,0,0),2,cv2.LINE_AA)
-        cv2.putText(img,'{}'.format(predNN[id2]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 3,(30,0,0),2,cv2.LINE_AA)
+        color = int(min(abs(predNN[id1]-gtNumNeighbors[b,0]),2)*127)
+        cv2.putText(image,'{:.2f}/{}'.format(predNN[id1],gtNumNeighbors[b,0]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.4,(color,0,0),2,cv2.LINE_AA)
+        color = int(min(abs(predNN[id2]-gtNumNeighbors[b,1]),2)*127)
+        cv2.putText(image,'{:.2f}/{}'.format(predNN[id2],gtNumNeighbors[b,1]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 0.4,(color,0,0),2,cv2.LINE_AA)
     
     if totalGTs>0:
         recall = truePs/float(totalGTs)

@@ -129,7 +129,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    ttt_hit=22-startIndex
     #else:
     #    return 0
-    lossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
+    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
     alignmentPointsPred={}
     alignmentPointsTarg={}
     index=0
@@ -256,6 +256,11 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
             #import pdb; pdb.set_trace()
             bbs = outputBBs[b]
+            if model.predNumNeighbors:
+                predNN= bbs[:,6]
+                predClass= bbs[:,7:]
+            else:
+                predClass= bbs[:,6:]
             for j in range(bbs.shape[0]):
                 #circle aligned predictions
                 conf = bbs[j,0]
@@ -268,13 +273,19 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                     #    cv2.bb(bbImage[:,:,2],p1,p2,shade,2)
                     #elif name=='field_end_gt' or name=='field_start_gt':
                     #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
-                    if bbs[j,6] > bbs[j,7]:
+                    if predClass[j,0] > predClass[j,1]:
                         color=[0,0,shade] #text
                     else:
                         color=[shade,0,0] #field
-                    if numClasses==2 and model.numBBTypes==3 and bbs[j,8] > 0.5:
+                    if numClasses==2 and model.numBBTypes==3 and predClass[j,2] > 0.5:
                         color[1]=shade
                     plotRect(image,color,bbs[j,1:6])
+                if model.predNumNeighbors:
+                    x=int(bbs[j,1])
+                    y=int(bbs[j,2])
+                    color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
+                    cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(30,0,0),2,cv2.LINE_AA)
+
 
             #for j in alignmentBBsTarg[name][b]:
             #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
@@ -356,8 +367,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                'ap_7':aps_7,
                'recall':recalls_5,
                'prec':precs_5,
+               'nn_loss': nn_loss,
              }, 
-             (lossThis, position_loss, conf_loss, class_loss, recall, precision)
+             (lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision)
             )
 
 

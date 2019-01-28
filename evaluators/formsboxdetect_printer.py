@@ -104,6 +104,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     targetPixels = instance['pixel_gt']
     imageName = instance['imgName']
     scale = instance['scale']
+    gtNumNeighbors = instance['num_neighbors']
     dataT, targetBBsT, targetBBsSizes, targetPointsT, targetPointsSizes, targetPixelsT = __to_tensor(instance,gpu)
 
     resultsDirName='results'
@@ -227,6 +228,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
             for j in range(targetBBsSizes[b]):
                 plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
+                x=int(targetBBs[b,j,0])
+                x=int(targetBBs[b,j,1])
+                cv2.putText(image,'{}'.format(gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(0.6,0.3,0),2,cv2.LINE_AA)
                 #if alignmentBBs[b] is not None:
                 #    aj=alignmentBBs[b][j]
                 #    xc_gt = targetBBs[b,j,0]
@@ -283,8 +287,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if model.predNumNeighbors:
                     x=int(bbs[j,1])
                     y=int(bbs[j,2])
-                    color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
-                    cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(30,0,0),2,cv2.LINE_AA)
+                    #color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
+                    #cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                    cv2.putText(image,'{}'.format(predNN[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,color,2,cv2.LINE_AA)
 
 
             #for j in alignmentBBsTarg[name][b]:

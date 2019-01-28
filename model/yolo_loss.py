@@ -99,6 +99,8 @@ class YoloLoss (nn.Module):
         th = th.type(FloatTensor).to(prediction.device)
         tconf = tconf.type(FloatTensor).to(prediction.device)
         tcls = tcls.type(LongTensor).to(prediction.device)
+        if target_num_neighbors is not None:
+            tneighbors = tneighbors.type(FloatTensor).to(prediction.device)
 
         # Get conf mask where gt and where there is no gt
         conf_mask_true = mask

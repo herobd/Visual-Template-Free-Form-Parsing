@@ -97,41 +97,44 @@ class PairingGraph(BaseModel):
 
         assert(self.detector.scale[0]==self.detector.scale[1])
         detect_scale = self.detector.scale[0]
-        self.roi_align = ROIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
-        self.avg_box = ROIAlign(2,3,1.0/detect_scale)
+        if self.useShapeFeats!='only':
+            self.roi_align = ROIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
+            self.avg_box = ROIAlign(2,3,1.0/detect_scale)
 
-        self.expandedRelContext = config['expand_rel_context'] if 'expand_rel_context' in config else None
-        if self.expandedRelContext is not None:
-            bbMasks=3
+            self.expandedRelContext = config['expand_rel_context'] if 'expand_rel_context' in config else None
+            if self.expandedRelContext is not None:
+                bbMasks=3
+            else:
+                bbMasks=2
+
+            feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
+            featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
+            featurizer_conv = [self.detector.last_channels+bbMasks] + featurizer_conv #bbMasks are appended
+            scaleX=1
+            scaleY=1
+            for a in featurizer_conv:
+                if a=='M' or (type(a) is str and a[0]=='D'):
+                    scaleX*=2
+                    scaleY*=2
+                elif type(a) is str and a[0]=='U':
+                    scaleX/=2
+                    scaleY/=2
+                elif type(a) is str and a[0:4]=='long': #long pool
+                    scaleX*=3
+                    scaleY*=2
+            #self.scale=(scaleX,scaleY) this holds scale for detector
+            fsizeX = self.pool_w//scaleX
+            fsizeY = self.pool_h//scaleY
+            layers, last_ch_relC = make_layers(featurizer_conv,norm=feat_norm,dropout=True) 
+            layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
+            self.relFeaturizerConv = nn.Sequential(*layers)
         else:
-            bbMasks=2
-
-        feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
-        featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
-        featurizer_conv = [self.detector.last_channels+bbMasks] + featurizer_conv #bbMasks are appended
-        scaleX=1
-        scaleY=1
-        for a in featurizer_conv:
-            if a=='M' or (type(a) is str and a[0]=='D'):
-                scaleX*=2
-                scaleY*=2
-            elif type(a) is str and a[0]=='U':
-                scaleX/=2
-                scaleY/=2
-            elif type(a) is str and a[0:4]=='long': #long pool
-                scaleX*=3
-                scaleY*=2
-        #self.scale=(scaleX,scaleY) this holds scale for detector
-        fsizeX = self.pool_w//scaleX
-        fsizeY = self.pool_h//scaleY
-        layers, last_ch_relC = make_layers(featurizer_conv,norm=feat_norm,dropout=True) 
-        layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
-        self.relFeaturizerConv = nn.Sequential(*layers)
+            last_ch_relC=0
 
         if self.useShapeFeats:
            added_feats=8+2*self.numBBTypes #we'll append some extra feats
            added_featsBB=3+self.numBBTypes
-           if self.useShapeFeats=='extra' or self.useShapeFeats=='corner':
+           if self.useShapeFeats!='old':
                added_feats+=4
         else:
            added_feats=0
@@ -139,9 +142,7 @@ class PairingGraph(BaseModel):
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if config['graph_config']['arch']=='BinaryPairNet':
             feat_norm=None
-            featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
-        else:
-            featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
+        featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
         layers, last_ch_rel = make_layers(featurizer_fc,norm=feat_norm,dropout=True) 
         self.relFeaturizerFC = nn.Sequential(*layers)
 
@@ -165,7 +166,7 @@ class PairingGraph(BaseModel):
                     nn.GroupNorm(bestGroup,convOut)
                     )
             assert(len(featurizer)==0)
-            #if len(featurizer)>0:
+           #if len(featurizer)>0:
             #    featurizer = featurizer + ['FCnR{}'.format(graph_in_channels)]
             #    layers, last_ch_node = make_layers(featurizer,norm=feat_norm)
             #    self.bbFeaturizerFC = nn.Sequential(*layers)
@@ -297,106 +298,106 @@ class PairingGraph(BaseModel):
         brX = brX.cpu()
         brY = brY.cpu()
 
-        #get axis aligned rectangle from corners
-        rois = torch.zeros((len(candidates),5)) #(batchIndex,x1,y1,x2,y2) as expected by ROI Align
-        i=0
-        for (index1, index2) in candidates:
-            maxX = max(tlX[index1],tlX[index2],trX[index1],trX[index2],blX[index1],blX[index2],brX[index1],brX[index2])
-            minX = min(tlX[index1],tlX[index2],trX[index1],trX[index2],blX[index1],blX[index2],brX[index1],brX[index2])
-            maxY = max(tlY[index1],tlY[index2],trY[index1],trY[index2],blY[index1],blY[index2],brY[index1],brY[index2])
-            minY = min(tlY[index1],tlY[index2],trY[index1],trY[index2],blY[index1],blY[index2],brY[index1],brY[index2])
+        if self.useShapeFeats!='only'
+            #get axis aligned rectangle from corners
+            rois = torch.zeros((len(candidates),5)) #(batchIndex,x1,y1,x2,y2) as expected by ROI Align
+            for i,(index1, index2) in enumerate(candidates):
+                maxX = max(tlX[index1],tlX[index2],trX[index1],trX[index2],blX[index1],blX[index2],brX[index1],brX[index2])
+                minX = min(tlX[index1],tlX[index2],trX[index1],trX[index2],blX[index1],blX[index2],brX[index1],brX[index2])
+                maxY = max(tlY[index1],tlY[index2],trY[index1],trY[index2],blY[index1],blY[index2],brY[index1],brY[index2])
+                minY = min(tlY[index1],tlY[index2],trY[index1],trY[index2],blY[index1],blY[index2],brY[index1],brY[index2])
+                if self.expandedRelContext is not None:
+                    maxX = min(maxX.item()+self.expandedRelContext,imageWidth-1)
+                    minX = max(minX.item()-self.expandedRelContext,0)
+                    maxY = min(maxY.item()+self.expandedRelContext,imageHeight-1)
+                    minY = max(minY.item()-self.expandedRelContext,0)
+                rois[i,1]=minX
+                rois[i,2]=minY
+                rois[i,3]=maxX
+                rois[i,4]=maxY
+
+
+
+
+                ###DEBUG
+                if debug_image is not None and i<10:
+                    assert(self.rotation==False)
+                    #print('crop {}: ({},{}), ({},{})'.format(i,minX.item(),maxX.item(),minY.item(),maxY.item()))
+                    #print(bbs[index1])
+                    #print(bbs[index2])
+                    crop = debug_image[0,:,int(minY):int(maxY),int(minX):int(maxX)+1].cpu()
+                    crop = (2-crop)/2
+                    if crop.size(0)==1:
+                        crop = crop.expand(3,crop.size(1),crop.size(2))
+                    crop[0,int(tlY[index1].item()-minY):int(brY[index1].item()-minY)+1,int(tlX[index1].item()-minX):int(brX[index1].item()-minX)+1]*=0.5
+                    crop[1,int(tlY[index2].item()-minY):int(brY[index2].item()-minY)+1,int(tlX[index2].item()-minX):int(brX[index2].item()-minX)+1]*=0.5
+                    crop = crop.numpy().transpose([1,2,0])
+                    cv2.imshow('crop {}'.format(i),crop)
+                    #import pdb;pdb.set_trace()
+                ###
+            if debug_image is not None:
+                cv2.waitKey()
+
+            #crop from feats, ROI pool
+            stackedEdgeFeatWindows = self.roi_align(features,rois.to(features.device))
+
+            #create and add masks
             if self.expandedRelContext is not None:
-                maxX = min(maxX.item()+self.expandedRelContext,imageWidth-1)
-                minX = max(minX.item()-self.expandedRelContext,0)
-                maxY = min(maxY.item()+self.expandedRelContext,imageHeight-1)
-                minY = max(minY.item()-self.expandedRelContext,0)
-            rois[i,1]=minX
-            rois[i,2]=minY
-            rois[i,3]=maxX
-            rois[i,4]=maxY
-
-
-
-            i+=1
-
-            ###DEBUG
-            if debug_image is not None and i<10:
-                assert(self.rotation==False)
-                #print('crop {}: ({},{}), ({},{})'.format(i,minX.item(),maxX.item(),minY.item(),maxY.item()))
-                #print(bbs[index1])
-                #print(bbs[index2])
-                crop = debug_image[0,:,int(minY):int(maxY),int(minX):int(maxX)+1].cpu()
-                crop = (2-crop)/2
-                if crop.size(0)==1:
-                    crop = crop.expand(3,crop.size(1),crop.size(2))
-                crop[0,int(tlY[index1].item()-minY):int(brY[index1].item()-minY)+1,int(tlX[index1].item()-minX):int(brX[index1].item()-minX)+1]*=0.5
-                crop[1,int(tlY[index2].item()-minY):int(brY[index2].item()-minY)+1,int(tlX[index2].item()-minX):int(brX[index2].item()-minX)+1]*=0.5
-                crop = crop.numpy().transpose([1,2,0])
-                cv2.imshow('crop {}'.format(i),crop)
-                #import pdb;pdb.set_trace()
-            ###
-        if debug_image is not None:
-            cv2.waitKey()
-
-        #crop from feats, ROI pool
-        stackedEdgeFeatWindows = self.roi_align(features,rois.to(features.device))
-
-        #create and add masks
-        if self.expandedRelContext is not None:
-            #We're going to add a third mask for all bbs, which we'll precompute here
-            numMasks=3
-            allMasks = torch.zeros(imageHeight,imageWidth)
-            for bbIdx in range(bbs.size(0)):
-                rr, cc = draw.polygon([tlY[bbIdx],trY[bbIdx],brY[bbIdx],blY[bbIdx]],[tlX[bbIdx],trX[bbIdx],brX[bbIdx],blX[bbIdx]], [self.pool_h,self.pool_w])
-                allMasks[rr,cc]=1
-        else:
-            numMasks=2
-        masks = torch.zeros(stackedEdgeFeatWindows.size(0),numMasks,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
+                #We're going to add a third mask for all bbs, which we'll precompute here
+                numMasks=3
+                allMasks = torch.zeros(imageHeight,imageWidth)
+                for bbIdx in range(bbs.size(0)):
+                    rr, cc = draw.polygon([tlY[bbIdx],trY[bbIdx],brY[bbIdx],blY[bbIdx]],[tlX[bbIdx],trX[bbIdx],brX[bbIdx],blX[bbIdx]], [self.pool_h,self.pool_w])
+                    allMasks[rr,cc]=1
+            else:
+                numMasks=2
+            masks = torch.zeros(stackedEdgeFeatWindows.size(0),numMasks,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
         if self.useShapeFeats:
-            if self.useShapeFeats=='extra' or self.useShapeFeats=='corner':
+            if self.useShapeFeats!='old':
                 numFeats=8+4
             else:
                 numFeats=8
             shapeFeats = torch.FloatTensor(len(candidates),numFeats+2*self.numBBTypes)
-        i=0
-        for (index1, index2) in candidates:
-            #... or make it so index1 is always to top-left one
-            if random.random()<0.5 and not self.debug:
-                temp=index1
-                index1=index2
-                index2=temp
-            
-            #warp to roi space
-            feature_w = rois[i,3]-rois[i,1] +1
-            feature_h = rois[i,4]-rois[i,2] +1
-            w_m = self.pool_w/feature_w
-            h_m = self.pool_h/feature_h
 
-            tlX1 = round(((tlX[index1]-rois[i,1])*w_m).item())
-            trX1 = round(((trX[index1]-rois[i,1])*w_m).item())
-            brX1 = round(((brX[index1]-rois[i,1])*w_m).item())
-            blX1 = round(((blX[index1]-rois[i,1])*w_m).item())
-            tlY1 = round(((tlY[index1]-rois[i,2])*h_m).item())
-            trY1 = round(((trY[index1]-rois[i,2])*h_m).item())
-            brY1 = round(((brY[index1]-rois[i,2])*h_m).item())
-            blY1 = round(((blY[index1]-rois[i,2])*h_m).item())
-            tlX2 = round(((tlX[index2]-rois[i,1])*w_m).item())
-            trX2 = round(((trX[index2]-rois[i,1])*w_m).item())
-            brX2 = round(((brX[index2]-rois[i,1])*w_m).item())
-            blX2 = round(((blX[index2]-rois[i,1])*w_m).item())
-            tlY2 = round(((tlY[index2]-rois[i,2])*h_m).item())
-            trY2 = round(((trY[index2]-rois[i,2])*h_m).item())
-            brY2 = round(((brY[index2]-rois[i,2])*h_m).item())
-            blY2 = round(((blY[index2]-rois[i,2])*h_m).item())
+        for i,(index1, index2) in enumerate(candidates):
+            if self.useShapeFeats!='only':
+                #... or make it so index1 is always to top-left one
+                if random.random()<0.5 and not self.debug:
+                    temp=index1
+                    index1=index2
+                    index2=temp
+                
+                #warp to roi space
+                feature_w = rois[i,3]-rois[i,1] +1
+                feature_h = rois[i,4]-rois[i,2] +1
+                w_m = self.pool_w/feature_w
+                h_m = self.pool_h/feature_h
 
-            rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], [self.pool_h,self.pool_w])
-            masks[i,0,rr,cc]=1
-            rr, cc = draw.polygon([tlY2,trY2,brY2,blY2],[tlX2,trX2,brX2,blX2], [self.pool_h,self.pool_w])
-            masks[i,1,rr,cc]=1
-            if self.expandedRelContext is not None:
-                cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
-                masks[i,2] = F.upsample(cropArea[None,None,...], size=(self.pool_h,self.pool_w), mode='bilinear')[0,0]
-                #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
+                tlX1 = round(((tlX[index1]-rois[i,1])*w_m).item())
+                trX1 = round(((trX[index1]-rois[i,1])*w_m).item())
+                brX1 = round(((brX[index1]-rois[i,1])*w_m).item())
+                blX1 = round(((blX[index1]-rois[i,1])*w_m).item())
+                tlY1 = round(((tlY[index1]-rois[i,2])*h_m).item())
+                trY1 = round(((trY[index1]-rois[i,2])*h_m).item())
+                brY1 = round(((brY[index1]-rois[i,2])*h_m).item())
+                blY1 = round(((blY[index1]-rois[i,2])*h_m).item())
+                tlX2 = round(((tlX[index2]-rois[i,1])*w_m).item())
+                trX2 = round(((trX[index2]-rois[i,1])*w_m).item())
+                brX2 = round(((brX[index2]-rois[i,1])*w_m).item())
+                blX2 = round(((blX[index2]-rois[i,1])*w_m).item())
+                tlY2 = round(((tlY[index2]-rois[i,2])*h_m).item())
+                trY2 = round(((trY[index2]-rois[i,2])*h_m).item())
+                brY2 = round(((brY[index2]-rois[i,2])*h_m).item())
+                blY2 = round(((blY[index2]-rois[i,2])*h_m).item())
+
+                rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], [self.pool_h,self.pool_w])
+                masks[i,0,rr,cc]=1
+                rr, cc = draw.polygon([tlY2,trY2,brY2,blY2],[tlX2,trX2,brX2,blX2], [self.pool_h,self.pool_w])
+                masks[i,1,rr,cc]=1
+                if self.expandedRelContext is not None:
+                    cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
+                    masks[i,2] = F.upsample(cropArea[None,None,...], size=(self.pool_h,self.pool_w), mode='bilinear')[0,0]
+                    #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
 
             if self.useShapeFeats:
                 shapeFeats[i,0] = (bbs[index1,0]-bbs[index2,0])/self.normalizeHorz
@@ -409,25 +410,29 @@ class PairingGraph(BaseModel):
                 shapeFeats[i,7] = bbs[index2,4]/self.normalizeHorz
                 shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,5:])
                 shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,5:])
-                if self.useShapeFeats=='extra' or self.useShapeFeats=='corner':
+                if self.useShapeFeats!='old':
                     startCorners = 8+self.numBBTypes+self.numBBTypes
                     shapeFeats[i,startCorners +0] = math.sqrt( (tlX[index1]-tlX[index2])**2 + (tlY[index1]-tlY[index2])**2 )
                     shapeFeats[i,startCorners +1] = math.sqrt( (trX[index1]-trX[index2])**2 + (trY[index1]-trY[index2])**2 )
                     shapeFeats[i,startCorners +2] = math.sqrt( (blX[index1]-blX[index2])**2 + (blY[index1]-blY[index2])**2 )
                     shapeFeats[i,startCorners +3] = math.sqrt( (brX[index1]-brX[index2])**2 + (brY[index1]-brY[index2])**2 )
 
-            i+=1
 
-        stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,masks.to(stackedEdgeFeatWindows.device)),dim=1)
-        #import pdb; pdb.set_trace()
-        relFeats = self.relFeaturizerConv(stackedEdgeFeatWindows) #preparing for graph feature size
-        relFeats = relFeats.view(relFeats.size(0),relFeats.size(1))
+        if self.useShapeFeats!='only':
+            stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,masks.to(stackedEdgeFeatWindows.device)),dim=1)
+            #import pdb; pdb.set_trace()
+            relFeats = self.relFeaturizerConv(stackedEdgeFeatWindows) #preparing for graph feature size
+            relFeats = relFeats.view(relFeats.size(0),relFeats.size(1))
         if self.useShapeFeats:
-            relFeats = torch.cat((relFeats,shapeFeats.to(relFeats.device)),dim=1)
+            if self.useShapeFeats=='only':
+                relFeats = shapeFeats.to(features.device)
+            else:
+                relFeats = torch.cat((relFeats,shapeFeats.to(relFeats.device)),dim=1)
         relFeats = self.relFeaturizerFC(relFeats)
-        #?
-        #?crop bbs
-        #?run bbs through net
+        #if self.useShapeFeats=='sp
+    
+        #compute features for the bounding boxes by themselves
+        #This will be replaced with some type of word embedding
         if self.useBBVisualFeats:
             assert(features.size(0)==1)
             if self.useShapeFeats:
@@ -510,6 +515,7 @@ class PairingGraph(BaseModel):
             edgeLocs = torch.LongTensor(edges).t().to(relFeats.device)
             ones = torch.ones(len(edges)).to(relFeats.device)
             adjacencyMatrix = torch.sparse.FloatTensor(edgeLocs,ones,torch.Size([bbAndRel_features.size(0),bbAndRel_features.size(0)]))
+            #numOfNeighbors is for convienence in tracking the normalization term
             numOfNeighbors=numOfNeighbors.to(relFeats.device)
 
         #rel_features = (candidates,relFeats)

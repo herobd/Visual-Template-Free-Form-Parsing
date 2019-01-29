@@ -428,7 +428,8 @@ class PairingGraph(BaseModel):
                 relFeats = shapeFeats.to(features.device)
             else:
                 relFeats = torch.cat((relFeats,shapeFeats.to(relFeats.device)),dim=1)
-        relFeats = self.relFeaturizerFC(relFeats)
+        if self.relFeaturizerFC is not None:
+            relFeats = self.relFeaturizerFC(relFeats)
         #if self.useShapeFeats=='sp
     
         #compute features for the bounding boxes by themselves

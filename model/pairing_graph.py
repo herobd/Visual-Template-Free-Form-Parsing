@@ -84,8 +84,6 @@ class PairingGraph(BaseModel):
             self.useBBVisualFeats=False
         self.includeRelRelEdges= config['use_rel_rel_edges'] if 'use_rel_rel_edges' in config else True
         #rel_channels = config['graph_config']['rel_channels']
-        self.pool_h = config['featurizer_start_h']
-        self.pool_w = config['featurizer_start_w']
 
 
         if 'use_rel_shape_feats' in config:
@@ -98,6 +96,8 @@ class PairingGraph(BaseModel):
         assert(self.detector.scale[0]==self.detector.scale[1])
         detect_scale = self.detector.scale[0]
         if self.useShapeFeats!='only':
+            self.pool_h = config['featurizer_start_h']
+            self.pool_w = config['featurizer_start_w']
             self.roi_align = ROIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
             self.avg_box = ROIAlign(2,3,1.0/detect_scale)
 
@@ -298,7 +298,7 @@ class PairingGraph(BaseModel):
         brX = brX.cpu()
         brY = brY.cpu()
 
-        if self.useShapeFeats!='only'
+        if self.useShapeFeats!='only':
             #get axis aligned rectangle from corners
             rois = torch.zeros((len(candidates),5)) #(batchIndex,x1,y1,x2,y2) as expected by ROI Align
             for i,(index1, index2) in enumerate(candidates):

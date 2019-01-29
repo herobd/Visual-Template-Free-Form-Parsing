@@ -174,7 +174,7 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
                 kernel_size=5
                 outCh=int(v[1:])
             else:
-                kernel_size=int(v[1:div)
+                kernel_size=int(v[1:div])
                 outCh=int(v[1+div:])
             conv2d = nn.Conv2d(in_channels[-1], outCh, kernel_size=kernel_size, padding=(kernel_size-1)//2)
             #if i == len(cfg)-1:

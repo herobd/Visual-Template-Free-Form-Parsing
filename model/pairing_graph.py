@@ -8,7 +8,7 @@ from model.graph_net import GraphNet
 from model.binary_pair_net import BinaryPairNet
 from model.roi_align.roi_align import RoIAlign
 from skimage import draw
-from model.net_builder import make_layers
+from model.net_builder import make_layers, getGroupSize
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist
 import math
 import random
@@ -20,29 +20,6 @@ import cv2
 MAX_CANDIDATES=325 #450
 MAX_GRAPH_SIZE=370
 #max seen 428, so why'd it crash on 375?
-
-def primeFactors(n): 
-    ret = [1]
-    # Print the number of two's that divide n 
-    while n % 2 == 0: 
-        if len(ret)==0:
-            ret.append(2)
-        n = n / 2
-          
-    # n must be odd at this point 
-    # so a skip of 2 ( i = i + 2) can be used 
-    for i in range(3,int(math.sqrt(n))+1,2): 
-          
-        # while i divides n , print i ad divide n 
-        while n % i== 0: 
-            ret.append(i) 
-            n = n / i 
-              
-    # Condition if n is a prime 
-    # number greater than 2 
-    if n > 2: 
-        ret.append(n)
-    return ret
 
 class PairingGraph(BaseModel):
     def __init__(self, config):
@@ -96,6 +73,15 @@ class PairingGraph(BaseModel):
 
         assert(self.detector.scale[0]==self.detector.scale[1])
         detect_scale = self.detector.scale[0]
+        if self.useShapeFeats:
+           added_feats=8+2*self.numBBTypes #we'll append some extra feats
+           added_featsBB=3+self.numBBTypes
+           if self.useShapeFeats!='old':
+               added_feats+=4
+        else:
+           added_feats=0
+           added_featsBB=0
+        featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if self.useShapeFeats!='only':
             self.roi_align = RoIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
             self.avg_box = RoIAlign(2,3,1.0/detect_scale)
@@ -109,6 +95,10 @@ class PairingGraph(BaseModel):
             feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
             featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
             featurizer_conv = [self.detector.last_channels+bbMasks] + featurizer_conv #bbMasks are appended
+            if featurizer_fc is not None: #we don't have a FC layer, so channels need to be the same as graph model expects
+                if len(featurizer_conv)==0 or featurizer_conv[-1]+added_feats!=graph_in_channels:
+                    featurizer_conv += ['k1-{}'.format(graph_in_channels-added_feats)]
+                    print('WARNING: featurizer_conv did not line up with graph_in_channels, adding layer k1-{}'.format(graph_in_channels-added_feats))
             scaleX=1
             scaleY=1
             for a in featurizer_conv:
@@ -130,20 +120,14 @@ class PairingGraph(BaseModel):
         else:
             last_ch_relC=0
 
-        if self.useShapeFeats:
-           added_feats=8+2*self.numBBTypes #we'll append some extra feats
-           added_featsBB=3+self.numBBTypes
-           if self.useShapeFeats!='old':
-               added_feats+=4
-        else:
-           added_feats=0
-           added_featsBB=0
-        featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
-        if config['graph_config']['arch']=='BinaryPairNet':
+        if config['graph_config']['arch'][:10]=='BinaryPair':
             feat_norm=None
-        featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
-        layers, last_ch_rel = make_layers(featurizer_fc,norm=feat_norm,dropout=True) 
-        self.relFeaturizerFC = nn.Sequential(*layers)
+        if featurizer_fc is not None:
+            featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
+            layers, last_ch_rel = make_layers(featurizer_fc,norm=feat_norm,dropout=True) 
+            self.relFeaturizerFC = nn.Sequential(*layers)
+        else:
+            self.relFeaturizerFC = None
 
         if self.useBBVisualFeats:
             #TODO un-hardcode
@@ -154,15 +138,9 @@ class PairingGraph(BaseModel):
                 convOut=featurizer[0]
             else:
                 convOut=graph_in_channels-added_featsBB
-            factors=primeFactors(convOut)
-            bestDist=9999
-            for f in factors:
-                if abs(f-8)<=bestDist: #favor larger
-                    bestDist=abs(f-8)
-                    bestGroup=f
             self.bbFeaturizerConv = nn.Sequential( 
                     nn.Conv2d(self.detector.last_channels,convOut,kernel_size=(2,3)),
-                    nn.GroupNorm(bestGroup,convOut)
+                    #nn.GroupNorm(getGroupSize(convOut),convOut)
                     )
             assert(len(featurizer)==0)
            #if len(featurizer)>0:

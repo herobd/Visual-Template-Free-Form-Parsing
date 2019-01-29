@@ -297,7 +297,7 @@ class PairingGraph(BaseModel):
         brX = brX.cpu()
         brY = brY.cpu()
 
-        if self.useShapeFeats!='only'
+        if self.useShapeFeats!='only':
             #get axis aligned rectangle from corners
             rois = torch.zeros((len(candidates),5)) #(batchIndex,x1,y1,x2,y2) as expected by ROI Align
             for i,(index1, index2) in enumerate(candidates):
@@ -427,7 +427,8 @@ class PairingGraph(BaseModel):
                 relFeats = shapeFeats.to(features.device)
             else:
                 relFeats = torch.cat((relFeats,shapeFeats.to(relFeats.device)),dim=1)
-        relFeats = self.relFeaturizerFC(relFeats)
+        if self.relFeaturizerFC is not None:
+            relFeats = self.relFeaturizerFC(relFeats)
         #if self.useShapeFeats=='sp
     
         #compute features for the bounding boxes by themselves

@@ -169,8 +169,14 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'C': 
-            outCh=int(v[1:])
-            conv2d = nn.Conv2d(in_channels[-1], outCh, kernel_size=5, padding=2)
+            div = v.find('-')
+            if div==-1:
+                kernel_size=5
+                outCh=int(v[1:])
+            else:
+                kernel_size=int(v[1:div)
+                outCh=int(v[1+div:])
+            conv2d = nn.Conv2d(in_channels[-1], outCh, kernel_size=kernel_size, padding=(kernel_size-1)//2)
             #if i == len(cfg)-1:
             #    layers += [conv2d]
             #    break

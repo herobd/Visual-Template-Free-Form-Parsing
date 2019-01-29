@@ -528,14 +528,14 @@ class PairingGraph(BaseModel):
 
         sin_r = torch.sin(bbs[:,2])
         cos_r = torch.cos(bbs[:,2])
-        lx = bbs[:,0] - cos_r*bbs[:,4] 
-        ly = bbs[:,1] + sin_r*bbs[:,3]
-        rx = bbs[:,0] + cos_r*bbs[:,4] 
-        ry = bbs[:,1] - sin_r*bbs[:,3]
-        tx = bbs[:,0] - cos_r*bbs[:,4] 
-        ty = bbs[:,1] - sin_r*bbs[:,3]
-        bx = bbs[:,0] + cos_r*bbs[:,4] 
-        by = bbs[:,1] + sin_r*bbs[:,3]
+        #lx = bbs[:,0] - cos_r*bbs[:,4] 
+        #ly = bbs[:,1] + sin_r*bbs[:,3]
+        #rx = bbs[:,0] + cos_r*bbs[:,4] 
+        #ry = bbs[:,1] - sin_r*bbs[:,3]
+        #tx = bbs[:,0] - cos_r*bbs[:,4] 
+        #ty = bbs[:,1] - sin_r*bbs[:,3]
+        #bx = bbs[:,0] + cos_r*bbs[:,4] 
+        #by = bbs[:,1] + sin_r*bbs[:,3]
         brX = bbs[:,4]*cos_r-bbs[:,3]*sin_r + bbs[:,0] 
         brY = bbs[:,4]*sin_r+bbs[:,3]*cos_r + bbs[:,1] 
         blX = -bbs[:,4]*cos_r-bbs[:,3]*sin_r + bbs[:,0]
@@ -551,19 +551,30 @@ class PairingGraph(BaseModel):
         maxY = max( torch.max(trY), torch.max(tlY), torch.max(blY), torch.max(brY) )
         #if (math.isinf(minX) or math.isinf(minY) or math.isinf(maxX) or math.isinf(maxY) ):
         #    import pdb;pdb.set_trace()
-        minX = max(minX.item(),0)
-        minY = max(minY.item(),0)
-        maxX = min(maxX.item(),imageWidth)
-        maxY = min(maxY.item(),imageHeight)
+        minX = min(max(minX.item(),0),imageWidth)
+        minY = min(max(minY.item(),0),imageHeight)
+        maxX = min(max(maxX.item(),0),imageWidth)
+        maxY = min(max(maxY.item(),0),imageHeight)
 
-        lx-=minX 
-        ly-=minY 
-        rx-=minX 
-        ry-=minY 
-        tx-=minX 
-        ty-=minY 
-        bx-=minX 
-        by-=minY 
+        #lx-=minX 
+        #ly-=minY 
+        #rx-=minX 
+        #ry-=minY 
+        #tx-=minX 
+        #ty-=minY 
+        #bx-=minX 
+        #by-=minY 
+        zeros = torch.zeros_like(trX)
+        tImageWidth = torch.ones_like(trX)*imageWidth
+        tImageHeight = torch.ones_like(trX)*imageHeight
+        trX = torch.min(torch.max(trX,zeros),tImageWidth)
+        trY = torch.min(torch.max(trY,zeros),tImageHeight)
+        tlX = torch.min(torch.max(tlX,zeros),tImageWidth)
+        tlY = torch.min(torch.max(tlY,zeros),tImageHeight)
+        brX = torch.min(torch.max(brX,zeros),tImageWidth)
+        brY = torch.min(torch.max(brY,zeros),tImageHeight)
+        blX = torch.min(torch.max(blX,zeros),tImageWidth)
+        blY = torch.min(torch.max(blY,zeros),tImageHeight)
         trX-=minX
         trY-=minY
         tlX-=minX
@@ -573,19 +584,22 @@ class PairingGraph(BaseModel):
         blX-=minX
         blY-=minY
 
+
+
+
         scaleCand = 0.5
         minX*=scaleCand
         minY*=scaleCand
         maxX*=scaleCand
         maxY*=scaleCand
-        lx  *=scaleCand
-        ly  *=scaleCand
-        rx  *=scaleCand
-        ry  *=scaleCand
-        tx  *=scaleCand
-        ty  *=scaleCand
-        bx  *=scaleCand
-        by  *=scaleCand
+        #lx  *=scaleCand
+        #ly  *=scaleCand
+        #rx  *=scaleCand
+        #ry  *=scaleCand
+        #tx  *=scaleCand
+        #ty  *=scaleCand
+        #bx  *=scaleCand
+        #by  *=scaleCand
         trX *=scaleCand
         trY *=scaleCand
         tlX *=scaleCand

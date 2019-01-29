@@ -178,13 +178,14 @@ class GraphPairDataset(torch.utils.data.Dataset):
         #import pdb;pdb.set_trace()
         for id in ids: #updated
             responseBBIdList = self.getResponseBBIdList(id,annotations)
-            for bbId in responseBBIdList:
-                try:
-                    index2 = ids.index(bbId)
-                    #adjMatrix[min(index1,index2),max(index1,index2)]=1
-                    pairs.add((min(index1,index2),max(index1,index2)))
-                except ValueError:
-                    pass
+            if responseBBIdList is not None:
+                for bbId in responseBBIdList:
+                    try:
+                        index2 = ids.index(bbId)
+                        #adjMatrix[min(index1,index2),max(index1,index2)]=1
+                        pairs.add((min(index1,index2),max(index1,index2)))
+                    except ValueError:
+                        pass
             index1+=1
         #ones = torch.ones(len(pairs))
         #if len(pairs)>0:

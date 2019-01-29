@@ -14,6 +14,38 @@ def collate(batch):
     assert(len(batch)==1)
     return batch[0]
 
+def getResponseBBIdList_(this,queryId,annotations):
+    responsePolyList=[]
+    for relId in annotations['relationships']:
+        if queryId in relId:
+            #print('query: '+queryId)
+            #print('rel:   '+relId)
+            pos = relId.find(queryId)
+            if pos+len(queryId)<len(relId) and relId[pos+len(queryId)]!='+': #ensure 'B1' doesnt match 'B10'
+                continue
+            #only the objects listed immediatley before or after this one are important
+            if pos>0 and relId[pos-1]=='+':
+                nextPlus = relId.rfind('+',0,pos-1)
+                #print('nextP: '+str(nextPlus))
+                neighborId = relId[nextPlus+1:pos-1]
+                #print('neBe:  '+neighborId)
+                poly = this.getResponsePoly(neighborId,annotations)
+                if poly is not None:
+                    #responsePolyList.append(poly)
+                    responsePolyList.append(neighborId)
+            if pos+len(queryId)+1<len(relId) and relId[pos+len(queryId)]=='+':
+                nextPlus = relId.find('+',pos+len(queryId)+1)
+                if nextPlus==-1:
+                    neighborId=relId[pos+len(queryId)+1:]
+                    #print('neAf1: '+neighborId)
+                else:
+                    neighborId=relId[pos+len(queryId)+1:nextPlus]
+                    #print('neAf2: '+neighborId)
+                poly = this.getResponsePoly(neighborId,annotations)
+                if poly is not None:
+                    #responsePolyList.append(poly)
+                    responsePolyList.append(neighborId)
+    return responsePolyList
 
 class AI2DGraphPair(GraphPairDataset):
     """
@@ -21,39 +53,9 @@ class AI2DGraphPair(GraphPairDataset):
     """
 
     def getResponseBBIdList(self,queryId,annotations):
-        responsePolyList=[]
-        for relId in annotations['relationships']:
-            if queryId in relId:
-                #print('query: '+queryId)
-                #print('rel:   '+relId)
-                pos = relId.find(queryId)
-                if pos+len(queryId)<len(relId) and relId[pos+len(queryId)]!='+': #ensure 'B1' doesnt match 'B10'
-                    continue
-                #only the objects listed immediatley before or after this one are important
-                if pos>0 and relId[pos-1]=='+':
-                    nextPlus = relId.rfind('+',0,pos-1)
-                    #print('nextP: '+str(nextPlus))
-                    neighborId = relId[nextPlus+1:pos-1]
-                    #print('neBe:  '+neighborId)
-                    poly = self.__getResponsePoly(neighborId,annotations)
-                    if poly is not None:
-                        #responsePolyList.append(poly)
-                        responsePolyList.append(neighborId)
-                if pos+len(queryId)+1<len(relId) and relId[pos+len(queryId)]=='+':
-                    nextPlus = relId.find('+',pos+len(queryId)+1)
-                    if nextPlus==-1:
-                        neighborId=relId[pos+len(queryId)+1:]
-                        #print('neAf1: '+neighborId)
-                    else:
-                        neighborId=relId[pos+len(queryId)+1:nextPlus]
-                        #print('neAf2: '+neighborId)
-                    poly = self.__getResponsePoly(neighborId,annotations)
-                    if poly is not None:
-                        #responsePolyList.append(poly)
-                        responsePolyList.append(neighborId)
-        return responsePolyList
+        return getResponseBBIdList_(self,queryId,annotations)
 
-    def __getResponsePoly(self, neighborId,annotations):
+    def getResponsePoly(self, neighborId,annotations):
         if neighborId[0]=='T':
             rect=annotations['text'][neighborId]['rectangle']
             poly = [ rect[0], [rect[1][0],rect[0][1]], rect[1], [rect[0][0],rect[1][1]] ]#, rect[0] ]

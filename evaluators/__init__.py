@@ -6,6 +6,7 @@ from model.line_follower import LineFollower
 
 from evaluators.formsdetect_printer import FormsDetect_printer
 from evaluators.formsboxdetect_printer import FormsBoxDetect_printer
+from evaluators.ai2dboxdetect_printer import AI2DBoxDetect_printer
 from evaluators.formsboxpair_printer import FormsBoxPair_printer
 from evaluators.formsgraphpair_printer import FormsGraphPair_printer
 from evaluators.formsfeaturepair_printer import FormsFeaturePair_printer

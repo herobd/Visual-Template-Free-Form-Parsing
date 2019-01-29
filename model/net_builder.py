@@ -6,6 +6,44 @@ from torch.nn.utils.weight_norm import weight_norm
 import math
 import numpy as np
 
+def primeFactors(n):
+    ret = [1]
+    # Print the number of two's that divide n 
+    while n % 2 == 0:
+        if len(ret)==0:
+            ret.append(2)
+        n = n / 2
+
+    # n must be odd at this point 
+    # so a skip of 2 ( i = i + 2) can be used 
+    for i in range(3,int(math.sqrt(n))+1,2):
+
+        # while i divides n , print i ad divide n 
+        while n % i== 0:
+            ret.append(i)
+            n = n / i
+
+    # Condition if n is a prime 
+    # number greater than 2 
+    if n > 2:
+        ret.append(n)
+    return ret
+
+def getGroupSize(channels):
+    if channels>=32:
+        goalSize=8
+    else:
+        goalSize=4
+    if channels%goalSize==0:
+        return goalSize
+    factors=primeFactors(channels)
+    bestDist=9999
+    for f in factors:
+        if abs(f-goalSize)<=bestDist: #favor larger
+            bestDist=abs(f-goalSize)
+            bestGroup=f
+    return bestGroup
+
 class ncReLU(nn.Module):
     def __init__(self):
         super(ncReLU, self).__init__()
@@ -25,23 +63,25 @@ class ResBlock(nn.Module):
             layers.append(ncReLU())
             skipFirstReLU=True
         if downsample:
-            layers.append(nn.AvgPool2d(2))
+            layers.append(nn.AvgPool2d(2)) #could be learned, but this allows a better identity?
         if len(layers)>0:
             self.transform = nn.Sequential(*layers)
         else:
             self.transform = lambda x: x
 
         layers=[]
-        if norm=='batch_norm':
-            layers.append(nn.BatchNorm2d(out_ch))
-        if norm=='instance_norm':
-            layers.append(nn.InstanceNorm2d(out_ch))
-        if norm=='group_norm':
-            layers.append(nn.GroupNorm(8,out_ch))
         if not skipFirstReLU:
+            #I'm not sure if this is the best thing
+            #there should be a way to normalize (mask after normalization?)
+            if norm=='batch_norm':
+                layers.append(nn.BatchNorm2d(out_ch))
+            if norm=='instance_norm':
+                layers.append(nn.InstanceNorm2d(out_ch))
+            if norm=='group_norm':
+                layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
             layers.append(nn.ReLU(inplace=True)) 
         conv1=nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation)
-        if norm=='weight_norm':
+        if norm=='weight_norm' or skipFirstReLU: #or just use this normalization?
             layers.append(weight_norm(conv1))
         else:
             layers.append(conv1)
@@ -52,7 +92,7 @@ class ResBlock(nn.Module):
         if norm=='instance_norm':
             layers.append(nn.InstanceNorm2d(out_ch))
         if norm=='group_norm':
-            layers.append(nn.GroupNorm(8,out_ch))
+            layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
         if dropout is not None:
             if dropout==True or dropout=='2d':
                 layers.append(nn.Dropout2d(p=0.1,inplace=True))
@@ -91,7 +131,7 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
     elif norm=='instance_norm':
         layers.append(nn.InstanceNorm2d(out_ch))
     elif norm=='group_norm':
-        layers.append(nn.GroupNorm(8,out_ch))
+        layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
     if dropout is not None:
         if dropout==True or dropout=='2d':
             layers.append(nn.Dropout2d(p=0.1,inplace=True))
@@ -113,7 +153,7 @@ def fcReLU(in_ch,out_ch,norm,dropout=None,relu=True):
     elif norm=='instance_norm':
         layers.append(nn.InstanceNorm2d(out_ch))
     elif norm=='group_norm':
-        layers.append(nn.GroupNorm(8,out_ch))
+        layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
     if dropout is not None:
         if dropout != False:
             layers.append(nn.Dropout(p=0.1,inplace=True))
@@ -167,8 +207,14 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'C': 
-            outCh=int(v[1:])
-            conv2d = nn.Conv2d(in_channels[-1], outCh, kernel_size=5, padding=2)
+            div = v.find('-')
+            if div==-1:
+                kernel_size=5
+                outCh=int(v[1:])
+            else:
+                kernel_size=int(v[1:div])
+                outCh=int(v[1+div:])
+            conv2d = nn.Conv2d(in_channels[-1], outCh, kernel_size=kernel_size, padding=(kernel_size-1)//2)
             #if i == len(cfg)-1:
             #    layers += [conv2d]
             #    break
@@ -244,7 +290,13 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             in_channels.append(outCh)
         elif type(v)==str and v[:4] == 'wave': #Res layer that is dilated in first conv and second conv is 1x1
             div = v.find('-')
-            dilate=int(v[4:div])
+            dilate=v[4:div]
+            div0 = dilate.find(',')
+            if div0==-1:
+                dilate=int(dilate)
+            else:
+                assert(div0<div)
+                dilate=( int(dilate[:div0]), int(dilate[div0+1:]) )
             outCh=int(v[div+1:])
             layers.append(ResBlock(in_channels[-1],outCh,dilate,norm,dropout=dropout,secondKernel=1))
             layerCodes.append(v)

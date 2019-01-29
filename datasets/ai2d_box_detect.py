@@ -78,17 +78,29 @@ class AI2DBoxDetect(BoxDetectDataset):
 
     def parseAnn(self,image,annotations,scale,imageName):
         bbs=[]
+        numNeighbors=defaultdict(lambda:0)
         for blobId, blob in annotations['blobs'].items():
             bbs.append( self.transformBB(blob,scale,0) )
+            responseIds = getResponseBBIdList_(self,blobId,annotations)
+            numNeighbors[blobId]+=len(responseIds)
         for arrowId, arrow in annotations['arrows'].items():
             bbs.append( self.transformBB(arrow,scale,1) )
+            responseIds = getResponseBBIdList_(self,arrowId,annotations)
+            numNeighbors[arrowId]+=len(responseIds)
         for headId, arrow in annotations['arrowHeads'].items():
             bbs.append( self.transformBB(arrow,scale,2) )
+            responseIds = getResponseBBIdList_(self,headId,annotations)
+            numNeighbors[headId]+=len(responseIds)
         for textId, text in annotations['text'].items():
             bbs.append( self.transformBB(text,scale,3) )
+            responseIds = getResponseBBIdList_(self,textId,annotations)
+            numNeighbors[textId]+=len(responseIds)
         
         bbs = np.array(bbs)[None,:,:] #add batch dim on front
-        return bbs,{},{},None,4
+
+
+
+        return bbs,{},{},None,4,numNeighbors
 
 
     def transformBB(self,item,scale,classNum):

@@ -7,7 +7,7 @@ import json
 import os
 import math
 from collections import defaultdict, OrderedDict
-from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT
+from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT, getResponseBBIdList_
 import timeit
 from .graph_pair import GraphPairDataset
 
@@ -158,17 +158,7 @@ class FormsGraphPair(GraphPairDataset):
         return bbs,ids,numClasses
 
     def getResponseBBIdList(self,queryId,annotations):
-        responseBBList=[]
-        for pair in annotations['pairs']: #done already +annotations['samePairs']:
-            if queryId in pair:
-                if pair[0]==queryId:
-                    otherId=pair[1]
-                else:
-                    otherId=pair[0]
-                if otherId in annotations['byId'] and (not self.onlyFormStuff or ('paired' in bb and bb['paired'])):
-                    #responseBBList.append(annotations['byId'][otherId])
-                    responseBBList.append(otherId)
-        return responseBBList
+        return getResponseBBIdList_(self,queryId,annotations)
 
 
 def getWidthFromBB(bb):

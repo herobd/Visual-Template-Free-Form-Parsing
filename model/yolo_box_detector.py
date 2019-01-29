@@ -20,6 +20,12 @@ class YoloBoxDetector(nn.Module): #BaseModel
         self.numBBTypes = config['number_of_box_types']
         self.numBBParams = 6 #conf,x-off,y-off,h-scale,w-scale,rot-off
         self.numLineParams = 5 #conf,x-off,y-off,h-scale,rot
+        if 'pred_num_neighbors' in config and config['pred_num_neighbors']:
+            self.predNumNeighbors=True
+            self.numBBParams+=1
+            print("Detecting number of neighbors!")
+        else:
+            self.predNumNeighbors=False
 
         self.predPointCount = config['number_of_point_types'] if 'number_of_point_types' in config else 0
         self.predPixelCount = config['number_of_pixel_types'] if 'number_of_pixel_types' in config else 0
@@ -127,18 +133,14 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 torch.exp(y[:,5+offset:6+offset,:,:]) * anchor[i]['width'],  #5. width (half)   as we scale the anchors in training
             ]
 
-            #stackedOffsets = [
-            #        y[:,0+offset:1+offset,:,:],
-            #        y[:,1+offset:2+offset,:,:],
-            #        y[:,2+offset:3+offset,:,:],
-            #        y[:,4+offset:5+offset,:,:],
-            #        y[:,4+offset:5+offset,:,:]
-            #]
-            #if self.rotation:
-            #    stackedOffsets.append( rot_dif )
 
+            if self.predNumNeighbors:
+                stackedPred.append(1+y[:,6+offset:7+offset,:,:])
+                extra=1
+            else:
+                extra=0
             for j in range(self.numBBTypes):
-                stackedPred.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
+                stackedPred.append(y[:,6+j+extra+offset:7+j+extra+offset,:,:])         #x. class prediction
                 #stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
             pred_boxes.append(torch.cat(stackedPred, dim=1))
             #pred_offsets.append(torch.cat(stackedOffsets, dim=1))

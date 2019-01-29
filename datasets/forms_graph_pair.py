@@ -158,7 +158,7 @@ class FormsGraphPair(GraphPairDataset):
         return bbs,ids,numClasses
 
     def getResponseBBIdList(self,queryId,annotations):
-        getResponseBBIdList_(self,queryId,annotations)
+        return getResponseBBIdList_(self,queryId,annotations)
 
 
 def getWidthFromBB(bb):

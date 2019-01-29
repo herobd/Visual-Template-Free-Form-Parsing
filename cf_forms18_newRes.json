@@ -86,7 +86,7 @@
         "number_of_pixel_types": 0,
         "norm_type": "group_norm",
         "dropout":true,
-        "down_layers_cfg": [1,"k7-32", "M", "R64", "R64", "wave1,2-64",  "D128",
+        "down_layers_cfg": [1,"C7-32", "M", "R64", "R64", "wave1,2-64",  "D128",
                                 "wave1,2-128", "R128", "wave1,4-128", "D256",
                                 "wave1,4-256", "R256", "wave1,8-256", "D512",
                                 "wave1,8-512", "R512", "wave1,16-512", "R512", "R512"],

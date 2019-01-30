@@ -61,19 +61,28 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     qXY = instance['qXY']
     iXY = instance['iXY']
     label = instance['label']
-    dataT = data.to(gpu)#__to_tensor(data,gpu)
     relNodeIds = instance['nodeIds']
     gtNumNeighbors=instance['numNeighbors']+1
 
-    predAll = model(dataT)
-    pred = predAll[:,0]
 
-    if predAll.size(1)==3:
-        predNN = predAll[:,1:]+1
-        newPredNN=defaultdict(list)
+    if 'rule' in config:
+        if config['rule']=='closest':
+            dists = torch.sqrt(data[:,8]**2 + data[:,9]**2)
+            maxDist = torch.max(dists)
+            minDist = torch.min(dists)
+            pred = 1-(dists-minDist)/(maxDist-minDist)
+            predNN=newPredNN = None
     else:
-        predNN=newPredNN = None
-    pred = torch.sigmoid(pred)
+        dataT = data.to(gpu)#__to_tensor(data,gpu)
+        predAll = model(dataT)
+        pred = predAll[:,0]
+
+        if predAll.size(1)==3:
+            predNN = predAll[:,1:]+1
+            newPredNN=defaultdict(list)
+        else:
+            predNN=newPredNN = None
+        pred = torch.sigmoid(pred)
 
     
 

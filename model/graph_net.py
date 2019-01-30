@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import math
 import json
 from .graphconvolution import GraphConvolution, GraphResConv, GraphConvWithAct
+from .net_builder import getGroupSize
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 
@@ -47,11 +48,11 @@ class GraphNet(nn.Module):
             if config['norm']=='batch_norm':
                 act_layers.append(nn.BatchNorm1d(prevCh)) #essentially all the nodes compose a batch
             elif config['norm']=='group_norm':
-                act_layers.append(nn.GroupNorm(4,prevCh)) 
+                act_layers.append(nn.GroupNorm(getGroupSize(prevCh),prevCh)) 
             elif config['norm']=='split_norm':
                 #act_layers.append(nn.InstanceNorm1d(prevCh))
-                self.split_normBB = nn.GroupNorm(4,prevCh)
-                self.split_normRel = nn.GroupNorm(4,prevCh)
+                self.split_normBB = nn.GroupNorm(getGroupSize(prevCh),prevCh)
+                self.split_normRel = nn.GroupNorm(getGroupSize(prevCh),prevCh)
         if 'dropout' in config:
             if type(config['dropout']) is float:
                 act_layers.append(nn.Dropout(p=config['dropout'],inplace=True))

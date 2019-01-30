@@ -67,6 +67,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     adjacency = instance['adj']
     imageName = instance['imgName']
     scale = instance['scale']
+    gtNumNeighbors = instance['num_neighbors']
     dataT, targetBBsT, adjT = __to_tensor(instance,gpu)
 
 
@@ -88,9 +89,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         targetSize=targetBBsT.size(1)
     else:
         targetSize=0
-    lossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize])
+    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize])
 
-    #TODO rel loss
 
     relCand = relIndexes
     if relPred is not None:
@@ -131,10 +131,13 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #else:
     #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
+    if model.detector.predNumNeighbors:
+        useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
     if model.rotation:
-        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBBs,0.9,model.numBBTypes)
     else:
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBBs,0.5,model.numBBTypes)
+    useOutputBBs=None
 
     truePred=falsePred=badPred=0
     scores=[]

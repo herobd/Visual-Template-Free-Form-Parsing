@@ -224,7 +224,7 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 targSize =0 
             #import pdb;pdb.set_trace()
-            boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
+            boxLoss, position_loss, conf_loss, class_loss, nn_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
             boxLoss *= self.lossWeights['box']
             if relLoss is not None:
                 loss = relLoss + boxLoss
@@ -370,7 +370,7 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
-                    boxLoss, position_loss, conf_loss, class_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
+                    boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
                     loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)

@@ -563,7 +563,8 @@ class PairingGraph(BaseModel):
         minY = min(max(minY.item(),0),imageHeight)
         maxX = min(max(maxX.item(),0),imageWidth)
         maxY = min(max(maxY.item(),0),imageHeight)
-        assert(minX<maxX and minY<maxY)
+        if minX>=maxX or minY>=maxY:
+            return []
 
         #lx-=minX 
         #ly-=minY 

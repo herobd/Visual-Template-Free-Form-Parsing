@@ -130,11 +130,12 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
     if model.detector.predNumNeighbors:
-        outputBBs=
+        useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
     if model.rotation:
-        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBBs,0.9,model.numBBTypes)
     else:
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBBs,0.5,model.numBBTypes)
+    useOutputBBs=None
 
     truePred=falsePred=badPred=0
     scores=[]

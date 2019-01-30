@@ -143,7 +143,7 @@ class GraphPairDataset(torch.utils.data.Dataset):
             out, cropPoint = self.transform({
                 "img": np_img,
                 "bb_gt": bbs,
-                'bb_auxs':ids[i],
+                'bb_auxs':ids,
                 #"line_gt": {
                 #    "start_of_line": start_of_line,
                 #    "end_of_line": end_of_line

@@ -6,6 +6,7 @@ import numpy as np
 from model import *
 from model.graph_net import GraphNet
 from model.binary_pair_net import BinaryPairNet
+from model.binary_pair_real import BinaryPairReal
 from model.roi_align.roi_align import RoIAlign
 from skimage import draw
 from model.net_builder import make_layers, getGroupSize
@@ -56,7 +57,7 @@ class PairingGraph(BaseModel):
 
         graph_in_channels = config['graph_config']['in_channels'] if 'in_channels' in config['graph_config'] else 1
         self.useBBVisualFeats=True
-        if config['graph_config']['arch']=='BinaryPairNet':
+        if config['graph_config']['arch'][:10]=='BinaryPair':
             self.useBBVisualFeats=False
         self.includeRelRelEdges= config['use_rel_rel_edges'] if 'use_rel_rel_edges' in config else True
         #rel_channels = config['graph_config']['rel_channels']
@@ -95,10 +96,6 @@ class PairingGraph(BaseModel):
             feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
             featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
             featurizer_conv = [self.detector.last_channels+bbMasks] + featurizer_conv #bbMasks are appended
-            if featurizer_fc is not None: #we don't have a FC layer, so channels need to be the same as graph model expects
-                if len(featurizer_conv)==0 or featurizer_conv[-1]+added_feats!=graph_in_channels:
-                    featurizer_conv += ['k1-{}'.format(graph_in_channels-added_feats)]
-                    print('WARNING: featurizer_conv did not line up with graph_in_channels, adding layer k1-{}'.format(graph_in_channels-added_feats))
             scaleX=1
             scaleY=1
             for a in featurizer_conv:
@@ -115,6 +112,12 @@ class PairingGraph(BaseModel):
             fsizeX = self.pool_w//scaleX
             fsizeY = self.pool_h//scaleY
             layers, last_ch_relC = make_layers(featurizer_conv,norm=feat_norm,dropout=True) 
+            if featurizer_fc is None: #we don't have a FC layer, so channels need to be the same as graph model expects
+                if last_ch_relC+added_feats!=graph_in_channels:
+                    new_layer = [last_ch_relC,'k1-{}'.format(graph_in_channels-added_feats)]
+                    print('WARNING: featurizer_conv did not line up with graph_in_channels, adding layer k1-{}'.format(graph_in_channels-added_feats))
+                    new_layer, last_ch_relC = make_layers(new_layer,norm=feat_norm,dropout=True) 
+                    layers+=new_layer
             layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
             self.relFeaturizerConv = nn.Sequential(*layers)
         else:

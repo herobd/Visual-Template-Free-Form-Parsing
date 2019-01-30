@@ -305,6 +305,8 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             if v[2:4]=='nR':
                 div= 4
                 relu=False
+                norm=None
+                dropout=None
             else:
                 div = 2
                 relu=True

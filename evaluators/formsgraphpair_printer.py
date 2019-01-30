@@ -89,9 +89,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         targetSize=targetBBsT.size(1)
     else:
         targetSize=0
-    lossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize])
+    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize])
 
-    #TODO rel loss
 
     relCand = relIndexes
     relPred = torch.sigmoid(relPred)
@@ -129,6 +128,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #else:
     #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
+    if model.detector.predNumNeighbors:
+        outputBBs=
     if model.rotation:
         ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes)
     else:

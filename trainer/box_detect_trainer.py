@@ -340,14 +340,19 @@ class BoxDetectTrainer(BaseTrainer):
                     if targetBoxes is not None:
                         targetBoxes = targetBoxes.cpu()
                     for b in range(batchSize):
+                        if model.predNumNeighbors:
+                            useOutputBoxes=torch.cat((outputBoxes[b][:,0:6],outputBoxes[b][:,7:]),dim=1)
+                        else:
+                            useOutputBoxes=outputBoxes[b]
                         if targetBoxes is not None:
                             target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
                         else:
                             target_for_b = torch.empty(0)
+
                         if self.model.rotation:
-                            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes[b],0.9,self.model.numBBTypes)
+                            ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBoxes,0.9,self.model.numBBTypes)
                         else:
-                            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.5,self.model.numBBTypes)
+                            ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBoxes,0.5,self.model.numBBTypes)
                         mAP += np.array(ap_5,dtype=np.float)#/len(outputBoxes)
                         mRecall += np.array(recall_5,dtype=np.float)#/len(outputBoxes)
                         mPrecision += np.array(prec_5,dtype=np.float)#/len(outputBoxes)
@@ -393,6 +398,7 @@ class BoxDetectTrainer(BaseTrainer):
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
             'val_recall':(mRecall/(batchSize*len(self.valid_data_loader))).tolist(),
             'val_precision':(mPrecision/(batchSize*len(self.valid_data_loader))).tolist(),
+            'val_Fm':(mPrecision.mean()+mRecall.mean())/(2*batchSize*len(self.valid_data_loader))
             'val_mAP':(mAP/(batchSize*len(self.valid_data_loader))).tolist(),
             'val_position_loss':total_position_loss / len(self.valid_data_loader),
             'val_conf_loss':total_conf_loss / len(self.valid_data_loader),

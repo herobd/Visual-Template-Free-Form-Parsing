@@ -64,10 +64,10 @@ class GraphPairTrainer(BaseTrainer):
         self.conf_thresh_init = config['trainer']['conf_thresh_init'] if 'conf_thresh_init' in config['trainer'] else 0.9
         self.conf_thresh_change_iters = config['trainer']['conf_thresh_change_iters'] if 'conf_thresh_change_iters' in config['trainer'] else 5000
 
-        self.train_hard_detect_limit = config['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
-        self.val_hard_detect_limit = config['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
+        self.train_hard_detect_limit = config['trainer']['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
+        self.val_hard_detect_limit = config['trainer']['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
 
-        self.useBadBBPredForRelLoss = config['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
+        self.useBadBBPredForRelLoss = config['trainer']['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
 
         #Name change
         if 'edge' in self.lossWeights:
@@ -145,7 +145,7 @@ class GraphPairTrainer(BaseTrainer):
             self.data_loader_iter = iter(self.data_loader)
             thisInstance = self.data_loader_iter.next()
         if not self.model.detector.predNumNeighbors:
-            del thisInstance['num_neighbors']
+            thisInstance['num_neighbors']=None
         ##toc=timeit.default_timer()
         ##print('data: '+str(toc-tic))
         
@@ -340,11 +340,15 @@ class GraphPairTrainer(BaseTrainer):
         mAP = np.zeros(self.model.numBBTypes)
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
+        numClasses = model.numBBTypes
+        if 'no_blanks' in config['validation'] and not config['data_loader']['no_blanks']:
+            numClasses-=1
+
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
                 if not self.model.detector.predNumNeighbors:
-                    del instance['num_neighbors']
+                    instance['num_neighbors']=None
                 if not self.logged:
                     print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
 
@@ -394,9 +398,9 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     target_for_b = torch.empty(0)
                 if self.model.rotation:
-                    ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,self.model.numBBTypes)
+                    ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,numClasses)
                 else:
-                    ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,self.model.numBBTypes)
+                    ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,numClasses)
 
                 #import pdb;pdb.set_trace()
                 mAP += np.array(ap_5)
@@ -414,7 +418,7 @@ class GraphPairTrainer(BaseTrainer):
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
             'val_bb_recall':(mRecall/len(self.valid_data_loader)).tolist(),
             'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
-            'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
+            #'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
             'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
             'val_bb_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_rel_recall':total_rel_recall/len(self.valid_data_loader),

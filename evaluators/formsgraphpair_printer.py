@@ -68,6 +68,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     adjacency = instance['adj']
     imageName = instance['imgName']
     scale = instance['scale']
+    gtNumNeighbors = instance['num_neighbors']
     dataT, targetBBsT, adjT = __to_tensor(instance,gpu)
 
 

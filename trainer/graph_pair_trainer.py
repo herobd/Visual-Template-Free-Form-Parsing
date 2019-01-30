@@ -79,13 +79,16 @@ class GraphPairTrainer(BaseTrainer):
         image = instance['img']
         bbs = instance['bb_gt']
         adjaceny = instance['adj']
+        num_neighbors = instance['num_neighbors']
 
         if self.with_cuda:
             image = image.to(self.gpu)
             if bbs is not None:
                 bbs = bbs.to(self.gpu)
+            if num_neighbors is not None:
+                num_neighbors = num_neighbors.to(self.gpu)
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
-        return image, bbs, adjaceny
+        return image, bbs, adjaceny, num_neighbors
 
     def _eval_metrics(self, typ,name,output, target):
         if len(self.metrics[typ])>0:
@@ -141,6 +144,8 @@ class GraphPairTrainer(BaseTrainer):
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
             thisInstance = self.data_loader_iter.next()
+        if not self.model.detector.predNumNeighbors:
+            del thisInstance['num_neighbors']
         ##toc=timeit.default_timer()
         ##print('data: '+str(toc-tic))
         
@@ -165,7 +170,7 @@ class GraphPairTrainer(BaseTrainer):
             threshIntur = 1 - iteration/self.conf_thresh_change_iters
         else:
             threshIntur = None
-        image, targetBoxes, adj = self._to_tensor(thisInstance)
+        image, targetBoxes, adj, target_num_neighbors = self._to_tensor(thisInstance)
         useGT = self.useGT(iteration)
         if useGT:
             outputBoxes, outputOffsets, relPred, relIndexes = self.model(image,targetBoxes,True,
@@ -224,7 +229,7 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 targSize =0 
             #import pdb;pdb.set_trace()
-            boxLoss, position_loss, conf_loss, class_loss, nn_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
+            boxLoss, position_loss, conf_loss, class_loss, nn_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize],target_num_neighbors)
             boxLoss *= self.lossWeights['box']
             if relLoss is not None:
                 loss = relLoss + boxLoss
@@ -338,10 +343,12 @@ class GraphPairTrainer(BaseTrainer):
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
+                if not self.model.detector.predNumNeighbors:
+                    del instance['num_neighbors']
                 if not self.logged:
                     print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
 
-                image, targetBoxes, adjM = self._to_tensor(instance)
+                image, targetBoxes, adjM, target_num_neighbors = self._to_tensor(instance)
 
                 outputBoxes, outputOffsets, relPred, relIndexes = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
                 #loss = self.loss(output, target)
@@ -370,7 +377,7 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
-                    boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
+                    boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)],target_num_neighbors)
                     loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
@@ -378,6 +385,8 @@ class GraphPairTrainer(BaseTrainer):
                 total_box_loss+=boxLoss.item()
                 total_rel_loss+=relLoss.item()
                 
+                if model.predNumNeighbors:
+                    outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
                 if targetBoxes is not None:

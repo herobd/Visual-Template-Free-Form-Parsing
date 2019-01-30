@@ -26,7 +26,8 @@ class BinaryPairReal(nn.Module):
         layers, last_ch_relC = make_layers(layer_desc,norm=norm,dropout=dropout)
         self.layers = nn.Sequential(*layers)
 
-        self.numShapeFeats = config['num_shape_feats'] if 'num_shape_feats' in config else 14
+        #This is written to by the PairingGraph object (which holds this one)
+        self.numShapeFeats = config['num_shape_feats'] if 'num_shape_feats' in config else 16
 
         
 

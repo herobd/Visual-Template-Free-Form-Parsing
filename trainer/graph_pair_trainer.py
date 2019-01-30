@@ -64,10 +64,10 @@ class GraphPairTrainer(BaseTrainer):
         self.conf_thresh_init = config['trainer']['conf_thresh_init'] if 'conf_thresh_init' in config['trainer'] else 0.9
         self.conf_thresh_change_iters = config['trainer']['conf_thresh_change_iters'] if 'conf_thresh_change_iters' in config['trainer'] else 5000
 
-        self.train_hard_detect_limit = config['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
-        self.val_hard_detect_limit = config['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
+        self.train_hard_detect_limit = config['trainer']['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
+        self.val_hard_detect_limit = config['trainer']['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
 
-        self.useBadBBPredForRelLoss = config['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
+        self.useBadBBPredForRelLoss = config['trainer']['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
 
         #Name change
         if 'edge' in self.lossWeights:
@@ -79,13 +79,16 @@ class GraphPairTrainer(BaseTrainer):
         image = instance['img']
         bbs = instance['bb_gt']
         adjaceny = instance['adj']
+        num_neighbors = instance['num_neighbors']
 
         if self.with_cuda:
             image = image.to(self.gpu)
             if bbs is not None:
                 bbs = bbs.to(self.gpu)
+            if num_neighbors is not None:
+                num_neighbors = num_neighbors.to(self.gpu)
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
-        return image, bbs, adjaceny
+        return image, bbs, adjaceny, num_neighbors
 
     def _eval_metrics(self, typ,name,output, target):
         if len(self.metrics[typ])>0:
@@ -141,6 +144,8 @@ class GraphPairTrainer(BaseTrainer):
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
             thisInstance = self.data_loader_iter.next()
+        if not self.model.detector.predNumNeighbors:
+            thisInstance['num_neighbors']=None
         ##toc=timeit.default_timer()
         ##print('data: '+str(toc-tic))
         
@@ -165,7 +170,7 @@ class GraphPairTrainer(BaseTrainer):
             threshIntur = 1 - iteration/self.conf_thresh_change_iters
         else:
             threshIntur = None
-        image, targetBoxes, adj = self._to_tensor(thisInstance)
+        image, targetBoxes, adj, target_num_neighbors = self._to_tensor(thisInstance)
         useGT = self.useGT(iteration)
         if useGT:
             outputBoxes, outputOffsets, relPred, relIndexes = self.model(image,targetBoxes,True,
@@ -225,7 +230,7 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 targSize =0 
             #import pdb;pdb.set_trace()
-            boxLoss, position_loss, conf_loss, class_loss, nn_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
+            boxLoss, position_loss, conf_loss, class_loss, nn_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize],target_num_neighbors)
             boxLoss *= self.lossWeights['box']
             if relLoss is not None:
                 loss = relLoss + boxLoss
@@ -336,13 +341,19 @@ class GraphPairTrainer(BaseTrainer):
         mAP = np.zeros(self.model.numBBTypes)
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
+        numClasses = model.numBBTypes
+        if 'no_blanks' in config['validation'] and not config['data_loader']['no_blanks']:
+            numClasses-=1
+
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
+                if not self.model.detector.predNumNeighbors:
+                    instance['num_neighbors']=None
                 if not self.logged:
                     print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
 
-                image, targetBoxes, adjM = self._to_tensor(instance)
+                image, targetBoxes, adjM, target_num_neighbors = self._to_tensor(instance)
 
                 outputBoxes, outputOffsets, relPred, relIndexes = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
                 #loss = self.loss(output, target)
@@ -371,7 +382,7 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
-                    boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
+                    boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)],target_num_neighbors)
                     loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
@@ -379,6 +390,8 @@ class GraphPairTrainer(BaseTrainer):
                 total_box_loss+=boxLoss.item()
                 total_rel_loss+=relLoss.item()
                 
+                if model.predNumNeighbors:
+                    outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
                 if targetBoxes is not None:
@@ -386,9 +399,9 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     target_for_b = torch.empty(0)
                 if self.model.rotation:
-                    ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,self.model.numBBTypes)
+                    ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,numClasses)
                 else:
-                    ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,self.model.numBBTypes)
+                    ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,numClasses)
 
                 #import pdb;pdb.set_trace()
                 mAP += np.array(ap_5)
@@ -406,7 +419,7 @@ class GraphPairTrainer(BaseTrainer):
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
             'val_bb_recall':(mRecall/len(self.valid_data_loader)).tolist(),
             'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
-            'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
+            #'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
             'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
             'val_bb_mAP':(mAP/len(self.valid_data_loader)).tolist(),
             'val_rel_recall':total_rel_recall/len(self.valid_data_loader),

@@ -143,7 +143,7 @@ class GraphPairDataset(torch.utils.data.Dataset):
             out, cropPoint = self.transform({
                 "img": np_img,
                 "bb_gt": bbs,
-                'bb_ids':ids,
+                'bb_auxs':ids,
                 #"line_gt": {
                 #    "start_of_line": start_of_line,
                 #    "end_of_line": end_of_line
@@ -156,14 +156,8 @@ class GraphPairDataset(torch.utils.data.Dataset):
             }, cropPoint)
             np_img = out['img']
             bbs = out['bb_gt']
-            ids = out['bb_ids']
-            #if 'table_points' in out['point_gt']:
-            #    table_points = out['point_gt']['table_points']
-            #else:
-            #    table_points=None
-            #pixel_gt = out['pixel_gt']
-            #start_of_line = out['line_gt']['start_of_line']
-            #end_of_line = out['line_gt']['end_of_line']
+            ids= out['bb_auxs']
+
 
             ##tic=timeit.default_timer()
             if np_img.shape[2]==3:
@@ -174,18 +168,18 @@ class GraphPairDataset(torch.utils.data.Dataset):
             ##print('augmentation: {}'.format(timeit.default_timer()-tic))
         ##print('transfrm: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
         pairs=set()
-        index1=0
         #import pdb;pdb.set_trace()
-        for id in ids: #updated
+        numNeighbors=[0]*len(ids)
+        for index1,id in enumerate(ids): #updated
             responseBBIdList = self.getResponseBBIdList(id,annotations)
             for bbId in responseBBIdList:
                 try:
                     index2 = ids.index(bbId)
                     #adjMatrix[min(index1,index2),max(index1,index2)]=1
                     pairs.add((min(index1,index2),max(index1,index2)))
+                    numNeighbors[index1]+=1
                 except ValueError:
                     pass
-            index1+=1
         #ones = torch.ones(len(pairs))
         #if len(pairs)>0:
         #    pairs = torch.LongTensor(list(pairs)).t()
@@ -208,13 +202,17 @@ class GraphPairDataset(torch.utils.data.Dataset):
         #end_of_line = None if end_of_line is None or end_of_line.shape[1] == 0 else torch.from_numpy(end_of_line)
         
         bbs = convertBBs(bbs,self.rotate,numClasses)
-
+        if len(numNeighbors)>0:
+            numNeighbors = torch.tensor(numNeighbors)[None,:] #add batch dim
+        else:
+            numNeighbors=None
         #if table_points is not None:
         #    table_points = None if table_points.shape[1] == 0 else torch.from_numpy(table_points)
 
         return {
                 "img": img,
                 "bb_gt": bbs,
+                "num_neighbors": numNeighbors,
                 "adj": pairs,#adjMatrix,
                 "imgName": imageName,
                 "scale": s,

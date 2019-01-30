@@ -310,6 +310,10 @@ class BoxDetectTrainer(BaseTrainer):
         mAP = np.zeros(self.model.numBBTypes)
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
+        numClasses = model.numBBTypes
+        if 'no_blanks' in config['validation'] and not config['data_loader']['no_blanks']:
+            numClasses-=1
+
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
@@ -350,9 +354,9 @@ class BoxDetectTrainer(BaseTrainer):
                             target_for_b = torch.empty(0)
 
                         if self.model.rotation:
-                            ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBoxes,0.9,self.model.numBBTypes)
+                            ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBoxes,0.9,numClasses)
                         else:
-                            ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBoxes,0.5,self.model.numBBTypes)
+                            ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBoxes,0.5,numClasses)
                         mAP += np.array(ap_5,dtype=np.float)#/len(outputBoxes)
                         mRecall += np.array(recall_5,dtype=np.float)#/len(outputBoxes)
                         mPrecision += np.array(prec_5,dtype=np.float)#/len(outputBoxes)

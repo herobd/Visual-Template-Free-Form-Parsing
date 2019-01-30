@@ -72,6 +72,9 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             minDist = torch.min(dists)
             pred = 1-(dists-minDist)/(maxDist-minDist)
             predNN=newPredNN = None
+        else:
+            print("Uknown rule "+config['rule'])
+            exit()
     else:
         dataT = data.to(gpu)#__to_tensor(data,gpu)
         predAll = model(dataT)
@@ -112,20 +115,21 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     #nnPred=newNNPred
     relNodeIds=newNodeIds
     label=newLabel
-    predNN={}
-    for id,li in newPredNN.items():
-        predNN[id]=np.mean(li)
+    if predNN is not None:
+        predNN={}
+        for id,li in newPredNN.items():
+            predNN[id]=np.mean(li)
     gtNumNeighbors=newGtNumNeighbors
  
     if 'optimize' in config and config['optimize']:
         #We first need to prune down as there are far too many possible pairings
         thresh=0.3
-        while thresh>0:
+        while thresh<0.9:
             keep = pred>thresh
             newPred=pred[keep]
-            if newPred.size(0)<1500:
+            if newPred.size(0)<700:
                 break
-            thresh-=0.01
+            thresh+=0.01
         newIds=[]
         newLabel=label[keep]
         if config['optimize']=='blind':
@@ -159,7 +163,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
                         numNeighbors.append(predNN[id2])
                         newId+=1
                     numIds.append( [idMap[id1],idMap[id2]] )
-            assert((newPred.size(0))<1500)
+            assert((newPred.size(0))<700)
             print('size being optimized soft: {}'.format(newPred.size(0)))
             pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors) ).float()
         else:
@@ -251,14 +255,15 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             totalGTs+=1
         else:
             scores.append( (pred[b],False) )
-        color = int(min(abs(predNN[id1]-gtNumNeighbors[b,0]),2)*127)
-        if id1 not in wroteIds:
-            cv2.putText(image,'{:.2f}/{}'.format(predNN[id1],gtNumNeighbors[b,0]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
-            wroteIds.add(id1)
-        color = int(min(abs(predNN[id2]-gtNumNeighbors[b,1]),2)*127)
-        if id2 not in wroteIds:
-            cv2.putText(image,'{:.2f}/{}'.format(predNN[id2],gtNumNeighbors[b,1]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
-            wroteIds.add(id2)
+        if predNN is not None:
+            color = int(min(abs(predNN[id1]-gtNumNeighbors[b,0]),2)*127)
+            if id1 not in wroteIds:
+                cv2.putText(image,'{:.2f}/{}'.format(predNN[id1],gtNumNeighbors[b,0]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
+                wroteIds.add(id1)
+            color = int(min(abs(predNN[id2]-gtNumNeighbors[b,1]),2)*127)
+            if id2 not in wroteIds:
+                cv2.putText(image,'{:.2f}/{}'.format(predNN[id2],gtNumNeighbors[b,1]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
+                wroteIds.add(id2)
     
     if totalGTs>0:
         recall = truePs/float(totalGTs)
@@ -268,13 +273,13 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         prec = truePs/float(totalPreds)
     else:
         prec = 1
+    ap=computeAP(scores)
     if outDir is not None:
-        saveName = '{}_r:{:.4f}_p:{:.4f}_.png'.format(imageName,recall,prec)
+        saveName = '{}_AP:{:.2f}_r:{:.2f}_p:{:.2f}_.png'.format(imageName,ap,recall,prec)
         cv2.imwrite(os.path.join(outDir,saveName),image)
         #cv2.imshow('dfsdf',image)
         #cv2.waitKey()
 
-    ap=computeAP(scores)
 
         
     #return metricsOut

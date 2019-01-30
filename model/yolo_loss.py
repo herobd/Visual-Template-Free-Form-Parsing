@@ -127,7 +127,7 @@ class YoloLoss (nn.Module):
                 loss_cls =  self.ce_loss(pred_cls[mask], torch.argmax(tcls[mask], 1)) *(1 / nB) #this multiply is erronous
             loss_conf += self.bce_loss(pred_conf[conf_mask_true], tconf[conf_mask_true])
             if target_num_neighbors is not None: #if self.predNumNeighbors:
-                loss_nn = self.mse_loss(pred_neighbors[mask],tneighbors[mask])
+                loss_nn = 0.1*self.mse_loss(pred_neighbors[mask],tneighbors[mask])
             else:
                 loss_nn = 0
             loss = loss_x + loss_y + loss_w + loss_h + loss_conf + loss_cls + loss_nn

@@ -199,6 +199,7 @@ class GraphPairTrainer(BaseTrainer):
         #    relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
         #relLoss = torch.tensor(0.0).to(image.device)
         relLoss = None
+        #seperating the loss into true and false portions is not only convienint, it balances the loss between true/false examples
         if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
             ones = torch.ones_like(predPairingShouldBeTrue).to(image.device)
             relLoss = self.loss['rel'](predPairingShouldBeTrue,ones)
@@ -460,8 +461,7 @@ class GraphPairTrainer(BaseTrainer):
         matches=0
         #for i in range(rels.size(0)):
         truePred=falsePred=badPred=0
-        i=0
-        for n0,n1 in rels:
+        for i,(n0,n1) in enumerate(rels):
             #n0 = rels[i,0]
             #n1 = rels[i,1]
             t0 = targIndex[n0].item()
@@ -481,13 +481,11 @@ class GraphPairTrainer(BaseTrainer):
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
             else:
+                if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
+                    predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     badPred+=1
-                    if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
-                        predsNeg.append(predsAll[i])
-            #else skip this
-            i+=1
         #Add score 0 for instances we didn't predict
         for i in range(len(adj)-matches):
             scores.append( (0.0,True) )
@@ -542,8 +540,7 @@ class GraphPairTrainer(BaseTrainer):
         predsNeg = []
         scores = []
         truePred=falsePred=0
-        i=0
-        for n0,n1 in rels:
+        for i,(n0,n1) in enumerate(rels):
             #n0 = rels[i,0]
             #n1 = rels[i,1]
             #gt[i] = int((n0,n1) in adj) #(adjM[ n0, n1 ])
@@ -557,7 +554,6 @@ class GraphPairTrainer(BaseTrainer):
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     falsePred+=1
-            i+=1
     
         #return gt.to(relPred.device), relPred._values().view(-1).view(-1)
         #return gt.to(relPred[1].device), relPred[1].view(-1)

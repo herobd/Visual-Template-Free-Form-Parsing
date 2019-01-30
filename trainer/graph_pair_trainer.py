@@ -199,6 +199,7 @@ class GraphPairTrainer(BaseTrainer):
         #    relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
         #relLoss = torch.tensor(0.0).to(image.device)
         relLoss = None
+        #seperating the loss into true and false portions is not only convienint, it balances the loss between true/false examples
         if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
             ones = torch.ones_like(predPairingShouldBeTrue).to(image.device)
             relLoss = self.loss['rel'](predPairingShouldBeTrue,ones)

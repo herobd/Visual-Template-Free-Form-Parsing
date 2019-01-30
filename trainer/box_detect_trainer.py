@@ -398,7 +398,7 @@ class BoxDetectTrainer(BaseTrainer):
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
             'val_recall':(mRecall/(batchSize*len(self.valid_data_loader))).tolist(),
             'val_precision':(mPrecision/(batchSize*len(self.valid_data_loader))).tolist(),
-            'val_Fm':(mPrecision.mean()+mRecall.mean())/(2*batchSize*len(self.valid_data_loader))
+            'val_Fm':(mPrecision.mean()+mRecall.mean())/(2*batchSize*len(self.valid_data_loader)),
             'val_mAP':(mAP/(batchSize*len(self.valid_data_loader))).tolist(),
             'val_position_loss':total_position_loss / len(self.valid_data_loader),
             'val_conf_loss':total_conf_loss / len(self.valid_data_loader),

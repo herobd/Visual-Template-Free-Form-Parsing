@@ -225,7 +225,7 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 targSize =0 
             #import pdb;pdb.set_trace()
-            boxLoss, position_loss, conf_loss, class_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
+            boxLoss, position_loss, conf_loss, class_loss, nn_loss, recall, precision = self.loss['box'](outputOffsets,targetBoxes,[targSize])
             boxLoss *= self.lossWeights['box']
             if relLoss is not None:
                 loss = relLoss + boxLoss
@@ -371,7 +371,7 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
-                    boxLoss, position_loss, conf_loss, class_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
+                    boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)])
                     loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
@@ -461,8 +461,7 @@ class GraphPairTrainer(BaseTrainer):
         matches=0
         #for i in range(rels.size(0)):
         truePred=falsePred=badPred=0
-        i=0
-        for n0,n1 in rels:
+        for i,(n0,n1) in enumerate(rels):
             #n0 = rels[i,0]
             #n1 = rels[i,1]
             t0 = targIndex[n0].item()
@@ -482,13 +481,11 @@ class GraphPairTrainer(BaseTrainer):
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
             else:
+                if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
+                    predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     badPred+=1
-                    if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
-                        predsNeg.append(predsAll[i])
-            #else skip this
-            i+=1
         #Add score 0 for instances we didn't predict
         for i in range(len(adj)-matches):
             scores.append( (0.0,True) )
@@ -543,8 +540,7 @@ class GraphPairTrainer(BaseTrainer):
         predsNeg = []
         scores = []
         truePred=falsePred=0
-        i=0
-        for n0,n1 in rels:
+        for i,(n0,n1) in enumerate(rels):
             #n0 = rels[i,0]
             #n1 = rels[i,1]
             #gt[i] = int((n0,n1) in adj) #(adjM[ n0, n1 ])
@@ -558,7 +554,6 @@ class GraphPairTrainer(BaseTrainer):
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     falsePred+=1
-            i+=1
     
         #return gt.to(relPred.device), relPred._values().view(-1).view(-1)
         #return gt.to(relPred[1].device), relPred[1].view(-1)

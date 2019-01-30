@@ -81,6 +81,7 @@ class PairingGraph(BaseModel):
         else:
            added_feats=0
            added_featsBB=0
+        config['graph_config']['num_shape_feats']=added_feats
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if self.useShapeFeats!='only':
             self.pool_h = config['featurizer_start_h']

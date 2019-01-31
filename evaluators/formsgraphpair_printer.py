@@ -42,13 +42,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         image = instance['img']
         bbs = instance['bb_gt']
         adjaceny = instance['adj']
+        num_neighbors = instance['num_neighbors']
 
         if gpu is not None:
             image = image.to(gpu)
             if bbs is not None:
                 bbs = bbs.to(gpu)
+            if num_neighbors is not None:
+                num_neighbors = num_neighbors.to(gpu)
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
-        return image, bbs, adjaceny    
+        return image, bbs, adjaceny, num_neighbors
 
     EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.5
     #print(type(instance['pixel_gt']))
@@ -69,7 +72,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     imageName = instance['imgName']
     scale = instance['scale']
     gtNumNeighbors = instance['num_neighbors']
-    dataT, targetBBsT, adjT = __to_tensor(instance,gpu)
+    if not model.detector.predNumNeighbors:
+        instance['num_neighbors']=None
+    dataT, targetBBsT, adjT, gtNumNeighborsT = __to_tensor(instance,gpu)
 
 
     resultsDirName='results'
@@ -86,15 +91,20 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
     outputBBs, outputOffsets, relPred, relIndexes = model(dataT)
 
+    if model.detector.predNumNeighbors:
+        predNN = outputBBs[:,6]
+    else:
+        predNN = None
+
     if targetBBsT is not None:
         targetSize=targetBBsT.size(1)
     else:
         targetSize=0
-    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize])
+    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize], gtNumNeighborsT)
 
 
     relCand = relIndexes
-    relPred = torch.sigmoid(relPred)
+    relPred = torch.sigmoid(relPred)[:,0]
 
     numClasses=2
     if model.rotation:
@@ -106,17 +116,32 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         target_for_b = torch.empty(0)
     if 'optimize' in config and config['optimize']:
-        #from model.optimize import optimizeRelationships
-        numNeighbors=[0]*len(relCand)
-        rev={}
-        for ind in range(outputBBs.size(0)):
-            rev[targIndex[ind]]=ind
-        for t0,t1 in adjacency:
-            if t0 in rev:
-                numNeighbors[rev[t0]]+=1
-            if t1 in rev:
-                numNeighbors[rev[t1]]+=1
-        relPred[:,0] *= torch.from_numpy( optimizeRelationships(relPred,relCand,numNeighbors) ).float()
+        thresh=0.3
+        while thresh<0.9:
+            keep = relPred>thresh
+            newRelPred = relPred[keep]
+            if newRelPred.size(0)<700:
+                break
+        newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+
+        if config['optimize']=='gt' or predNN is None:
+            numNeighbors=[0]*len(newRelCand)
+            rev={}
+            newInd=0
+            for ind in range(outputBBs.size(0)):
+                if keep[ind]:
+                    rev[targIndex[ind]]=newInd
+                    newInd+=1
+            for t0,t1 in adjacency:
+                if t0 in rev:
+                    numNeighbors[rev[t0]]+=1
+                if t1 in rev:
+                    numNeighbors[rev[t1]]+=1
+            relPred[keep] *= torch.from_numpy( optimizeRelationships(newRelPred,newRelCand,numNeighbors) ).float()
+        elif predNN is not None and config['optimize']:
+            newPredNN=predNN[keep]
+            relPred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN) ).float()
+        relPred[1-keep] *= 0
         EDGE_THRESH=0
 
     data = data.numpy()
@@ -131,6 +156,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     if model.detector.predNumNeighbors:
         useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
+    else:
+        useOutputBBs=outputBBs
     if model.rotation:
         ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBBs,0.9,model.numBBTypes)
     else:
@@ -207,6 +234,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
         for j in range(targetSize):
             plotRect(image,(1,0.5,0),targetBBs[0,j,0:5])
+            #x=int(targetBBs[b,j,0])
+            #y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
+            #cv2.putText(image,'{:.2f}'.format(gtNumNeighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
             #if alignmentBBs[b] is not None:
             #    aj=alignmentBBs[b][j]
             #    xc_gt = targetBBs[b,j,0]
@@ -253,6 +283,17 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 else:
                     color=(shade,0,0) #field
                 plotRect(image,color,bbs[j,1:6])
+
+                if model.detector.predNumNeighbors:
+                    x=int(bbs[j,1])
+                    y=int(bbs[j,2]-bbs[j,4])
+                    targ_j = targIndex[j].item()
+                    if targ_j>=0:
+                        gtNN = gtNumNeighbors[targ_j]
+                    else:
+                        gtNN = 0
+                    color = int(min(abs(predNN[j]-gtNN),2)*127)
+                    cv2.putText(image,'{}/{}'.format(predNN[j],gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
         #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
@@ -311,6 +352,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
+               'nn_loss': nn_loss,
                'rel_recall':relRecall,
                'rel_prec':relPrec,
                'rel_Fm':(relRecall+relPrec)/2,

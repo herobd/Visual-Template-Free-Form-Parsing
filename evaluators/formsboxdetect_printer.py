@@ -293,12 +293,12 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if numClasses==2 and model.numBBTypes==3 and predClass[j,2] > 0.5:
                         color[1]=shade
                     plotRect(image,color,bbs[j,1:6])
-                if model.predNumNeighbors:
-                    x=int(bbs[j,1])
-                    y=int(bbs[j,2]-bbs[j,4])
-                    #color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
-                    #cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
-                    cv2.putText(image,'{:.2f}'.format(predNN[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color,2,cv2.LINE_AA)
+                    if model.predNumNeighbors:
+                        x=int(bbs[j,1])
+                        y=int(bbs[j,2]-bbs[j,4])
+                        #color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
+                        #cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                        cv2.putText(image,'{:.2f}'.format(predNN[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color,2,cv2.LINE_AA)
 
 
             #for j in alignmentBBsTarg[name][b]:

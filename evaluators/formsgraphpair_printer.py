@@ -131,6 +131,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     if model.detector.predNumNeighbors:
         useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
+    else:
+        useOutputBBs=outputBBs
     if model.rotation:
         ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBBs,0.9,model.numBBTypes)
     else:

@@ -340,7 +340,7 @@ class GraphPairTrainer(BaseTrainer):
         mAP = np.zeros(self.model.numBBTypes)
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
-        numClasses = model.numBBTypes
+        numClasses = self.model.numBBTypes
         if 'no_blanks' in config['validation'] and not config['data_loader']['no_blanks']:
             numClasses-=1
 
@@ -389,7 +389,7 @@ class GraphPairTrainer(BaseTrainer):
                 total_box_loss+=boxLoss.item()
                 total_rel_loss+=relLoss.item()
                 
-                if model.predNumNeighbors:
+                if self.model.predNumNeighbors:
                     outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()

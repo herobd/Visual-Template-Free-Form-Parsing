@@ -341,7 +341,7 @@ class GraphPairTrainer(BaseTrainer):
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
         numClasses = self.model.numBBTypes
-        if 'no_blanks' in config['validation'] and not config['data_loader']['no_blanks']:
+        if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
 
         with torch.no_grad():

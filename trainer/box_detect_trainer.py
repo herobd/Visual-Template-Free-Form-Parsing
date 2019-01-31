@@ -310,8 +310,8 @@ class BoxDetectTrainer(BaseTrainer):
         mAP = np.zeros(self.model.numBBTypes)
         mRecall = np.zeros(self.model.numBBTypes)
         mPrecision = np.zeros(self.model.numBBTypes)
-        numClasses = model.numBBTypes
-        if 'no_blanks' in config['validation'] and not config['data_loader']['no_blanks']:
+        numClasses = self.model.numBBTypes
+        if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
 
         with torch.no_grad():
@@ -344,7 +344,7 @@ class BoxDetectTrainer(BaseTrainer):
                     if targetBoxes is not None:
                         targetBoxes = targetBoxes.cpu()
                     for b in range(batchSize):
-                        if model.predNumNeighbors:
+                        if self.model.predNumNeighbors:
                             useOutputBoxes=torch.cat((outputBoxes[b][:,0:6],outputBoxes[b][:,7:]),dim=1)
                         else:
                             useOutputBoxes=outputBoxes[b]

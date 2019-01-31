@@ -389,7 +389,7 @@ class GraphPairTrainer(BaseTrainer):
                 total_box_loss+=boxLoss.item()
                 total_rel_loss+=relLoss.item()
                 
-                if self.model.predNumNeighbors:
+                if self.model.detector.predNumNeighbors:
                     outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()

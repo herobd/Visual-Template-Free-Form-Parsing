@@ -1,0 +1,101 @@
+{
+    "name": "Simple18_pair_binaryNegShapeOnly_staggerLightP",
+    "cuda": true,
+    "gpu": 0,
+    "save_mode": "state_dict",
+    "override": true,
+    "super_computer":false,
+    "data_loader": {
+        "data_set_name": "FormsGraphPair",
+        "special_dataset": "simple",
+        "data_dir": "../data/forms",
+        "batch_size": 1,
+        "shuffle": true,
+        "num_workers": 1,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.4,0.65],
+        "crop_params": {
+            "crop_size":[652,1608],
+	    "pad":0
+        },
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "cache_resized_images": true,
+        "rotation": false,
+        "only_opposite_pairs": true
+
+
+    },
+    "validation": {
+        "simple_dataset": true,
+        "shuffle": false,
+        "crop_to_page":false,
+        "color":false,
+        "rescale_range": [0.52,0.52],
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "batch_size": 1,
+        "rotation": false,
+        "only_opposite_pairs": true
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.001,
+        "weight_decay": 0
+    },
+    "loss": {
+        "box": "YoloLoss",
+        "edge": "sigmoid_BCE_loss"
+    },
+    "loss_weights": {
+        "box": 1,
+        "edge": 1
+    },
+    "loss_params": 
+        {
+            "box": {"ignore_thresh": 0.5,
+                    "bad_conf_weight": 20.0}
+        },
+    "metrics": [],
+    "trainer": {
+        "class": "GraphPairTrainer",
+        "iterations": 200000,
+        "save_dir": "saved/",
+        "val_step": 10000,
+        "save_step": 50000,
+        "save_step_minor": 250,
+        "log_step": 500,
+        "verbosity": 1,
+        "monitor": "loss",
+        "monitor_mode": "none",
+        "warmup_steps": 1000,
+        "conf_thresh_init": 0.9,
+        "conf_thresh_change_iters": 5000,
+        "retry_count":10,
+
+        "unfreeze_detector": null,
+        "partial_from_gt": null,
+
+        "use_bad_bb_pred_for_rel_loss": true
+    },
+    "arch": "PairingGraph", 
+    "model": {
+        "detector_checkpoint": "saved/Forms18_staggerLight/checkpoint-iteration200000.pth.tar",
+        "conf_thresh": 0.5,
+        "start_frozen": true,
+	"use_rel_shape_feats": "only",
+        "graph_config": {
+            "arch": "BinaryPairNet",
+            "node_channels": 0,
+            "edge_channels": 1
+        },
+        "featurizer_fc": ["FC256","FC256"]
+    }
+}

@@ -390,8 +390,8 @@ class PairingGraph(BaseModel):
                 shapeFeats[i,5] = bbs[index2,3]/self.normalizeVert
                 shapeFeats[i,6] = bbs[index1,4]/self.normalizeHorz
                 shapeFeats[i,7] = bbs[index2,4]/self.normalizeHorz
-                shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,5:])
-                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,5:])
+                shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,-self.numBBTypes:])
+                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,-self.numBBTypes:])
                 if self.useShapeFeats!='old':
                     startCorners = 8+self.numBBTypes+self.numBBTypes
                     shapeFeats[i,startCorners +0] = math.sqrt( (tlX[index1]-tlX[index2])**2 + (tlY[index1]-tlY[index2])**2 )

@@ -338,12 +338,12 @@ class GraphPairTrainer(BaseTrainer):
         AP_count=0
         total_val_metrics = np.zeros(len(self.metrics))
 
-        mAP = np.zeros(self.model.numBBTypes)
-        mRecall = np.zeros(self.model.numBBTypes)
-        mPrecision = np.zeros(self.model.numBBTypes)
         numClasses = self.model.numBBTypes
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
+        mAP = np.zeros(numClasses)
+        mRecall = np.zeros(numClasses)
+        mPrecision = np.zeros(numClasses)
 
         with torch.no_grad():
             losses = defaultdict(lambda: 0)

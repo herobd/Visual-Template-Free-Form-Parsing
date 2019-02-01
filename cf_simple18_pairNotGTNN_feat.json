@@ -1,0 +1,71 @@
+{
+    "name": "Simple18_pairNotGTNN_feat",
+    "cuda": false,
+    "gpu": 0,
+    "save_mode": "state_dict",
+    "override": true,
+    "super_computer":false,
+    "data_loader": {
+        "data_set_name": "FormsFeaturePair",
+        "simple_dataset": true,
+        "alternate_json_dir": "out_json/Simple18_staggerLight_NN"
+        "data_dir": "../data/forms",
+        "batch_size": 512,
+        "shuffle": true,
+        "num_workers": 2,
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "cache_resized_images": true,
+        "rotation": false,
+        "balance": true,
+        "only_opposite_pairs": true,
+        "corners":true
+
+
+    },
+    "validation": {
+        "simple_dataset": true,
+        "shuffle": false,
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "batch_size": 512,
+        "rotation": false,
+        "only_opposite_pairs": true,
+        "corners":true
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.001,
+        "weight_decay": 0
+    },
+    "loss": "sigmoid_BCE_loss",
+    "loss_params": 
+        {
+        },
+    "metrics": [],
+    "trainer": {
+        "class": "FeaturePairTrainer",
+        "iterations": 10000,
+        "save_dir": "saved/",
+        "val_step": 250,
+        "save_step": 2000,
+        "save_step_minor": 250,
+        "log_step": 50,
+        "verbosity": 1,
+        "monitor": "loss",
+        "monitor_mode": "none"
+    },
+    "arch": "SimpleNN", 
+    "model": {
+        "feat_size":18,
+        "num_layers": 2,
+        "hidden_size": 256,
+        "out_size": 3
+    }
+}

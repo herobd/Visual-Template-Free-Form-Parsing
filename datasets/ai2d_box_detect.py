@@ -100,7 +100,7 @@ class AI2DBoxDetect(BoxDetectDataset):
 
 
 
-        return bbs,{},{},None,4,numNeighbors
+        return bbs,{},{},None,4,numNeighbors, None
 
 
     def transformBB(self,item,scale,classNum):

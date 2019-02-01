@@ -307,8 +307,8 @@ if __name__ == '__main__':
             addtoconfig.append(split2)
 
     config = None
-    if args.checkpoint is None or (args.savedir is None and args.number>0):
-        print('Must provide checkpoint (with -c) and save dir (with -d) (or no save)')
+    if args.checkpoint is None:
+        print('Must provide checkpoint (with -c)')
         exit()
 
     index = args.index

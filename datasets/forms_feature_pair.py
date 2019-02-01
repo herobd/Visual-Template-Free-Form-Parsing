@@ -100,6 +100,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
         self.balance = config['balance'] if 'balance' in config else False
 
         self.eval = config['eval'] if 'eval' in config else False
+
+        self.altJSONDir = config['alternate_json_dir'] if 'alternate_json_dir' in config else None
         
 
         #width_mean=400.006887263
@@ -134,6 +136,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                     else:
                         path = org_path
                     jsonPath = org_path[:org_path.rfind('.')]+'.json'
+                    if altJSONDir is not None:
+                        jsonPath = os.path.join(altJSONDir,imageName[:imageName.rfind('.')]+'.json')
                     annotations=None
                     if os.path.exists(jsonPath):
                         if annotations is None:
@@ -159,7 +163,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                         for id,bb in annotations['byId'].items():
                             if not self.onlyFormStuff or ('paired' in bb and bb['paired']):
                                 numN1 = numNeighbors[id]-1
-                                qX, qY, qH, qW, qR, qIsText = getBBInfo(bb,self.rotate,useBlankClass=not self.no_blanks)
+                                qX, qY, qH, qW, qR, qIsText, qIsField, qIsBlank, qNN = getBBInfo(bb,self.rotate,useBlankClass=not self.no_blanks)
                                 tlX = bb['poly_points'][0][0]
                                 tlY = bb['poly_points'][0][1]
                                 trX = bb['poly_points'][1][0]
@@ -176,7 +180,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 for id2,bb2 in annotations['byId'].items():
                                     if id!=id2:
                                         numN2 = numNeighbors[id2]-1
-                                        iX, iY, iH, iW, iR, iIsText = getBBInfo(bb2,self.rotate,useBlankClass=not self.no_blanks)
+                                        iX, iY, iH, iW, iR, iIsText, iIsField, iIsBlank, qNN  = getBBInfo(bb2,self.rotate,useBlankClass=not self.no_blanks)
                                         tlX2 = bb2['poly_points'][0][0]
                                         tlY2 = bb2['poly_points'][0][1]
                                         trX2 = bb2['poly_points'][1][0]
@@ -209,11 +213,18 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                             instances = pair_instances
                                         else:
                                             instances = notpair_instances
-                                        data=[qH,qW,qR,qIsText, iH,iW,iR,iIsText, xDiff, yDiff]
+                                        if self.altJSONDir is None:
+                                            data=[qH,qW,qR,qIsText, iH,iW,iR,iIsText, xDiff, yDiff]
+                                        else:
+                                            data=[qH,qW,qR,qIsText,qIsField, iH,iW,iR,iIsText,iIsField, xDiff, yDiff]
                                         if self.use_corners=='xy':
                                             data+=[tlXDiff,trXDiff,brXDiff,blXDiff,tlYDiff,trYDiff,brYDiff,blYDiff]
                                         elif self.use_corners:
                                             data+=[tlDiff, trDiff, brDiff, blDiff]
+                                        if qIsBlank is not None:
+                                            data+=[qIsBlank,iIsBlank]
+                                        if qNN is not None:
+                                            data+=[qNN,iNN]
                                         instances.append( {
                                             'data': torch.tensor([ data ]),
                                             'label': pair,

@@ -121,6 +121,7 @@ def fixAnnotations(this,annotations):
         annotations['byId'][bb['id']]=bb
     if not this.only_opposite_pairs:
         annotations['pairs']+=annotations['samePairs']
+    del annotations['samePairs']
 
     toAdd=[]
     idsToRemove=set()
@@ -360,8 +361,7 @@ def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):
     if usePairedClass:
         numClasses+=1
     bbs = np.empty((1,len(useBBs), 8+8+numClasses), dtype=np.float32) #2x4 corners, 2x4 cross-points, 2 classes
-    j=0
-    for bb in useBBs:
+    for j,bb in enumerate(useBBs):
         tlX = bb['poly_points'][0][0]
         tlY = bb['poly_points'][0][1]
         trX = bb['poly_points'][1][0]
@@ -392,20 +392,27 @@ def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):
         bbs[:,j,15]=s*(brY+blY)/2.0
 
         #classes
-        field = bb['type'][:4]!='text'
-        text=not field
-        bbs[:,j,16]=1 if text else 0
-        bbs[:,j,17]=1 if field else 0
+        if bb['type']=='detectorPrediction':
+            bbs[:,j,16]=bb['textPred']
+            bbs[:,j,17]=bb['fieldPred']
+        else:
+            field = bb['type'][:4]!='text'
+            text=not field
+            bbs[:,j,16]=1 if text else 0
+            bbs[:,j,17]=1 if field else 0
         index = 18
         if useBlankClass:
-            blank = (bb['isBlank']=='blank' or bb['isBlank']==3) if 'isBlank' in bb else False
-            bbs[:,j,index]=1 if blank else 0
+            if bb['type']=='detectorPrediction':
+                bbs[:,j,index]=bb['blankPred']
+            else:
+                blank = (bb['isBlank']=='blank' or bb['isBlank']==3) if 'isBlank' in bb else False
+                bbs[:,j,index]=1 if blank else 0
             index+=1
         if usePairedClass:
+            assert(bb['type']!='detectorPrediction')
             paired = bb['paired'] if 'paired' in bb else False
             bbs[:,j,index]=1 if paired else 0
             index+=1
-        j+=1
     return bbs
 
 def getStartEndGT(useBBs,s,useBlankClass=False):
@@ -498,14 +505,20 @@ def getBBInfo(bb,rotate,useBlankClass=False):
         blX = np.minimum.reduce((tlX,blX,trX,brX))
         blY = np.maximum.reduce((tlY,trY,blY,brY))
 
-    field = bb['type'][:4]!='text'
-    if useBlankClass and (bb['isBlank']=='blank' or bb['isBlank']==3):
-        field=False
-        text=False
-        blank=True
+
+    if bb['type']=='detectorPrediction':
+        text=bb['textPred']
+        field=bb['fieldPred']
+        blank = bb['blankPred'] if 'blankPred' in bb else None
+        nn = bb['nnPred'] if 'nnPred' in bb else None
     else:
+        field = bb['type'][:4]!='text'
+        if useBlankClass:
+            blank = bb['isBlank']=='blank' or bb['isBlank']==3
+        else:
+            blank=None
         text=not field
-        blank=False
+        nn=None
         
     lX = (tlX+blX)/2.0
     lY = (tlY+blY)/2.0
@@ -523,7 +536,7 @@ def getBBInfo(bb,rotate,useBlankClass=False):
     height = np.abs(h)*2
     width = d
 
-    return cX,cY,height,width,rot,text
+    return cX,cY,height,width,rot,text,field,blank,nn
 
 def getResponseBBIdList_(this,queryId,annotations):
     responseBBList=[]

@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binaryNegShapeOnly_staggerLightP",
+    "name": "Simple18_pair_binaryShapeOnly_staggerLightP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -81,9 +81,7 @@
         "retry_count":10,
 
         "unfreeze_detector": null,
-        "partial_from_gt": null,
-
-        "use_bad_bb_pred_for_rel_loss": true
+        "partial_from_gt": null
     },
     "arch": "PairingGraph", 
     "model": {

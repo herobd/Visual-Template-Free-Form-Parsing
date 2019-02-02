@@ -126,12 +126,16 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         if index is None:
 
 
-            trainDir = os.path.join(saveDir,'train_'+config['name'])
-            validDir = os.path.join(saveDir,'valid_'+config['name'])
-            if not os.path.isdir(trainDir):
-                os.mkdir(trainDir)
-            if not os.path.isdir(validDir):
-                os.mkdir(validDir)
+            if saveDir is not None:
+                trainDir = os.path.join(saveDir,'train_'+config['name'])
+                validDir = os.path.join(saveDir,'valid_'+config['name'])
+                if not os.path.isdir(trainDir):
+                    os.mkdir(trainDir)
+                if not os.path.isdir(validDir):
+                    os.mkdir(validDir)
+            else:
+                trainDir=None
+                validDir=None
 
             val_metrics_sum = np.zeros(len(metrics))
             val_metrics_list = defaultdict(lambda: defaultdict(list))
@@ -303,8 +307,8 @@ if __name__ == '__main__':
             addtoconfig.append(split2)
 
     config = None
-    if args.checkpoint is None or args.savedir is None:
-        print('Must provide checkpoint (with -c) and save dir (with -d)')
+    if args.checkpoint is None:
+        print('Must provide checkpoint (with -c)')
         exit()
 
     index = args.index

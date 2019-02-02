@@ -8,11 +8,12 @@ from model.alignment_loss import alignment_loss
 import math
 from model.loss import *
 from collections import defaultdict
-from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist
+from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
+import json
 
 #THRESH=0.5
 
-def plotRect(img,color,xyrhw):
+def getCorners(xyrhw):
     xc=xyrhw[0].item()
     yc=xyrhw[1].item()
     rot=xyrhw[2].item()
@@ -24,6 +25,9 @@ def plotRect(img,color,xyrhw):
     tl = ( int(-w*math.cos(rot)-h*math.sin(rot) + xc), int(-w*math.sin(rot)+h*math.cos(rot) + yc) )
     br = ( int(w*math.cos(rot)+h*math.sin(rot) + xc),  int(w*math.sin(rot)-h*math.cos(rot) + yc) )
     bl = ( int(-w*math.cos(rot)+h*math.sin(rot) + xc), int(-w*math.sin(rot)-h*math.cos(rot) + yc) )
+    return tl,tr,br,bl
+def plotRect(img,color,xyrhw):
+    tl,tr,br,bl = getCorners(xyrhw)
 
     cv2.line(img,tl,tr,color,1)
     cv2.line(img,tr,br,color,1)
@@ -91,6 +95,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         return data, targetBBs, targetBBs_sizes, targetPoints, targetPoints_sizes, targetPixels, target_num_neighbors
 
     THRESH = config['THRESH'] if 'THRESH' in config else 0.92
+    numClasses=2
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -165,24 +170,24 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     numClasses = model.numBBTypes
     if 'no_blanks' in config['data_loader'] and not config['data_loader']['no_blanks']:
         numClasses-=1
+    if model.predNumNeighbors:
+        extraPreds=1
+    else:
+        extraPreds=0
     
     for b in range(batchSize):
-        if model.predNumNeighbors:
-            useOutputBBs=torch.cat((outputBBs[b][:,0:6],outputBBs[b][:,7:]),dim=1)
-        else:
-            useOutputBBs=outputBBs[b]
         if targetBBs is not None:
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
             target_for_b = torch.empty(0)
         if model.rotation:
-            ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBBs,0.9,numClasses)
-            ap_3, prec_3, recall_3 =AP_dist(target_for_b,useOutputBBs,1.3,numClasses)
-            ap_7, prec_7, recall_7 =AP_dist(target_for_b,useOutputBBs,0.5,numClasses)
+            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.9,numClasses,beforeCls=extraPreds)
+            ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],1.3,numClasses,beforeCls=extraPreds)
+            ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.5,numClasses,beforeCls=extraPreds)
         else:
-            ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBBs,0.5,numClasses)
-            ap_3, prec_3, recall_3 =AP_iou(target_for_b,useOutputBBs,0.3,numClasses)
-            ap_7, prec_7, recall_7 =AP_iou(target_for_b,useOutputBBs,0.7,numClasses)
+            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,numClasses,beforeCls=extraPreds)
+            ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,numClasses,beforeCls=extraPreds)
+            ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,numClasses,beforeCls=extraPreds)
 
 
         aps_5.append(ap_5 )
@@ -217,9 +222,65 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     dists_y=defaultdict(list)
     scaleDiffs=defaultdict(list)
     rotDiffs=defaultdict(list)
+
+
+
     for b in range(batchSize):
         #print('image {} has {} {}'.format(startIndex+b,targetBBsSizes[name][b],name))
         #bbImage = np.ones_like(image)
+        bbs = outputBBs[b]
+        if model.predNumNeighbors:
+            predNN= bbs[:,6]
+            predClass= bbs[:,7:]
+        else:
+            predClass= bbs[:,6:]
+
+        if 'save_json' in config:
+            assert(batchSize==1)
+            scale=scale[0]
+            if model.rotation:
+                targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[b],torch.from_numpy(bbs),1.1,numClasses,extraPreds)
+            else:
+                targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[b],torch.from_numpy(bbs),0.4,numClasses,extraPreds)
+            bbsData=[]
+            newId=targetBBs[b].size(0)
+            for j in range(bbs.shape[0]):
+                tl,tr,br,bl = getCorners(bbs[j,1:])
+                id = targIndex[j].item()
+                if id<0:
+                    id='u{}'.format(newId)
+                    newId+=1
+                else:
+                    id='m{}'.format(id)
+                bb = {
+                        'id': id,
+                        'poly_points': [ [float(tl[0]/scale),float(tl[1]/scale)], 
+                                         [float(tr[0]/scale),float(tr[1]/scale)], 
+                                         [float(br[0]/scale),float(br[1]/scale)], 
+                                         [float(bl[0]/scale),float(bl[1]/scale)] ],
+                        'type':'detectorPrediction',
+                        'textPred': float(predClass[j,0]),
+                        'fieldPred': float(predClass[j,1])
+                }
+                if numClasses==2 and model.numBBTypes==3:
+                    bb['blankPred']=float(predClass[j,2])
+                if model.predNumNeighbors:
+                    bb['nnPred']=float(predNN[j])
+                bbsData.append(bb)
+
+            pairsData=[ ('m{}'.format(i1),'m{}'.format(i2)) for i1,i2 in instance['pairs'] ]
+
+            saveJSON = os.path.join(config['save_json'],imageName[b]+'.json')
+            allData = {
+                    'textBBs': bbsData,
+                    'fieldBBs': [],
+                    'pairs': pairsData
+            }
+            with open(saveJSON,'w') as f:
+                json.dump(allData,f)
+                print('wrote {}'.format(saveJSON))
+
+
         if outDir is not None:
             #Write the results so we can train LF with them
             #saveFile = os.path.join(outDir,resultsDirName,name,'{}'.format(imageName[b]))
@@ -268,12 +329,6 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #    #pred_points.append(
             #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
             #import pdb; pdb.set_trace()
-            bbs = outputBBs[b]
-            if model.predNumNeighbors:
-                predNN= bbs[:,6]
-                predClass= bbs[:,7:]
-            else:
-                predClass= bbs[:,6:]
             for j in range(bbs.shape[0]):
                 #circle aligned predictions
                 conf = bbs[j,0]
@@ -293,12 +348,12 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if numClasses==2 and model.numBBTypes==3 and predClass[j,2] > 0.5:
                         color[1]=shade
                     plotRect(image,color,bbs[j,1:6])
-                if model.predNumNeighbors:
-                    x=int(bbs[j,1])
-                    y=int(bbs[j,2]-bbs[j,4])
-                    #color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
-                    #cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
-                    cv2.putText(image,'{:.2f}'.format(predNN[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color,2,cv2.LINE_AA)
+                    if model.predNumNeighbors:
+                        x=int(bbs[j,1])
+                        y=int(bbs[j,2]-bbs[j,4])
+                        #color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
+                        #cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                        cv2.putText(image,'{:.2f}'.format(predNN[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color,2,cv2.LINE_AA)
 
 
             #for j in alignmentBBsTarg[name][b]:

@@ -140,7 +140,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
             else:
                 extra=0
             for j in range(self.numBBTypes):
-                stackedPred.append(y[:,6+j+extra+offset:7+j+extra+offset,:,:])         #x. class prediction
+                stackedPred.append(torch.sigmoid(y[:,6+j+extra+offset:7+j+extra+offset,:,:]))         #x. class prediction
                 #stackedOffsets.append(y[:,6+j+offset:7+j+offset,:,:])         #x. class prediction
             pred_boxes.append(torch.cat(stackedPred, dim=1))
             #pred_offsets.append(torch.cat(stackedOffsets, dim=1))

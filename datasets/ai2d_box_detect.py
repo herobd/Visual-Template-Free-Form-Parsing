@@ -100,7 +100,8 @@ class AI2DBoxDetect(BoxDetectDataset):
         bbs = np.array(bbs)[None,:,:] #add batch dim on front
 
 
-        return bbs,{},{},None,4,numNeighbors
+
+        return bbs,{},{},None,4,numNeighbors, None
 
 
     def transformBB(self,item,scale,classNum):

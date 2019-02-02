@@ -5,6 +5,7 @@ import torch
 
 from torch.nn.parameter import Parameter
 from torch import nn
+from .simpleNN import SimpleNN
 
 
 class GraphConvolution(nn.Module):
@@ -82,13 +83,113 @@ class GraphResConv(nn.Module):
     Two graph conv residual layer
     """
 
-    def __init__(self, num_features,norm='group_norm',dropout=0.1):
+    def __init__(self, num_features,norm='group_norm',dropout=0.1, depth=2):
         super(GraphResConv, self).__init__()
-        self.side1=GraphConvWithAct(num_features,num_features,norm,dropout)
-        self.side2=GraphConvWithAct(num_features,num_features,norm,dropout)
+        #self.side1=GraphConvWithAct(num_features,num_features,norm,dropout)
+        #self.side2=GraphConvWithAct(num_features,num_features,norm,dropout)
+        self.sideLayers=nn.ModuleList()
+        for i in range(depth):
+            sideLayers.append(GraphConvWithAct(num_features,num_features,norm,dropout))
             
 
     def forward(self,node_features,adjacencyMatrix,numBBs):
-        side = self.side1(node_features,adjacencyMatrix,numBBs)
-        side = self.side2(side,adjacencyMatrix,numBBs)
+        #side = self.side1(node_features,adjacencyMatrix,numBBs)
+        #side = self.side2(side,adjacencyMatrix,numBBs)
+        side=node_features
+        for layer in self.sideLayers:
+            side = layer(side,adjacencyMatrix,numBBs)
         return node_features+side
+
+#These are taken from the Annotated Transformer (http://nlp.seas.harvard.edu/2018/04/03/attention.html#attention)
+def clones(module, N):
+    "Produce N identical layers."
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
+def attention(query, key, value, mask=None, dropout=None):
+    "Compute 'Scaled Dot Product Attention'"
+    d_k = query.size(-1)
+    scores = torch.matmul(query, key.transpose(-2, -1)) \
+             / math.sqrt(d_k)
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, -1e9)
+    p_attn = F.softmax(scores, dim = -1)
+    if dropout is not None:
+        p_attn = dropout(p_attn)
+    return torch.matmul(p_attn, value), p_attn
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, h, d_model, dropout=0.1):
+        "Take in model size and number of heads."
+        super(MultiHeadedAttention, self).__init__()
+        assert d_model % h == 0
+        # We assume d_v always equals d_k
+        self.d_k = d_model // h
+        self.h = h
+        self.linears = clones(nn.Linear(d_model, d_model), 4) #W_q W_k W_v W_o
+        self.attn = None
+        self.dropout = nn.Dropout(p=dropout)
+        
+    def forward(self, query, key, value, mask=None):
+        "Implements Figure 2"
+        if mask is not None:
+            # Same mask applied to all h heads.
+            mask = mask.unsqueeze(1)
+        nbatches = query.size(0)
+        
+        # 1) Do all the linear projections in batch from d_model => h x d_k 
+        query, key, value = \
+            [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
+             for l, x in zip(self.linears, (query, key, value))]
+        
+        # 2) Apply attention on all the projected vectors in batch. 
+        x, self.attn = attention(query, key, value, mask=mask, 
+                                 dropout=self.dropout)
+        
+        # 3) "Concat" using a view and apply a final linear. 
+        x = x.transpose(1, 2).contiguous() \
+             .view(nbatches, -1, self.h * self.d_k)
+        return self.linears[-1](x)
+
+class GraphSelfAttention(nn.Module):
+    """
+    Graph convolution using self attention across neighbors
+    """
+
+    def __init__(self, in_features, heads=8):
+        super(GraphSelfAttention, self).__init__()
+        self.mhAtt = MultiHeadedAttention(heads,in_features)
+
+    def forward(self, input, adj):
+        #construct mask s.t. 1s where edges exist
+        locs = torch.LongTensor(adj).t()
+        ones = torch.ones(len(adj))
+        mask = torch.sparse.FloatTensor(locs,ones,torch.Size([input.size(0),input.size(0)]))
+        input_ = input[None,...] # add batch dim
+        return self.mhAtt(input_,input_,input_,mask)
+
+    def __repr__(self):
+        return self.__class__.__name__ +'(heads:{})'.format(self.mhAtt.h)
+
+class GraphTransformerBlock(nn.Module):
+
+    def __init__(self, features, num_ffnn_layers=2, ffnn_features=None):
+        super(GraphTransformerBlock, self).__init__()
+        if ffnn_features is None:
+            ffnn_features=features
+
+        config_ffnn = {
+                'feat_size': features,
+                'num_layers': num_ffnn_layers,
+                'hidden_size': ffnn_features,
+                'outSize': -1,
+                'reverse': True,
+                'norm': None,
+                'dropout': 0.1
+                }
+        self.ffnn = SimpleNN(config_ffnn)
+        self.att = GraphSelfAttention(num_heads,features)
+
+    def forward(self,input,adj):
+        side=self.att(input,adj)
+        side1+=input
+        side1 = self.norm1(side1)
+        side2=self.ffnn(side1)
+        return self.norm2(side2+side1)

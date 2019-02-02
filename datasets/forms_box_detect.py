@@ -219,7 +219,7 @@ class FormsBoxDetect(BoxDetectDataset):
                     s, 
                     np_img.shape[0], 
                     np_img.shape[1],
-                    annotations['samePairs'])
+                    annotations['pairs'])
         except Exception as inst:
             if imageName not in self.errors:
                 table_points=None
@@ -252,8 +252,15 @@ class FormsBoxDetect(BoxDetectDataset):
         numNeighbors = [numNeighbors[bb['id']] for bb in full_bbs]
         #if self.pred_neighbors:
         #    bbs = torch.cat(bbs,
+        idToIndex={}
+        for i,bb in enumerate(full_bbs):
+            idToIndex[bb['id']]=i
+        pairs=[ (idToIndex[id1],idToIndex[id2]) for id1,id2 in annotations['pairs'] ]
+            
 
-        return bbs,line_gts,point_gts,pixel_gt,numClasses,numNeighbors
+
+
+        return bbs,line_gts,point_gts,pixel_gt,numClasses,numNeighbors, pairs
 
 
 

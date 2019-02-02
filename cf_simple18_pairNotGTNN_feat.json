@@ -8,11 +8,11 @@
     "data_loader": {
         "data_set_name": "FormsFeaturePair",
         "simple_dataset": true,
-        "alternate_json_dir": "out_json/Simple18_staggerLight_NN"
+        "alternate_json_dir": "out_json/Simple18_staggerLight_NN",
         "data_dir": "../data/forms",
         "batch_size": 512,
         "shuffle": true,
-        "num_workers": 2,
+        "num_workers": 0,
         "no_blanks": true,
         "swap_circle":true,
         "no_graphics":true,
@@ -25,15 +25,8 @@
 
     },
     "validation": {
-        "simple_dataset": true,
         "shuffle": false,
-        "no_blanks": true,
-        "swap_circle":true,
-        "no_graphics":true,
-        "batch_size": 512,
-        "rotation": false,
-        "only_opposite_pairs": true,
-        "corners":true
+        "balance": false
     },
 
     

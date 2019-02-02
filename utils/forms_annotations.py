@@ -119,9 +119,10 @@ def fixAnnotations(this,annotations):
         annotations['byId'][bb['id']]=bb
     for bb in annotations['fieldBBs']:
         annotations['byId'][bb['id']]=bb
-    if not this.only_opposite_pairs:
-        annotations['pairs']+=annotations['samePairs']
-    del annotations['samePairs']
+    if 'samePairs' in annotations:
+        if not this.only_opposite_pairs:
+            annotations['pairs']+=annotations['samePairs']
+        del annotations['samePairs']
 
     toAdd=[]
     idsToRemove=set()

@@ -136,8 +136,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                     else:
                         path = org_path
                     jsonPath = org_path[:org_path.rfind('.')]+'.json'
-                    if altJSONDir is not None:
-                        jsonPath = os.path.join(altJSONDir,imageName[:imageName.rfind('.')]+'.json')
+                    if self.altJSONDir is not None:
+                        jsonPath = os.path.join(self.altJSONDir,imageName[:imageName.rfind('.')]+'.json')
                     annotations=None
                     if os.path.exists(jsonPath):
                         if annotations is None:
@@ -180,7 +180,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 for id2,bb2 in annotations['byId'].items():
                                     if id!=id2:
                                         numN2 = numNeighbors[id2]-1
-                                        iX, iY, iH, iW, iR, iIsText, iIsField, iIsBlank, qNN  = getBBInfo(bb2,self.rotate,useBlankClass=not self.no_blanks)
+                                        iX, iY, iH, iW, iR, iIsText, iIsField, iIsBlank, iNN  = getBBInfo(bb2,self.rotate,useBlankClass=not self.no_blanks)
                                         tlX2 = bb2['poly_points'][0][0]
                                         tlY2 = bb2['poly_points'][0][1]
                                         trX2 = bb2['poly_points'][1][0]

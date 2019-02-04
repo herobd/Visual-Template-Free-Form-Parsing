@@ -172,6 +172,7 @@ def fixAnnotations(this,annotations):
     parasLinkedTo=defaultdict(list)
     pairsToRemove=[]
     for i,pair in enumerate(annotations['pairs']):
+        assert(len(pair)==2)
         if pair[0] not in annotations['byId'] or pair[1] not in annotations['byId']:
             pairsToRemove.append(i)
         elif pair[0] in idsToFix and annotations['byId'][pair[1]]['type'][-1]=='P':
@@ -225,6 +226,8 @@ def fixAnnotations(this,annotations):
                     if annotations['byId'][otherId]['type']=='fieldCol' and avg_y(annotations['byId'][otherId])>avg_y(annotations['byId'][num['id']]):
                         toAdd.append([num['id'],otherId])
 
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
     #heirarchy labels.
     #for pair in annotations['samePairs']:
     #    text=textMinor=None
@@ -273,6 +276,7 @@ def fixAnnotations(this,annotations):
     #                    toAddSame.append([text,otherId])
 
     for pair in toAdd:
+        assert(len(pair)==2)
         if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
              annotations['pairs'].append(pair)
     #annotations['pairs']+=toAdd
@@ -301,7 +305,7 @@ def fixAnnotations(this,annotations):
             elif group1 is not None:
                 circleGroups[group1].append(pair[0])
             else:
-                circleGroups[circleGroupId] = pair
+                circleGroups[circleGroupId] = pair.copy()
                 circleGroupId+=1
 
         if pair[0] in annotations['byId'] and pair[1] in annotations['byId']:
@@ -310,6 +314,9 @@ def fixAnnotations(this,annotations):
             if cls0!=cls1:
                 paired.add(pair[0])
                 paired.add(pair[1])
+
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
 
     #what pairs to each group?
     groupPairedTo=defaultdict(list)
@@ -325,6 +332,8 @@ def fixAnnotations(this,annotations):
                     groupPairedTo[id].append(pair[0])
 
 
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
     #add pairs
     toAdd=[]
     if not this.only_opposite_pairs:
@@ -336,6 +345,7 @@ def fixAnnotations(this,annotations):
                 for id2 in groupPairedTo[gid]:
                     toAdd.append([id,id2])
     for pair in toAdd:
+        assert(len(pair)==2)
         if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
              annotations['pairs'].append(pair)
 
@@ -353,6 +363,8 @@ def fixAnnotations(this,annotations):
         if id in annotations['byId']:
             annotations['byId'][id]['paired']=True
 
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
 
 def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):
 

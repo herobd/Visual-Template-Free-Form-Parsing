@@ -55,7 +55,7 @@ class BinaryPairReal(nn.Module):
                     init = config['weight_split']
                 else:
                     init = 0.5
-                self.split_weighting = Parameter(torch.tensor(init, requires_grad=True))
+                self.split_weighting = nn.Parameter(torch.tensor(init, requires_grad=True))
             else:
                 self.split_weighting = None
         else:

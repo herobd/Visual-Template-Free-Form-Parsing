@@ -194,7 +194,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
                 numIds=[]
                 for id,count in numNeighborsD.items():
                     if config['optimize']=='gt_noisy':
-                        numNeighbors[idNum]=random.gauss(count,0.7)
+                        numNeighbors[idNum]=random.gauss(count,0.5)
                     else:
                         numNeighbors[idNum]=count
                     idNumMap[id]=idNum

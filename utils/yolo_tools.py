@@ -224,7 +224,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
         else:
             #numClasses=pred.size(1)-6
             for cls in range(numClasses):
-                if (torch.argmax(pred[:,cls+6:],dim=1)==cls).any():
+                if (torch.argmax(pred[:,beforeCls+6:],dim=1)==cls).any():
                     aps.append(0) #but we did for this class :(
                     precisions.append(0)
                 else:
@@ -366,7 +366,7 @@ def computeAP(scores):
                     better+=1
                 elif conf2==conf:
                     equal+=1
-            rank.append(better+math.floor(equal/2.0))
+            rank.append(better+math.ceil(equal/2.0))
     if len(rank)==0:
         return -1
     rank.sort()
@@ -374,4 +374,5 @@ def computeAP(scores):
     for i in range(len(rank)):
         ap += float(i+1)/(rank[i]+1)
     ap/=len(rank)
+    assert(ap<=1)
     return ap

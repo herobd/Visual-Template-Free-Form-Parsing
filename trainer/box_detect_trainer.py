@@ -313,6 +313,10 @@ class BoxDetectTrainer(BaseTrainer):
         numClasses = self.model.numBBTypes
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
+        if self.model.predNumNeighbors:
+            extraPreds=1
+        else:
+            extraPreds=0
 
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
@@ -344,19 +348,19 @@ class BoxDetectTrainer(BaseTrainer):
                     if targetBoxes is not None:
                         targetBoxes = targetBoxes.cpu()
                     for b in range(batchSize):
-                        if self.model.predNumNeighbors:
-                            useOutputBoxes=torch.cat((outputBoxes[b][:,0:6],outputBoxes[b][:,7:]),dim=1)
-                        else:
-                            useOutputBoxes=outputBoxes[b]
+                        #if self.model.predNumNeighbors:
+                        #    useOutputBoxes=torch.cat((outputBoxes[b][:,0:6],outputBoxes[b][:,7:]),dim=1)
+                        #else:
+                        #    useOutputBoxes=outputBoxes[b]
                         if targetBoxes is not None:
                             target_for_b = targetBoxes[b,:targetBoxes_sizes[b],:]
                         else:
                             target_for_b = torch.empty(0)
 
                         if self.model.rotation:
-                            ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBoxes,0.9,numClasses)
+                            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes[b],0.9,numClasses,beforeCls=extraPreds)
                         else:
-                            ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBoxes,0.5,numClasses)
+                            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes[b],0.5,numClasses,beforeCls=extraPreds)
                         mAP += np.array(ap_5,dtype=np.float)#/len(outputBoxes)
                         mRecall += np.array(recall_5,dtype=np.float)#/len(outputBoxes)
                         mPrecision += np.array(prec_5,dtype=np.float)#/len(outputBoxes)

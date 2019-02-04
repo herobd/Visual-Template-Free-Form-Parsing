@@ -32,10 +32,19 @@ class BinaryPairReal(nn.Module):
         
 
         if 'shape_layers' in config:
-            layer_desc = config['shape_layers']
-            layer_desc = [self.numShapeFeats]+layer_desc+['FCnR{}'.format(numRelOut)]
-            layers, last_ch_relC = make_layers(layer_desc,norm=norm,dropout=dropout)
-            self.shape_layers = nn.Sequential(*layers)
+            if type(config['shape_layers']) is list:
+                layer_desc = config['shape_layers']
+                layer_desc = [self.numShapeFeats]+layer_desc+['FCnR{}'.format(numRelOut)]
+                layers, last_ch_relC = make_layers(layer_desc,norm=norm,dropout=dropout)
+                self.shape_layers = nn.Sequential(*layers)
+            else:
+                checkpoint = torch.load(config['shape_layers'])
+                shape_config = checkpoint['config']['model']
+                if 'state_dict' in checkpoint:
+                    self.shape_layers =  eval(checkpoint['config']['arch'])(detector_config)
+                    self.shape_layers.load_state_dict(checkpoint['state_dict'])
+                else:
+                    self.shape_layers = checkpoint['model']
         else:
             self.shape_layers=None
 

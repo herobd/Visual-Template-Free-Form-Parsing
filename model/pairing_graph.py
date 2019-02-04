@@ -78,6 +78,8 @@ class PairingGraph(BaseModel):
            added_featsBB=3+self.numBBTypes
            if self.useShapeFeats!='old':
                added_feats+=4
+           if self.detector.predNumNeighbors:
+               added_feats+=2
         else:
            added_feats=0
            added_featsBB=0
@@ -382,22 +384,25 @@ class PairingGraph(BaseModel):
                     #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
 
             if self.useShapeFeats:
+                shapeFeats[i,4] = bbs[index1,3]/self.normalizeVert
+                shapeFeats[i,6] = bbs[index1,4]/self.normalizeHorz
+                shapeFeats[i,2] = bbs[index1,2]/math.pi
+                shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,extraPred+5:])
+
+                shapeFeats[i,5] = bbs[index2,3]/self.normalizeVert
+                shapeFeats[i,7] = bbs[index2,4]/self.normalizeHorz
+                shapeFeats[i,3] = bbs[index2,2]/math.pi
+                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,extraPred+5:])
+
                 shapeFeats[i,0] = (bbs[index1,0]-bbs[index2,0])/self.normalizeHorz
                 shapeFeats[i,1] = (bbs[index1,1]-bbs[index2,1])/self.normalizeVert
-                shapeFeats[i,2] = bbs[index1,2]/math.pi
-                shapeFeats[i,3] = bbs[index2,2]/math.pi
-                shapeFeats[i,4] = bbs[index1,3]/self.normalizeVert
-                shapeFeats[i,5] = bbs[index2,3]/self.normalizeVert
-                shapeFeats[i,6] = bbs[index1,4]/self.normalizeHorz
-                shapeFeats[i,7] = bbs[index2,4]/self.normalizeHorz
-                shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,5:])
-                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,5:])
                 if self.useShapeFeats!='old':
                     startCorners = 8+self.numBBTypes+self.numBBTypes
                     shapeFeats[i,startCorners +0] = math.sqrt( (tlX[index1]-tlX[index2])**2 + (tlY[index1]-tlY[index2])**2 )
                     shapeFeats[i,startCorners +1] = math.sqrt( (trX[index1]-trX[index2])**2 + (trY[index1]-trY[index2])**2 )
-                    shapeFeats[i,startCorners +2] = math.sqrt( (blX[index1]-blX[index2])**2 + (blY[index1]-blY[index2])**2 )
                     shapeFeats[i,startCorners +3] = math.sqrt( (brX[index1]-brX[index2])**2 + (brY[index1]-brY[index2])**2 )
+                    shapeFeats[i,startCorners +2] = math.sqrt( (blX[index1]-blX[index2])**2 + (blY[index1]-blY[index2])**2 )
+
 
 
         if self.useShapeFeats!='only':

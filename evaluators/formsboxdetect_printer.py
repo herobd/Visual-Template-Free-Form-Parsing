@@ -176,6 +176,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         extraPreds=0
     
     for b in range(batchSize):
+        #outputBBs[b]=torch.cat((outputBBs[b][:,0:6],outputBBs[b][:,7:]),dim=1)
+        #extraPreds=0
+
         if targetBBs is not None:
             target_for_b = targetBBs[b,:targetBBsSizes[b],:]
         else:
@@ -224,16 +227,21 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     rotDiffs=defaultdict(list)
 
 
-
+    allPredNNs=[]
     for b in range(batchSize):
         #print('image {} has {} {}'.format(startIndex+b,targetBBsSizes[name][b],name))
         #bbImage = np.ones_like(image)
         bbs = outputBBs[b]
-        if model.predNumNeighbors:
-            predNN= bbs[:,6]
-            predClass= bbs[:,7:]
+        if bbs.shape[0]>0:
+            if model.predNumNeighbors:
+                predNN= bbs[:,6]
+                allPredNNs+=predNN.tolist()
+                predClass= bbs[:,7:]
+            else:
+                predClass= bbs[:,6:]
         else:
-            predClass= bbs[:,6:]
+            predNN=bbs
+            predVlass=bbs
 
         if 'save_json' in config:
             assert(batchSize==1)
@@ -438,7 +446,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                'prec':precs_5,
                'nn_loss': nn_loss,
              }, 
-             (lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision)
+             (lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision,allPredNNs)
             )
 
 

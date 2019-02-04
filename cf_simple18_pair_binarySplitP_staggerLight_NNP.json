@@ -76,7 +76,8 @@
 
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,
-        "stop_from_gt": 200000
+        "stop_from_gt": 200000,
+        "use_bad_bb_pred_for_rel_loss": true
     },
     "arch": "PairingGraph", 
     "model": {

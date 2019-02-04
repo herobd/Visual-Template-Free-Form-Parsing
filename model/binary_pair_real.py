@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import math
 import json
 from .net_builder import make_layers
+from model.simpleNN import SimpleNN
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 
@@ -41,7 +42,7 @@ class BinaryPairReal(nn.Module):
                 checkpoint = torch.load(config['shape_layers'])
                 shape_config = checkpoint['config']['model']
                 if 'state_dict' in checkpoint:
-                    self.shape_layers =  eval(checkpoint['config']['arch'])(detector_config)
+                    self.shape_layers =  eval(checkpoint['config']['arch'])(shape_config)
                     self.shape_layers.load_state_dict(checkpoint['state_dict'])
                 else:
                     self.shape_layers = checkpoint['model']

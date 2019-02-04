@@ -126,12 +126,16 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         if index is None:
 
 
-            trainDir = os.path.join(saveDir,'train_'+config['name'])
-            validDir = os.path.join(saveDir,'valid_'+config['name'])
-            if not os.path.isdir(trainDir):
-                os.mkdir(trainDir)
-            if not os.path.isdir(validDir):
-                os.mkdir(validDir)
+            if saveDir is not None:
+                trainDir = os.path.join(saveDir,'train_'+config['name'])
+                validDir = os.path.join(saveDir,'valid_'+config['name'])
+                if not os.path.isdir(trainDir):
+                    os.mkdir(trainDir)
+                if not os.path.isdir(validDir):
+                    os.mkdir(validDir)
+            else:
+                trainDir=None
+                validDir=None
 
             val_metrics_sum = np.zeros(len(metrics))
             val_metrics_list = defaultdict(lambda: defaultdict(list))
@@ -158,6 +162,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
             #else:
 
             ####
+            if 'save_nns' in config:
+                nns=[]
             curVI=0
 
             for index in range(0,numberOfImages,step*batchSize):
@@ -171,7 +177,9 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         #output = output.cpu().data.numpy()
                         #target = target.data.numpy()
                         #metricsO = _eval_metrics_ind(metrics,output, target)
-                        saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
+                        _,aux=saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
+                        if 'save_nns' in config:
+                            nns+=aux[-1]
                 
                 for validIndex in range(index,index+step*vBatchSize, vBatchSize):
                     if validIndex/vBatchSize < len(valid_data_loader):
@@ -184,7 +192,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         #output = output.cpu().data.numpy()
                         #target = target.data.numpy()
                         #metricsO = _eval_metrics_ind(metrics,output, target)
-                        metricsO,_ = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
+                        metricsO,aux = saveFunc(config,valid_iter.next(),model,gpu,metrics,validDir,validIndex)
                         if type(metricsO) == dict:
                             for typ,typeLists in metricsO.items():
                                 if type(typeLists) == dict:
@@ -228,6 +236,10 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                 print('{} overall mean: {}, std {}'.format(typ,np.mean(val_comb_metrics[typ],axis=0), np.std(val_comb_metrics[typ],axis=0)))
                 for name, typeLists in val_metrics_list[typ].items():
                     print('{} {} mean: {}, std {}'.format(typ,name,np.mean(typeLists,axis=0),np.std(typeLists,axis=0)))
+
+            if 'save_nns' in config:
+                import pickle
+                pickle.dump(nns,open(config['save_nns'],'wb'))
 
         elif type(index)==int:
             if index>0:
@@ -303,8 +315,8 @@ if __name__ == '__main__':
             addtoconfig.append(split2)
 
     config = None
-    if args.checkpoint is None or args.savedir is None:
-        print('Must provide checkpoint (with -c) and save dir (with -d)')
+    if args.checkpoint is None:
+        print('Must provide checkpoint (with -c)')
         exit()
 
     index = args.index

@@ -32,6 +32,10 @@ def collate(batch):
     bb_sizes=[]
     bb_dim=None
     line_dim=None
+    if len(batch)==1:
+        pairs = batch[0]['pairs']
+    else:
+        pairs = None
     for b in batch:
         if b is None:
             continue
@@ -160,7 +164,8 @@ def collate(batch):
         "point_label_sizes": point_label_sizes,
         'pixel_gt': pixel_gt,
         "imgName": imageNames,
-        "scale": scales
+        "scale": scales,
+        'pairs': pairs #this is only used to save a new json
     }
 
 
@@ -177,7 +182,7 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         #    self.augmentation_params=None
         self.rotate = config['rotation'] if 'rotation' in config else True
         #patchSize=config['patch_size']
-        if 'crop_params' in config:
+        if 'crop_params' in config and config['crop_params']:
             self.transform = CropBoxTransform(config['crop_params'],self.rotate)
         else:
             self.transform = None
@@ -259,10 +264,11 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))
         
 
-        bbs,line_gts,point_gts,pixel_gt,numClasses,numNeighbors = self.parseAnn(np_img,annotations,s,imagePath)
+        bbs,line_gts,point_gts,pixel_gt,numClasses,numNeighbors,pairs = self.parseAnn(np_img,annotations,s,imagePath)
 
         ##ticTr=timeit.default_timer()
         if self.transform is not None:
+            pairs = None
             out, cropPoint = self.transform({
                 "img": np_img,
                 "bb_gt": bbs,
@@ -337,7 +343,8 @@ class BoxDetectDataset(torch.utils.data.Dataset):
                 "pixel_gt": pixel_gt,
                 "imgName": imageName,
                 "scale": s,
-                "cropPoint": cropPoint
+                "cropPoint": cropPoint,
+                "pairs": pairs
                 }
         else:
             if 'boxes' not in self.only_types or not self.only_types['boxes']:
@@ -395,7 +402,8 @@ class BoxDetectDataset(torch.utils.data.Dataset):
                 "pixel_gt": pixel_gtR,
                 "imgName": imageName,
                 "scale": s,
-                "cropPoint": cropPoint
+                "cropPoint": cropPoint,
+                "pairs": pairs,
                 }
 
 

@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import math
 import json
 from .net_builder import make_layers
+from model.simpleNN import SimpleNN
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 
@@ -32,10 +33,31 @@ class BinaryPairReal(nn.Module):
         
 
         if 'shape_layers' in config:
-            layer_desc = config['shape_layers']
-            layer_desc = [self.numShapeFeats]+layer_desc+['FCnR{}'.format(numRelOut)]
-            layers, last_ch_relC = make_layers(layer_desc,norm=norm,dropout=dropout)
-            self.shape_layers = nn.Sequential(*layers)
+            if type(config['shape_layers']) is list:
+                layer_desc = config['shape_layers']
+                layer_desc = [self.numShapeFeats]+layer_desc+['FCnR{}'.format(numRelOut)]
+                layers, last_ch_relC = make_layers(layer_desc,norm=norm,dropout=dropout)
+                self.shape_layers = nn.Sequential(*layers)
+                self.frozen_shape_layers=False
+            else:
+                checkpoint = torch.load(config['shape_layers'])
+                shape_config = checkpoint['config']['model']
+                if 'state_dict' in checkpoint:
+                    self.shape_layers =  eval(checkpoint['config']['arch'])(shape_config)
+                    self.shape_layers.load_state_dict(checkpoint['state_dict'])
+                else:
+                    self.shape_layers = checkpoint['model']
+                for param in self.shape_layers.parameters():
+                    param.requires_grad=False
+                self.frozen_shape_layers=True
+            if 'weight_split' in config:
+                if type(config['weight_split']) is float:
+                    init = config['weight_split']
+                else:
+                    init = 0.5
+                self.split_weighting = nn.Parameter(torch.tensor(init, requires_grad=True))
+            else:
+                self.split_weighting = None
         else:
             self.shape_layers=None
 
@@ -44,8 +66,14 @@ class BinaryPairReal(nn.Module):
     def forward(self, node_features, adjacencyMatrix, numBBs):
         res = self.layers(node_features)
         if self.shape_layers is not None:
+            if self.frozen_shape_layers:
+                self.shape_layers.eval()
             res2 = self.shape_layers(node_features[:,-self.numShapeFeats:])
-            res = (res+res2)/2
+            if self.split_weighting is None:
+                res = (res+res2)/2
+            else:
+                weight = self.split_weighting.clamp(0,1)
+                res = weight*res + (1-weight)*res2
         return None,res
 
 

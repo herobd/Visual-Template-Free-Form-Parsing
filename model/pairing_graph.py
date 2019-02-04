@@ -67,21 +67,24 @@ class PairingGraph(BaseModel):
         if 'use_rel_shape_feats' in config:
              config['use_shape_feats'] =  config['use_rel_shape_feats']
         self.useShapeFeats= config['use_shape_feats'] if 'use_shape_feats' in config else False
-        #HACK, fixed values
+        #TODO HACK, fixed values
         self.normalizeHorz=400
         self.normalizeVert=50
+        self.normalizeDist=(self.normalizeHorz+self.normalizeVert)/2
 
         assert(self.detector.scale[0]==self.detector.scale[1])
         detect_scale = self.detector.scale[0]
         if self.useShapeFeats:
-           added_feats=8+2*self.numBBTypes #we'll append some extra feats
-           added_featsBB=3+self.numBBTypes
+           self.numShapeFeats=8+2*self.numBBTypes #we'll append some extra feats
+           self.numShapeFeatsBB=3+self.numBBTypes
            if self.useShapeFeats!='old':
-               added_feats+=4
+               self.numShapeFeats+=4
+           if self.detector.predNumNeighbors:
+               self.numShapeFeats+=2
         else:
-           added_feats=0
-           added_featsBB=0
-        config['graph_config']['num_shape_feats']=added_feats
+           self.numShapeFeats=0
+           self.numShapeFeatsBB=0
+        config['graph_config']['num_shape_feats']=self.numShapeFeats
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if self.useShapeFeats!='only':
             self.pool_h = config['featurizer_start_h']
@@ -115,9 +118,9 @@ class PairingGraph(BaseModel):
             fsizeY = self.pool_h//scaleY
             layers, last_ch_relC = make_layers(featurizer_conv,norm=feat_norm,dropout=True) 
             if featurizer_fc is None: #we don't have a FC layer, so channels need to be the same as graph model expects
-                if last_ch_relC+added_feats!=graph_in_channels:
-                    new_layer = [last_ch_relC,'k1-{}'.format(graph_in_channels-added_feats)]
-                    print('WARNING: featurizer_conv did not line up with graph_in_channels, adding layer k1-{}'.format(graph_in_channels-added_feats))
+                if last_ch_relC+self.numShapeFeats!=graph_in_channels:
+                    new_layer = [last_ch_relC,'k1-{}'.format(graph_in_channels-self.numShapeFeats)]
+                    print('WARNING: featurizer_conv did not line up with graph_in_channels, adding layer k1-{}'.format(graph_in_channels-self.numShapeFeats))
                     new_layer, last_ch_relC = make_layers(new_layer,norm=feat_norm,dropout=True) 
                     layers+=new_layer
             layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
@@ -128,7 +131,7 @@ class PairingGraph(BaseModel):
         if config['graph_config']['arch'][:10]=='BinaryPair':
             feat_norm=None
         if featurizer_fc is not None:
-            featurizer_fc = [last_ch_relC+added_feats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
+            featurizer_fc = [last_ch_relC+self.numShapeFeats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
             layers, last_ch_rel = make_layers(featurizer_fc,norm=feat_norm,dropout=True) 
             self.relFeaturizerFC = nn.Sequential(*layers)
         else:
@@ -142,7 +145,7 @@ class PairingGraph(BaseModel):
             if len(featurizer)>0:
                 convOut=featurizer[0]
             else:
-                convOut=graph_in_channels-added_featsBB
+                convOut=graph_in_channels-self.numShapeFeatsBB
             self.bbFeaturizerConv = nn.Sequential( 
                     nn.Conv2d(self.detector.last_channels,convOut,kernel_size=(2,3)),
                     #nn.GroupNorm(getGroupSize(convOut),convOut)
@@ -176,7 +179,7 @@ class PairingGraph(BaseModel):
             print('Unfroze detector')
         
 
-    def forward(self, image, gtBBs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
+    def forward(self, image, gtBBs=None, gtNNs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
         ##tic=timeit.default_timer()
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
@@ -222,7 +225,12 @@ class PairingGraph(BaseModel):
                 pos = torch.rand_like(classes)/2 +0.5
                 neg = torch.rand_like(classes)/2
                 classes = torch.where(classes==0,neg,pos)
-                useBBs = torch.cat((useBBs,classes),dim=1)
+                if self.detector.predNumNeighbors:
+                    nns = gtNNs.float()[0,:,None]
+                    nns += torch.rand_like(nns)/1.5
+                    useBBs = torch.cat((useBBs,nns,classes),dim=1)
+                else:
+                    useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>1:
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
             bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,final_features,image.size(-2),image.size(-1), debug_image=None)
@@ -335,11 +343,7 @@ class PairingGraph(BaseModel):
                 numMasks=2
             masks = torch.zeros(stackedEdgeFeatWindows.size(0),numMasks,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
         if self.useShapeFeats:
-            if self.useShapeFeats!='old':
-                numFeats=8+4
-            else:
-                numFeats=8
-            shapeFeats = torch.FloatTensor(len(candidates),numFeats+2*self.numBBTypes)
+            shapeFeats = torch.FloatTensor(len(candidates),self.numShapeFeats)
 
         for i,(index1, index2) in enumerate(candidates):
             if self.useShapeFeats!='only':
@@ -382,22 +386,40 @@ class PairingGraph(BaseModel):
                     #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
 
             if self.useShapeFeats:
-                shapeFeats[i,0] = (bbs[index1,0]-bbs[index2,0])/self.normalizeHorz
-                shapeFeats[i,1] = (bbs[index1,1]-bbs[index2,1])/self.normalizeVert
-                shapeFeats[i,2] = bbs[index1,2]/math.pi
-                shapeFeats[i,3] = bbs[index2,2]/math.pi
-                shapeFeats[i,4] = bbs[index1,3]/self.normalizeVert
-                shapeFeats[i,5] = bbs[index2,3]/self.normalizeVert
-                shapeFeats[i,6] = bbs[index1,4]/self.normalizeHorz
-                shapeFeats[i,7] = bbs[index2,4]/self.normalizeHorz
-                shapeFeats[i,8:8+self.numBBTypes] = torch.sigmoid(bbs[index1,-self.numBBTypes:])
-                shapeFeats[i,8+self.numBBTypes:8+self.numBBTypes+self.numBBTypes] = torch.sigmoid(bbs[index2,-self.numBBTypes:])
+                if self.detector.predNumNeighbors:
+                    extraPred=1
+                else:
+                    extraPred=0
+                if type(self.pairer.shape_layers) is not nn.Sequential:
+                    #The index specification is to allign with the format feat nets are trained with
+                    ixs=[0,1,2,3,3+self.numBBTypes,3+self.numBBTypes,4+self.numBBTypes,5+self.numBBTypes,6+self.numBBTypes,6+2*self.numBBTypes,6+2*self.numBBTypes,7+2*self.numBBTypes]
+                else:
+                    ixs=[4,6,2,8,8+self.numBBTypes,5,7,3,8+self.numBBTypes,8+self.numBBTypes+self.numBBTypes,0,1]
+                shapeFeats[i,ixs[0]] = bbs[index1,3]/self.normalizeVert
+                shapeFeats[i,ixs[1]] = bbs[index1,4]/self.normalizeHorz
+                shapeFeats[i,ixs[2]] = bbs[index1,2]/math.pi
+                shapeFeats[i,ixs[3]:ixs[4]] = torch.sigmoid(bbs[index1,extraPred+5:])
+
+                shapeFeats[i,ixs[5]] = bbs[index2,3]/self.normalizeVert
+                shapeFeats[i,ixs[6]] = bbs[index2,4]/self.normalizeHorz
+                shapeFeats[i,ixs[7]] = bbs[index2,2]/math.pi
+                shapeFeats[i,ixs[8]:ixs[9]] = torch.sigmoid(bbs[index2,extraPred+5:])
+
+                shapeFeats[i,ixs[10]] = (bbs[index1,0]-bbs[index2,0])/self.normalizeHorz
+                shapeFeats[i,ixs[11]] = (bbs[index1,1]-bbs[index2,1])/self.normalizeVert
                 if self.useShapeFeats!='old':
                     startCorners = 8+self.numBBTypes+self.numBBTypes
-                    shapeFeats[i,startCorners +0] = math.sqrt( (tlX[index1]-tlX[index2])**2 + (tlY[index1]-tlY[index2])**2 )
-                    shapeFeats[i,startCorners +1] = math.sqrt( (trX[index1]-trX[index2])**2 + (trY[index1]-trY[index2])**2 )
-                    shapeFeats[i,startCorners +2] = math.sqrt( (blX[index1]-blX[index2])**2 + (blY[index1]-blY[index2])**2 )
-                    shapeFeats[i,startCorners +3] = math.sqrt( (brX[index1]-brX[index2])**2 + (brY[index1]-brY[index2])**2 )
+                    shapeFeats[i,startCorners +0] = math.sqrt( (tlX[index1]-tlX[index2])**2 + (tlY[index1]-tlY[index2])**2 )/self.normalizeDist
+                    shapeFeats[i,startCorners +1] = math.sqrt( (trX[index1]-trX[index2])**2 + (trY[index1]-trY[index2])**2 )/self.normalizeDist
+                    shapeFeats[i,startCorners +3] = math.sqrt( (brX[index1]-brX[index2])**2 + (brY[index1]-brY[index2])**2 )/self.normalizeDist
+                    shapeFeats[i,startCorners +2] = math.sqrt( (blX[index1]-blX[index2])**2 + (blY[index1]-blY[index2])**2 )/self.normalizeDist
+                    startNN =startCorners+4
+                else:
+                    startNN = 8+self.numBBTypes+self.numBBTypes
+                if self.detector.predNumNeighbors:
+                    shapeFeats[i,startNN +0] = bbs[index1,5]
+                    shapeFeats[i,startNN +1] = bbs[index2,5]
+
 
 
         if self.useShapeFeats!='only':

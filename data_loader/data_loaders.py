@@ -66,6 +66,13 @@ def getDataLoader(config,split):
         data_dir = config['data_loader']['data_dir']
         batch_size = config['data_loader']['batch_size']
         valid_batch_size = config['validation']['batch_size'] if 'batch_size' in config['validation'] else batch_size
+
+        #copy info from main dataloader to validation (but don't overwrite)
+        #helps insure same data
+        for k,v in config['data_loader'].items():
+            if k not in config['validation']:
+                config['validation'][k]=v
+
         if 'augmentation_params' in config['data_loader']:
             aug_param = config['data_loader']['augmentation_params']
         else:

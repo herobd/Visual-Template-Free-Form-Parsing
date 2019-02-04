@@ -199,11 +199,11 @@ def allBoxDistNeg(boxes1,boxes2):
     return dist*-1
  
 #input is tensors of shape [instance,(conf,x,y,rot,h,w)]
-def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False):
-    return AP_(target,pred,iou_thresh,numClasses,ignoreClasses,allIOU)
-def AP_dist(target,pred,dist_thresh,numClasses=2,ignoreClasses=False):
-    return AP_(target,pred,-dist_thresh,numClasses,ignoreClasses,allBoxDistNeg)
-def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
+def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False,beforeCls=0):
+    return AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,allIOU)
+def AP_dist(target,pred,dist_thresh,numClasses=2,ignoreClasses=False,beforeCls=0):
+    return AP_(target,pred,-dist_thresh,numClasses,ignoreClasses,beforeCls,allBoxDistNeg)
+def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
     #mAP=0.0
     aps=[]
     precisions=[]
@@ -224,7 +224,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
         else:
             #numClasses=pred.size(1)-6
             for cls in range(numClasses):
-                if (torch.argmax(pred[:,cls+6:],dim=1)==cls).any():
+                if (torch.argmax(pred[:,beforeCls+6:],dim=1)==cls).any():
                     aps.append(0) #but we did for this class :(
                     precisions.append(0)
                 else:
@@ -244,7 +244,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
         clsTargInd = target[:,cls+13]==1
         if len(pred.size())>1 and pred.size(0)>0:
             #print(pred.size())
-            clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
+            clsPredInd = torch.argmax(pred[:,beforeCls+6:],dim=1)==cls
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if (ignoreClasses and pred.size(0)>0) or (clsTargInd.any() and clsPredInd.any()):
@@ -303,12 +303,12 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,getLoc):
     return aps, precisions, recalls
 
 
-def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses):
-    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,allIOU)
-def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses):
-    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,allBoxDistNeg)
+def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allIOU)
+def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses,beforeCls=0):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allBoxDistNeg)
 
-def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
+def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc):
     targIndex = torch.LongTensor((pred.size(0)))
     targIndex[:] = -1
     #mAP=0.0
@@ -330,13 +330,14 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,getLoc):
     hits = allIOUs>iou_thresh
     allIOUs *= hits.float()
 
+
     for cls in range(numClasses):
         scores=[]
         clsTargInd = target[:,cls+13]==1
         notClsTargInd = target[:,cls+13]!=1
         if len(pred.size())>1 and pred.size(0)>0:
             #print(pred.size())
-            clsPredInd = torch.argmax(pred[:,6:],dim=1)==cls
+            clsPredInd = torch.argmax(pred[:,beforeCls+6:],dim=1)==cls
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if  clsPredInd.any():
@@ -365,7 +366,7 @@ def computeAP(scores):
                     better+=1
                 elif conf2==conf:
                     equal+=1
-            rank.append(better+math.floor(equal/2.0))
+            rank.append(better+math.ceil(equal/2.0))
     if len(rank)==0:
         return -1
     rank.sort()
@@ -373,4 +374,5 @@ def computeAP(scores):
     for i in range(len(rank)):
         ap += float(i+1)/(rank[i]+1)
     ap/=len(rank)
+    assert(ap<=1)
     return ap

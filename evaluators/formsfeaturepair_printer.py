@@ -63,7 +63,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     label = instance['label']
     relNodeIds = instance['nodeIds']
     gtNumNeighbors=instance['numNeighbors']+1
-
+    useDataNN = ('optimize' in config and config['optimize']=='data') or ('nn_from_data' in config and config['nn_from_data'])
 
     if 'rule' in config:
         if config['rule']=='closest':
@@ -132,72 +132,79 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             thresh+=0.01
         newIds=[]
         newLabel=label[keep]
-        if config['optimize']=='blind':
-            idNum=0
-            numIds=[]
-            idNumMap={}
-            for index,(id1,id2) in enumerate(relNodeIds):
-                if keep[index]:
-                    if id1 not in idNumMap:
-                        idNumMap[id1]=idNum
-                        idNum+=1
-                    if id2 not in idNumMap:
-                        idNumMap[id2]=idNum
-                        idNum+=1
-                    numIds.append( [idNumMap[id1],idNumMap[id2]] )
-            print('size being optimized: {}'.format(newPred.size(0)))
-            pred[keep] *= torch.from_numpy( optimizeRelationshipsBlind(newPred,numIds) ).float()
-        elif predNN is not None and config['optimize']!='gt' and config['optimize']!='gt_noisy':
-            idMap={}
-            newId=0
-            numIds=[]
-            numNeighbors=[]
-            for index,(id1,id2) in enumerate(newNodeIds):
-                if keep[index]:
-                    if id1 not in idMap:
-                        idMap[id1]=newId
-                        numNeighbors.append(predNN[id1])
-                        newId+=1
-                    if id2 not in idMap:
-                        idMap[id2]=newId
-                        numNeighbors.append(predNN[id2])
-                        newId+=1
-                    numIds.append( [idMap[id1],idMap[id2]] )
-            assert((newPred.size(0))<700)
-            print('size being optimized soft: {}'.format(newPred.size(0)))
-            pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors) ).float()
-        else:
-            for i in range(keep.size(0)):
-                if keep[i]:
-                    newIds.append(relNodeIds[i])
-            
-            numNeighborsD=defaultdict(lambda: 0)
-            i=0
-            for id1,id2 in newIds:
-                if newLabel[i]:
-                    numNeighborsD[id1]+=1
-                    numNeighborsD[id2]+=1
-                else:
-                    numNeighborsD[id1]+=0
-                    numNeighborsD[id2]+=0
-                i+=1
-            numNeighbors=[0]*len(numNeighborsD)
-            idNum=0
-            idNumMap={}
-            numIds=[]
-            for id,count in numNeighborsD.items():
-                if config['optimize']=='gt_noisy':
-                    numNeighbors[idNum]=random.gauss(count,0.5)
-                else:
-                    numNeighbors[idNum]=count
-                idNumMap[id]=idNum
-                idNum+=1
-            numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
-            print('size being optimized: {}'.format(newPred.size(0)))
-            if config['optimize']=='gt_noisy':
+        if newPred.size(0)>0:
+            if config['optimize']=='blind':
+                idNum=0
+                numIds=[]
+                idNumMap={}
+                for index,(id1,id2) in enumerate(relNodeIds):
+                    if keep[index]:
+                        if id1 not in idNumMap:
+                            idNumMap[id1]=idNum
+                            idNum+=1
+                        if id2 not in idNumMap:
+                            idNumMap[id2]=idNum
+                            idNum+=1
+                        numIds.append( [idNumMap[id1],idNumMap[id2]] )
+                print('size being optimized: {}'.format(newPred.size(0)))
+                pred[keep] *= torch.from_numpy( optimizeRelationshipsBlind(newPred,numIds) ).float()
+            elif (predNN is not None or useDataNN) and config['optimize']!='gt' and config['optimize']!='gt_noisy':
+                idMap={}
+                newId=0
+                numIds=[]
+                numNeighbors=[]
+                for index,(id1,id2) in enumerate(newNodeIds):
+                    if keep[index]:
+                        if id1 not in idMap:
+                            idMap[id1]=newId
+                            if useDataNN:
+                                numNeighbors.append(data[index,-2])
+                            else:
+                                numNeighbors.append(predNN[id1])
+                            newId+=1
+                        if id2 not in idMap:
+                            idMap[id2]=newId
+                            if useDataNN:
+                                numNeighbors.append(data[index,-1])
+                            else:
+                                numNeighbors.append(predNN[id2])
+                            newId+=1
+                        numIds.append( [idMap[id1],idMap[id2]] )
+                assert((newPred.size(0))<700)
+                print('size being optimized soft: {}'.format(newPred.size(0)))
                 pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors) ).float()
             else:
-                pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors) ).float()
+                for i in range(keep.size(0)):
+                    if keep[i]:
+                        newIds.append(relNodeIds[i])
+                
+                numNeighborsD=defaultdict(lambda: 0)
+                i=0
+                for id1,id2 in newIds:
+                    if newLabel[i]:
+                        numNeighborsD[id1]+=1
+                        numNeighborsD[id2]+=1
+                    else:
+                        numNeighborsD[id1]+=0
+                        numNeighborsD[id2]+=0
+                    i+=1
+                numNeighbors=[0]*len(numNeighborsD)
+                idNum=0
+                idNumMap={}
+                numIds=[]
+                for id,count in numNeighborsD.items():
+                    if config['optimize']=='gt_noisy':
+                        numNeighbors[idNum]=random.gauss(count,0.5)
+                    else:
+                        numNeighbors[idNum]=count
+                    idNumMap[id]=idNum
+                    idNum+=1
+                numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
+                print('size being optimized: {}'.format(newPred.size(0)))
+                if config['optimize']=='gt_noisy':
+                    pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors) ).float()
+                else:
+                    pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors) ).float()
 
 
         pred[1-keep] *= 0
@@ -293,6 +300,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
              { 
                'recall':[recall],
                'prec':[prec],
+               'f-m':[(prec+recall)/2],
                'AP':[ap],
              }, 
              (recall, prec,ap)

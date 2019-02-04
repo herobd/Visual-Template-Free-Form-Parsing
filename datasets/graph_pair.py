@@ -34,7 +34,7 @@ class GraphPairDataset(torch.utils.data.Dataset):
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else False
         #patchSize=config['patch_size']
-        if 'crop_params' in config:
+        if 'crop_params' in config and config['crop_params'] is not None:
             self.transform = CropBoxTransform(config['crop_params'],self.rotate)
         else:
             self.transform = None

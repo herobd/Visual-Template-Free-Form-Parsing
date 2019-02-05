@@ -62,7 +62,7 @@
         "class": "GraphPairTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 10000,
+        "val_step": 5000,
         "save_step": 50000,
         "save_step_minor": 250,
         "log_step": 250,

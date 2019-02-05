@@ -69,9 +69,9 @@ class GraphPairTrainer(BaseTrainer):
 
         self.useBadBBPredForRelLoss = config['trainer']['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
 
-        self.adaptLR = config['adapt_lr'] if 'adapt_lr' in config else False
-        self.adaptLR_base = config['adapt_lr_base'] if 'adapt_lr_base' in config else 165 #roughly average number of rels
-        self.adaptLR_ep = config['adapt_lr_ep'] if 'adapt_lr_ep' in config else 15
+        self.adaptLR = config['trainer']['adapt_lr'] if 'adapt_lr' in config else False
+        self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config else 165 #roughly average number of rels
+        self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config else 15
 
         #Name change
         if 'edge' in self.lossWeights:

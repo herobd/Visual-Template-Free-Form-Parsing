@@ -39,7 +39,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.008,
+        "lr": 0.001,
         "weight_decay": 0
     },
     "loss": {
@@ -88,11 +88,11 @@
         "use_rel_rel_edges": false,
         "graph_config": {
             "arch": "GraphNet",
-            "in_channels": 128,
+            "in_channels": 64,
             "bb_out": 0,
             "rel_out": 1,
             "repetitions": 1,
-            "num_trans": 4,
+            "num_trans": 3,
             "num_heads": 4
         },
         "featurizer_start_h": 0,

@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import math
 import json
-from .graphconvolution import GraphConvolution, GraphResConv, GraphConvWithAct
+from .graphconvolution import GraphResConv, GraphConvWithAct, GraphTransformerBlock
 from .net_builder import getGroupSize
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
@@ -17,19 +17,53 @@ class GraphNet(nn.Module):
         #how many times to re-apply graph conv layers
         self.repetitions = config['repetitions'] if 'repetitions' in config else 1 
 
-        layer_desc = config['layers'] if 'layers' in config else [256,256,256]
+        self.split_normBB=None
+        act_layers = []
+
         prevCh=config['in_channels']
-        if self.repetitions>1:
-            for n in layer_desc:
-                assert(n==prevCh)
-        self.layers=nn.ModuleList()
-        for ch in layer_desc:
-            if type(self.useRes)==str and 'layer' in self.useRes:
-                assert(prevCh==ch)
-                self.layers.append( GraphResConv(prevCh,config['norm'],config['dropout']) )
-            else:
-                self.layers.append( GraphConvWithAct(prevCh,ch,config['norm'],config['dropout']) )
-            prevCh=ch
+        if 'layers' in config:
+            layer_desc = config['layers'] 
+            if self.repetitions>1:
+                for n in layer_desc:
+                    assert(n==prevCh)
+            self.layers=nn.ModuleList()
+            for ch in layer_desc:
+                if type(self.useRes)==str and 'layer' in self.useRes:
+                    assert(prevCh==ch)
+                    self.layers.append( GraphResConv(prevCh,config['norm'],config['dropout']) )
+                else:
+                    self.layers.append( GraphConvWithAct(prevCh,ch,config['norm'],config['dropout']) )
+                prevCh=ch
+            if 'norm' in config:
+                if config['norm']=='batch_norm':
+                    act_layers.append(nn.BatchNorm1d(prevCh)) #essentially all the nodes compose a batch
+                elif config['norm']=='group_norm':
+                    act_layers.append(nn.GroupNorm(getGroupSize(prevCh),prevCh)) 
+                elif config['norm']=='split_norm':
+                    #act_layers.append(nn.InstanceNorm1d(prevCh))
+                    self.split_normBB = nn.GroupNorm(getGroupSize(prevCh),prevCh)
+                    self.split_normRel = nn.GroupNorm(getGroupSize(prevCh),prevCh)
+            if 'dropout' in config:
+                if type(config['dropout']) is float:
+                    act_layers.append(nn.Dropout(p=config['dropout'],inplace=True))
+                elif config['dropout']:
+                    act_layers.append(nn.Dropout(p=0.3,inplace=True))
+        else:
+            self.layers=None
+            #Transformers!
+            num_feats = config['in_channels']#config['trans_features']
+            num_layers = config['num_trans']
+            num_heads = config['num_heads']
+            num_ffnn_layers = config['num_ffnn_layers'] if 'num_ffnn_layers' in config else 2
+            num_ffnn_feats = config['num_ffnn_feats'] if 'num_ffnn_feats' in config else num_feats
+            layers = [ GraphTransformerBlock(num_feats,num_heads,num_ffnn_layers,num_ffnn_feats) for i in range(num_layers)]
+            self.transformers = nn.Sequential(*layers)
+            act_layers.append(nn.Dropout(p=0.05,inplace=True))
+        act_layers.append(nn.ReLU(inplace=True))
+            
+
+        self.act_layers = nn.Sequential(*act_layers)
+
         numBBOut = config['bb_out'] if 'bb_out' in config else 0
         numRelOut = config['rel_out'] if 'rel_out' in config else 1
 
@@ -42,38 +76,25 @@ class GraphNet(nn.Module):
         else:
             self.rel_out=lambda x:  None
 
-        self.split_normBB=None
-        act_layers = []
-        if 'norm' in config:
-            if config['norm']=='batch_norm':
-                act_layers.append(nn.BatchNorm1d(prevCh)) #essentially all the nodes compose a batch
-            elif config['norm']=='group_norm':
-                act_layers.append(nn.GroupNorm(getGroupSize(prevCh),prevCh)) 
-            elif config['norm']=='split_norm':
-                #act_layers.append(nn.InstanceNorm1d(prevCh))
-                self.split_normBB = nn.GroupNorm(getGroupSize(prevCh),prevCh)
-                self.split_normRel = nn.GroupNorm(getGroupSize(prevCh),prevCh)
-        if 'dropout' in config:
-            if type(config['dropout']) is float:
-                act_layers.append(nn.Dropout(p=config['dropout'],inplace=True))
-            elif config['dropout']:
-                act_layers.append(nn.Dropout(p=0.3,inplace=True))
-        act_layers.append(nn.ReLU(inplace=True))
-        self.act_layers = nn.Sequential(*act_layers)
 
 
     def forward(self, node_features, adjacencyMatrix, numBBs):
 
         #it is assumed these features are not activated
         node_featuresX = node_features
+        if self.layers is None:
+            adjacencyMatrix = adjacencyMatrix[0].to_dense()
         for i in range(self.repetitions):
-            side=node_featuresX
-            for graph_conv in self.layers:
-                side = graph_conv(side,adjacencyMatrix,numBBs)
-            if type(self.useRes)==str and 'loop' in self.useRes:
-                node_featuresX=side+node_featuresX
+            if self.layers is not None:
+                side=node_featuresX
+                for graph_conv in self.layers:
+                    side = graph_conv(side,adjacencyMatrix,numBBs)
+                if type(self.useRes)==str and 'loop' in self.useRes:
+                    node_featuresX=side+node_featuresX
+                else:
+                    node_featuresX=side
             else:
-                node_featuresX=side
+                node_featuresX,_,_ = self.transformers((node_featuresX,adjacencyMatrix,numBBs))
         #the graph conv layers are residual, so activation is applied here
         if self.split_normBB is not None:
             bb = self.split_normBB(node_featuresX[:numBBs])

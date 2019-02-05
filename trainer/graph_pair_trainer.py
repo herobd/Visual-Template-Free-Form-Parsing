@@ -69,6 +69,10 @@ class GraphPairTrainer(BaseTrainer):
 
         self.useBadBBPredForRelLoss = config['trainer']['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
 
+        self.adaptLR = config['adapt_lr'] if 'adapt_lr' in config else False
+        self.adaptLR_base = config['adapt_lr_base'] if 'adapt_lr_base' in config else 165 #roughly average number of rels
+        self.adaptLR_ep = config['adapt_lr_ep'] if 'adapt_lr_ep' in config else 15
+
         #Name change
         if 'edge' in self.lossWeights:
             self.lossWeights['rel'] = self.lossWeights['edge']
@@ -253,6 +257,12 @@ class GraphPairTrainer(BaseTrainer):
         else:
             boxLoss = 0
         if loss is not None:
+            if self.adaptLR:
+                #if we only have a few relationship preds, step smaller so that we don't skew with a bad bias
+                #This effects the box loss too so that it doesn't yank the detector/backbone features around
+                #we actually just scale the loss, but its all the same :)
+                scale = (numEdgePred+self.adaptLR_ep)/(self.adaptLR_ep+self.adaptLR_base)
+                loss *= scale
             loss.backward()
 
             torch.nn.utils.clip_grad_value_(self.model.parameters(),1)

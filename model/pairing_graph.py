@@ -82,6 +82,7 @@ class PairingGraph(BaseModel):
                self.numShapeFeats+=4
            if self.detector.predNumNeighbors:
                self.numShapeFeats+=2
+               self.numShapeFeatsBB+=1
         else:
            self.numShapeFeats=0
            self.numShapeFeatsBB=0
@@ -127,7 +128,7 @@ class PairingGraph(BaseModel):
         else:
             last_ch_relC=0
 
-        if config['graph_config']['arch'][:10]=='BinaryPair':
+        if config['graph_config']['arch'][:10]=='BinaryPair' or self.useShapeFeats=='only':
             feat_norm=None
         if featurizer_fc is not None:
             featurizer_fc = [last_ch_relC+self.numShapeFeats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
@@ -140,22 +141,28 @@ class PairingGraph(BaseModel):
             #TODO un-hardcode
             #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
             #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
-            featurizer = config['node_featurizer'] if 'node_featurizer' in config else []
-            if len(featurizer)>0:
-                convOut=featurizer[0]
+            #featurizer = config['bb_featurizer'] if 'bb_featurizer' in config else []
+            featurizer_fc = config['bb_featurizer_fc'] if 'bb_featurizer_fc' in config else None
+            if self.useShapeFeats!='only':
+                if featurizer_fc is None:
+                    convOut=graph_in_channels-self.numShapeFeatsBB
+                else:
+                    convOut=featurizer_fc[0]-self.numShapeFeatsBB
+                convlayers = [ nn.Conv2d(self.detector.last_channels,convOut,kernel_size=(2,3)) ]
+                if featurizer_fc is not None:
+                    convlayers+=[   nn.GroupNorm(getGroupSize(convOut),convOut),
+                                    nn.Dropout2d(p=0.1,inplace=True),
+                                    nn.ReLU(inplace=True)
+                                ]
+                self.bbFeaturizerConv = nn.Sequential(*convlayers)
             else:
-                convOut=graph_in_channels-self.numShapeFeatsBB
-            self.bbFeaturizerConv = nn.Sequential( 
-                    nn.Conv2d(self.detector.last_channels,convOut,kernel_size=(2,3)),
-                    #nn.GroupNorm(getGroupSize(convOut),convOut)
-                    )
-            assert(len(featurizer)==0)
-           #if len(featurizer)>0:
-            #    featurizer = featurizer + ['FCnR{}'.format(graph_in_channels)]
-            #    layers, last_ch_node = make_layers(featurizer,norm=feat_norm)
-            #    self.bbFeaturizerFC = nn.Sequential(*layers)
-            #else:
-            #    self.bbFeaturizerFC = None
+                featurizer_fc = [self.numShapeFeatsBB]+featurizer_fc
+            if featurizer_fc is not None:
+                featurizer_fc = featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
+                layers, last_ch_node = make_layers(featurizer_fc,norm=feat_norm)
+                self.bbFeaturizerFC = nn.Sequential(*layers)
+            else:
+                self.bbFeaturizerFC = None
 
 
         #self.pairer = GraphNet(config['graph_config'])
@@ -343,6 +350,10 @@ class PairingGraph(BaseModel):
             masks = torch.zeros(stackedEdgeFeatWindows.size(0),numMasks,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
         if self.useShapeFeats:
             shapeFeats = torch.FloatTensor(len(candidates),self.numShapeFeats)
+        if self.detector.predNumNeighbors:
+            extraPred=1
+        else:
+            extraPred=0
 
         for i,(index1, index2) in enumerate(candidates):
             if self.useShapeFeats!='only':
@@ -385,11 +396,7 @@ class PairingGraph(BaseModel):
                     #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
 
             if self.useShapeFeats:
-                if self.detector.predNumNeighbors:
-                    extraPred=1
-                else:
-                    extraPred=0
-                if type(self.pairer.shape_layers) is not nn.Sequential:
+                if type(self.pairer) is BinaryPairReal and type(self.pairer.shape_layers) is not nn.Sequential:
                     #The index specification is to allign with the format feat nets are trained with
                     ixs=[0,1,2,3,3+self.numBBTypes,3+self.numBBTypes,4+self.numBBTypes,5+self.numBBTypes,6+self.numBBTypes,6+2*self.numBBTypes,6+2*self.numBBTypes,7+2*self.numBBTypes]
                 else:
@@ -440,7 +447,7 @@ class PairingGraph(BaseModel):
         if self.useBBVisualFeats:
             assert(features.size(0)==1)
             if self.useShapeFeats:
-                bb_shapeFeats=torch.FloatTensor(bbs.size(0),3+self.numBBTypes)
+                bb_shapeFeats=torch.FloatTensor(bbs.size(0),self.numShapeFeatsBB)
             rois = torch.zeros((bbs.size(0),5))
             for i in range(bbs.size(0)):
                 minY = round(min(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))
@@ -455,14 +462,22 @@ class PairingGraph(BaseModel):
                     bb_shapeFeats[i,0]= (bbs[i,2]+math.pi)/(2*math.pi)
                     bb_shapeFeats[i,1]=bbs[i,3]/self.normalizeVert
                     bb_shapeFeats[i,2]=bbs[i,4]/self.normalizeHorz
-                    bb_shapeFeats[i,3:]=torch.sigmoid(bbs[i,5:])
+                    if self.detector.predNumNeighbors:
+                        bb_shapeFeats[i,3]=bbs[i,5]
+                    bb_shapeFeats[i,3+extraPred:]=torch.sigmoid(bbs[i,5+extraPred:])
+            if self.useShapeFeats != "only":
                 #bb_features[i]= F.avg_pool2d(features[0,:,minY:maxY+1,minX:maxX+1], (1+maxY-minY,1+maxX-minX)).view(-1)
-            bb_features = self.avg_box(features,rois.to(features.device))
-            bb_features = self.bbFeaturizerConv(bb_features)
-            bb_features = bb_features.view(bb_features.size(0),bb_features.size(1))
-            if self.useShapeFeats:
-                bb_features = torch.cat( (bb_features,bb_shapeFeats.to(bb_features.device)), dim=1 )
-            #bb_features = self.bbFeaturizerFC(bb_features) if uncommented, change rot on bb_shapeFeats
+                bb_features = self.avg_box(features,rois.to(features.device))
+                bb_features = self.bbFeaturizerConv(bb_features)
+                bb_features = bb_features.view(bb_features.size(0),bb_features.size(1))
+                if self.useShapeFeats:
+                    bb_features = torch.cat( (bb_features,bb_shapeFeats.to(bb_features.device)), dim=1 )
+            else:
+                assert(self.useShapeFeats)
+                bb_features = bb_shapeFeats.to(features.device)
+
+            if self.bbFeaturizerFC is not None:
+                bb_features = self.bbFeaturizerFC(bb_features) #if uncommented, change rot on bb_shapeFeats, maybe not
         else:
             bb_features = None
         

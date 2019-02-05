@@ -401,15 +401,16 @@ class PairingGraph(BaseModel):
                     ixs=[0,1,2,3,3+self.numBBTypes,3+self.numBBTypes,4+self.numBBTypes,5+self.numBBTypes,6+self.numBBTypes,6+2*self.numBBTypes,6+2*self.numBBTypes,7+2*self.numBBTypes]
                 else:
                     ixs=[4,6,2,8,8+self.numBBTypes,5,7,3,8+self.numBBTypes,8+self.numBBTypes+self.numBBTypes,0,1]
-                shapeFeats[i,ixs[0]] = bbs[index1,3]/self.normalizeVert
-                shapeFeats[i,ixs[1]] = bbs[index1,4]/self.normalizeHorz
+                
+                shapeFeats[i,ixs[0]] = 2*bbs[index1,3]/self.normalizeVert #bb preds half height/width
+                shapeFeats[i,ixs[1]] = 2*bbs[index1,4]/self.normalizeHorz
                 shapeFeats[i,ixs[2]] = bbs[index1,2]/math.pi
-                shapeFeats[i,ixs[3]:ixs[4]] = torch.sigmoid(bbs[index1,extraPred+5:])
+                shapeFeats[i,ixs[3]:ixs[4]] = bbs[index1,extraPred+5:]# torch.sigmoid(bbs[index1,extraPred+5:])
 
-                shapeFeats[i,ixs[5]] = bbs[index2,3]/self.normalizeVert
-                shapeFeats[i,ixs[6]] = bbs[index2,4]/self.normalizeHorz
+                shapeFeats[i,ixs[5]] = 2*bbs[index2,3]/self.normalizeVert
+                shapeFeats[i,ixs[6]] = 2*bbs[index2,4]/self.normalizeHorz
                 shapeFeats[i,ixs[7]] = bbs[index2,2]/math.pi
-                shapeFeats[i,ixs[8]:ixs[9]] = torch.sigmoid(bbs[index2,extraPred+5:])
+                shapeFeats[i,ixs[8]:ixs[9]] = bbs[index2,extraPred+5:]#torch.sigmoid(bbs[index2,extraPred+5:])
 
                 shapeFeats[i,ixs[10]] = (bbs[index1,0]-bbs[index2,0])/self.normalizeHorz
                 shapeFeats[i,ixs[11]] = (bbs[index1,1]-bbs[index2,1])/self.normalizeVert

@@ -180,7 +180,7 @@ class GraphTransformerBlock(nn.Module):
 
         config_ffnn = {
                 'feat_size': features,
-                'num_layers': num_ffnn_layers,
+                'num_layers': num_ffnn_layers-1,
                 'hidden_size': ffnn_features,
                 'outSize': -1,
                 'reverse': True,

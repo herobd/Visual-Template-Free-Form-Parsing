@@ -19,10 +19,14 @@ logging.basicConfig(level=logging.INFO, format='')
 def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None, thresh=None, addToConfig=None):
     np.random.seed(1234)
     torch.manual_seed(1234)
-    checkpoint = torch.load(resume, map_location=lambda storage, location: storage)
-    if config is None:
-        config = checkpoint['config']
+    if resume is not None:
+        checkpoint = torch.load(resume, map_location=lambda storage, location: storage)
+        if config is None:
+            config = checkpoint['config']
+        else:
+            config = json.load(open(config))
     else:
+        checkpoint = None
         config = json.load(open(config))
 
     if gpu is None:
@@ -81,20 +85,23 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
     #data_loader = torch.utils.data.DataLoader(ttt, batch_size=16, shuffle=False, num_workers=5, collate_fn=forms_detect.collate)
     #valid_data_loader = data_loader.split_validation()
 
-    if 'state_dict' in checkpoint:
-        model = eval(config['arch'])(config['model'])
-        ##DEBUG
-        if 'edgeFeaturizerConv.0.0.weight' in checkpoint['state_dict']:
-            keys = list(checkpoint['state_dict'].keys())
-            for key in keys:
-                if 'edge' in key:
-                    newKey = key.replace('edge','rel')
-                    checkpoint['state_dict'][newKey] = checkpoint['state_dict'][key]
-                    del checkpoint['state_dict'][key]
-        ##DEBUG
-        model.load_state_dict(checkpoint['state_dict'])
+    if checkpoint is not None:
+        if 'state_dict' in checkpoint:
+            model = eval(config['arch'])(config['model'])
+            ##DEBUG
+            if 'edgeFeaturizerConv.0.0.weight' in checkpoint['state_dict']:
+                keys = list(checkpoint['state_dict'].keys())
+                for key in keys:
+                    if 'edge' in key:
+                        newKey = key.replace('edge','rel')
+                        checkpoint['state_dict'][newKey] = checkpoint['state_dict'][key]
+                        del checkpoint['state_dict'][key]
+            ##DEBUG
+            model.load_state_dict(checkpoint['state_dict'])
+        else:
+            model = checkpoint['model']
     else:
-        model = checkpoint['model']
+        model = eval(config['arch'])(config['model'])
     model.eval()
     model.summary()
 
@@ -315,7 +322,7 @@ if __name__ == '__main__':
             addtoconfig.append(split2)
 
     config = None
-    if args.checkpoint is None:
+    if args.checkpoint is None and args.config is None:
         print('Must provide checkpoint (with -c)')
         exit()
 

@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binarySplitP_staggerLight_NNP",
+    "name": "Simple18_pair_binaryALR_staggerLight_NNP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -40,7 +40,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.008,
+        "lr": 0.01,
         "weight_decay": 0
     },
     "loss": {
@@ -62,7 +62,7 @@
         "class": "GraphPairTrainer",
         "iterations": 200000,
         "save_dir": "saved/",
-        "val_step": 10000,
+        "val_step": 5000,
         "save_step": 50000,
         "save_step_minor": 250,
         "log_step": 250,
@@ -77,7 +77,10 @@
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,
         "stop_from_gt": 200000,
-        "use_bad_bb_pred_for_rel_loss": true
+        "use_bad_bb_pred_for_rel_loss": true,
+
+        "use_learning_schedule": true,
+        "adapt_lr": true
     },
     "arch": "PairingGraph", 
     "model": {
@@ -92,12 +95,11 @@
             "in_channels": 256,
             "node_channels": 0,
             "edge_channels": 1,
-            "layers": ["FC256","FC256"],
-            "shape_layers": "saved/Simple18_pairNotGT_feat/checkpoint-iteration4000.pth.tar"
+            "layers": ["FC256","FC256"]
         },
         "featurizer_start_h": 10,
         "featurizer_start_w": 10,
-        "featurizer_conv": [128,128,"M",256,240],
+        "featurizer_conv": [128,128,"M",256,238],
         "featurizer_fc": null
     }
 }

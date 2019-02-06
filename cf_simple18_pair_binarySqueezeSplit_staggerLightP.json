@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binarySplitP_staggerLight_NNP",
+    "name": "Simple18_pair_binarySqueezeSplit_staggerLightP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -31,8 +31,7 @@
     "validation": {
         "shuffle": false,
         "rescale_range": [0.52,0.52],
-        "crop_params": null,
-        "batch_size": 1
+        "crop_params": null
     },
 
     
@@ -77,27 +76,29 @@
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,
         "stop_from_gt": 200000,
+
         "use_bad_bb_pred_for_rel_loss": true
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Simple18_staggerLight_NN/checkpoint-iteration100000.pth.tar",
+        "detector_checkpoint": "saved/Forms18_staggerLight/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",
-        "expand_rel_context": 100,
+        "expand_rel_context": 200,
         "use_detect_layer_feats": 16,
         "graph_config": {
             "arch": "BinaryPairReal",
-            "in_channels": 256,
+            "in_channels": 128,
             "node_channels": 0,
             "edge_channels": 1,
-            "layers": ["FC256","FC256"],
-            "shape_layers": "saved/Simple18_pairNotGT_feat/checkpoint-iteration4000.pth.tar"
+            "layers": ["FC128", "FC128"],
+            "shape_layers": ["FC128", "FC128"],
+            "weight_split": 0.5
         },
         "featurizer_start_h": 10,
         "featurizer_start_w": 10,
-        "featurizer_conv": [128,128,"M",256,240],
-        "featurizer_fc": null
+        "featurizer_conv": [64,64,"M",128,64,"M",64],
+        "featurizer_fc": [36]
     }
 }

@@ -190,7 +190,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 badPred+=1
         i+=1
     for i in range(len(adjacency)-matches):
-        scores.append( (0.0,True) )
+        scores.append( (-0.0001,True) )
+        scores.append( (0.0,False) )
     rel_ap=computeAP(scores)
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)

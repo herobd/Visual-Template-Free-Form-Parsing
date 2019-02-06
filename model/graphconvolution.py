@@ -1,11 +1,13 @@
 #from https://github.com/tkipf/pygcn/blob/master/pygcn/layers.py
-import math
+import math, copy
 
 import torch
 
 from torch.nn.parameter import Parameter
+import torch.nn.functional as F
 from torch import nn
 from .simpleNN import SimpleNN
+from .net_builder import getGroupSize
 
 
 class GraphConvolution(nn.Module):
@@ -131,7 +133,7 @@ class MultiHeadedAttention(nn.Module):
         "Implements Figure 2"
         if mask is not None:
             # Same mask applied to all h heads.
-            mask = mask.unsqueeze(1)
+            mask = mask[None,None,...]#mask.unsqueeze(1)
         nbatches = query.size(0)
         
         # 1) Do all the linear projections in batch from d_model => h x d_k 
@@ -159,9 +161,10 @@ class GraphSelfAttention(nn.Module):
 
     def forward(self, input, adj):
         #construct mask s.t. 1s where edges exist
-        locs = torch.LongTensor(adj).t()
-        ones = torch.ones(len(adj))
-        mask = torch.sparse.FloatTensor(locs,ones,torch.Size([input.size(0),input.size(0)]))
+        #locs = torch.LongTensor(adj).t()
+        #ones = torch.ones(len(adj))
+        #mask = torch.sparse.FloatTensor(locs,ones,torch.Size([input.size(0),input.size(0)]))
+        mask=adj
         input_ = input[None,...] # add batch dim
         return self.mhAtt(input_,input_,input_,mask)
 
@@ -170,14 +173,14 @@ class GraphSelfAttention(nn.Module):
 
 class GraphTransformerBlock(nn.Module):
 
-    def __init__(self, features, num_ffnn_layers=2, ffnn_features=None):
+    def __init__(self, features, num_heads, num_ffnn_layers=2, ffnn_features=None,split=False):
         super(GraphTransformerBlock, self).__init__()
         if ffnn_features is None:
             ffnn_features=features
 
         config_ffnn = {
                 'feat_size': features,
-                'num_layers': num_ffnn_layers,
+                'num_layers': num_ffnn_layers-1,
                 'hidden_size': ffnn_features,
                 'outSize': -1,
                 'reverse': True,
@@ -185,11 +188,21 @@ class GraphTransformerBlock(nn.Module):
                 'dropout': 0.1
                 }
         self.ffnn = SimpleNN(config_ffnn)
-        self.att = GraphSelfAttention(num_heads,features)
+        self.att = GraphSelfAttention(features,num_heads)
+        self.norm1 = nn.GroupNorm(getGroupSize(features),features)
+        self.norm2 = nn.GroupNorm(getGroupSize(features),features)
 
-    def forward(self,input,adj):
-        side=self.att(input,adj)
+    def forward(self,input,adj=None,numBBs=None):
+        if adj is None:
+            input,adjMine,numBBs = input
+        else:
+            adjMin=adj
+        side1=self.att(input,adjMine)[0]
         side1+=input
+        #TODO allow splitting into rel and box sides
         side1 = self.norm1(side1)
         side2=self.ffnn(side1)
-        return self.norm2(side2+side1)
+        if adj is None:
+            return self.norm2(side2+side1),adj,numBBs
+        else:
+            return self.norm2(side2+side1)

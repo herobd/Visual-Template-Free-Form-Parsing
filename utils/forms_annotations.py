@@ -22,24 +22,33 @@ def convertBBs(bbs,rotate,numClasses):
         return None
     new_bbs = np.empty((1,bbs.shape[1], 5+8+numClasses), dtype=np.float32) #5 params, 8 points (used in loss), n classes
     
-    tlX = bbs[:,:,0]
-    tlY = bbs[:,:,1]
-    trX = bbs[:,:,2]
-    trY = bbs[:,:,3]
-    brX = bbs[:,:,4]
-    brY = bbs[:,:,5]
-    blX = bbs[:,:,6]
-    blY = bbs[:,:,7]
+    tlX_ = bbs[:,:,0]
+    tlY_ = bbs[:,:,1]
+    trX_ = bbs[:,:,2]
+    trY_ = bbs[:,:,3]
+    brX_ = bbs[:,:,4]
+    brY_ = bbs[:,:,5]
+    blX_ = bbs[:,:,6]
+    blY_ = bbs[:,:,7]
 
     if not rotate:
-        tlX = np.minimum.reduce((tlX,blX,trX,brX))
-        tlY = np.minimum.reduce((tlY,trY,blY,brY))
-        trX = np.maximum.reduce((tlX,blX,trX,brX))
-        trY = np.minimum.reduce((tlY,trY,blY,brY))
-        brX = np.maximum.reduce((tlX,blX,trX,brX))
-        brY = np.maximum.reduce((tlY,trY,blY,brY))
-        blX = np.minimum.reduce((tlX,blX,trX,brX))
-        blY = np.maximum.reduce((tlY,trY,blY,brY))
+        tlX = np.minimum.reduce((tlX_,blX_,trX_,brX_))
+        tlY = np.minimum.reduce((tlY_,trY_,blY_,brY_))
+        trX = np.maximum.reduce((tlX_,blX_,trX_,brX_))
+        trY = np.minimum.reduce((tlY_,trY_,blY_,brY_))
+        brX = np.maximum.reduce((tlX_,blX_,trX_,brX_))
+        brY = np.maximum.reduce((tlY_,trY_,blY_,brY_))
+        blX = np.minimum.reduce((tlX_,blX_,trX_,brX_))
+        blY = np.maximum.reduce((tlY_,trY_,blY_,brY_))
+    else:
+        tlX =  tlX_
+        tlY =  tlY_
+        trX =  trX_
+        trY =  trY_
+        brX =  brX_
+        brY =  brY_
+        blX =  blX_
+        blY =  blY_
 
     lX = (tlX+blX)/2.0
     lY = (tlY+blY)/2.0
@@ -172,6 +181,7 @@ def fixAnnotations(this,annotations):
     parasLinkedTo=defaultdict(list)
     pairsToRemove=[]
     for i,pair in enumerate(annotations['pairs']):
+        assert(len(pair)==2)
         if pair[0] not in annotations['byId'] or pair[1] not in annotations['byId']:
             pairsToRemove.append(i)
         elif pair[0] in idsToFix and annotations['byId'][pair[1]]['type'][-1]=='P':
@@ -225,6 +235,8 @@ def fixAnnotations(this,annotations):
                     if annotations['byId'][otherId]['type']=='fieldCol' and avg_y(annotations['byId'][otherId])>avg_y(annotations['byId'][num['id']]):
                         toAdd.append([num['id'],otherId])
 
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
     #heirarchy labels.
     #for pair in annotations['samePairs']:
     #    text=textMinor=None
@@ -273,6 +285,7 @@ def fixAnnotations(this,annotations):
     #                    toAddSame.append([text,otherId])
 
     for pair in toAdd:
+        assert(len(pair)==2)
         if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
              annotations['pairs'].append(pair)
     #annotations['pairs']+=toAdd
@@ -301,7 +314,7 @@ def fixAnnotations(this,annotations):
             elif group1 is not None:
                 circleGroups[group1].append(pair[0])
             else:
-                circleGroups[circleGroupId] = pair
+                circleGroups[circleGroupId] = pair.copy()
                 circleGroupId+=1
 
         if pair[0] in annotations['byId'] and pair[1] in annotations['byId']:
@@ -310,6 +323,9 @@ def fixAnnotations(this,annotations):
             if cls0!=cls1:
                 paired.add(pair[0])
                 paired.add(pair[1])
+
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
 
     #what pairs to each group?
     groupPairedTo=defaultdict(list)
@@ -325,6 +341,8 @@ def fixAnnotations(this,annotations):
                     groupPairedTo[id].append(pair[0])
 
 
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
     #add pairs
     toAdd=[]
     if not this.only_opposite_pairs:
@@ -336,6 +354,7 @@ def fixAnnotations(this,annotations):
                 for id2 in groupPairedTo[gid]:
                     toAdd.append([id,id2])
     for pair in toAdd:
+        assert(len(pair)==2)
         if pair not in annotations['pairs'] and [pair[1],pair[0]] not in annotations['pairs']:
              annotations['pairs'].append(pair)
 
@@ -353,6 +372,8 @@ def fixAnnotations(this,annotations):
         if id in annotations['byId']:
             annotations['byId'][id]['paired']=True
 
+    for pair in annotations['pairs']:
+        assert(len(pair)==2)
 
 def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):
 
@@ -487,24 +508,33 @@ def getStartEndGT(useBBs,s,useBlankClass=False):
 
 def getBBInfo(bb,rotate,useBlankClass=False):
 
-    tlX = bb['poly_points'][0][0]
-    tlY = bb['poly_points'][0][1]
-    trX = bb['poly_points'][1][0]
-    trY = bb['poly_points'][1][1]
-    brX = bb['poly_points'][2][0]
-    brY = bb['poly_points'][2][1]
-    blX = bb['poly_points'][3][0]
-    blY = bb['poly_points'][3][1]
+    tlX_ = bb['poly_points'][0][0]
+    tlY_ = bb['poly_points'][0][1]
+    trX_ = bb['poly_points'][1][0]
+    trY_ = bb['poly_points'][1][1]
+    brX_ = bb['poly_points'][2][0]
+    brY_ = bb['poly_points'][2][1]
+    blX_ = bb['poly_points'][3][0]
+    blY_ = bb['poly_points'][3][1]
 
     if not rotate:
-        tlX = np.minimum.reduce((tlX,blX,trX,brX))
-        tlY = np.minimum.reduce((tlY,trY,blY,brY))
-        trX = np.maximum.reduce((tlX,blX,trX,brX))
-        trY = np.minimum.reduce((tlY,trY,blY,brY))
-        brX = np.maximum.reduce((tlX,blX,trX,brX))
-        brY = np.maximum.reduce((tlY,trY,blY,brY))
-        blX = np.minimum.reduce((tlX,blX,trX,brX))
-        blY = np.maximum.reduce((tlY,trY,blY,brY))
+        tlX = np.minimum.reduce((tlX_,blX_,trX_,brX_))
+        tlY = np.minimum.reduce((tlY_,trY_,blY_,brY_))
+        trX = np.maximum.reduce((tlX_,blX_,trX_,brX_))
+        trY = np.minimum.reduce((tlY_,trY_,blY_,brY_))
+        brX = np.maximum.reduce((tlX_,blX_,trX_,brX_))
+        brY = np.maximum.reduce((tlY_,trY_,blY_,brY_))
+        blX = np.minimum.reduce((tlX_,blX_,trX_,brX_))
+        blY = np.maximum.reduce((tlY_,trY_,blY_,brY_))
+    else:
+        tlX =  tlX_
+        tlY =  tlY_
+        trX =  trX_
+        trY =  trY_
+        brX =  brX_
+        brY =  brY_
+        blX =  blX_
+        blY =  blY_
 
 
     if bb['type']=='detectorPrediction':
@@ -527,14 +557,22 @@ def getBBInfo(bb,rotate,useBlankClass=False):
     rY = (trY+brY)/2.0
     d=math.sqrt((lX-rX)**2 + (lY-rY)**2)
 
+    #orthX = -(rY-lY)
+    #orthY = (rX-lX)
+    #origLX = blX-tlX
+    #origLY = blY-tlY
+    #origRX = brX-trX
+    #origRY = brY-trY
+    #hl = (orthX*origLX + orthY*origLY)/d
+    #hr = (orthX*origRX + orthY*origRY)/d
     hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
     hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
-    h = (hl+hr)/2.0
+    h = (np.abs(hl)+np.abs(hr))/2.0
 
     cX = (lX+rX)/2.0
     cY = (lY+rY)/2.0
     rot = np.arctan2(-(rY-lY),rX-lX)
-    height = np.abs(h)*2
+    height = h*2 #use full height
     width = d
 
     return cX,cY,height,width,rot,text,field,blank,nn

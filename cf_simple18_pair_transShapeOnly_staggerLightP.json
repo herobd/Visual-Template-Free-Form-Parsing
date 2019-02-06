@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binarySplitP_staggerLight_NNP",
+    "name": "Simple18_pair_transShapeOnly_staggerLightP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -31,8 +31,7 @@
     "validation": {
         "shuffle": false,
         "rescale_range": [0.52,0.52],
-        "crop_params": null,
-        "batch_size": 1
+        "crop_params": null
     },
 
     
@@ -40,7 +39,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.008,
+        "lr": 0.001,
         "weight_decay": 0
     },
     "loss": {
@@ -76,28 +75,31 @@
 
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,
-        "stop_from_gt": 200000,
-        "use_bad_bb_pred_for_rel_loss": true
+        "stop_from_gt": 200000
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Simple18_staggerLight_NN/checkpoint-iteration100000.pth.tar",
+        "detector_checkpoint": "saved/Forms18_staggerLight/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
-	"use_rel_shape_feats": "corner",
-        "expand_rel_context": 100,
+	"use_shape_feats": "only",
+        "expand_rel_context": 0,
         "use_detect_layer_feats": 16,
+        "use_rel_rel_edges": false,
         "graph_config": {
-            "arch": "BinaryPairReal",
-            "in_channels": 256,
-            "node_channels": 0,
-            "edge_channels": 1,
-            "layers": ["FC256","FC256"],
-            "shape_layers": "saved/Simple18_pairNotGT_feat/checkpoint-iteration4000.pth.tar"
+            "arch": "GraphNet",
+            "in_channels": 64,
+            "bb_out": 0,
+            "rel_out": 1,
+            "repetitions": 1,
+            "num_trans": 3,
+            "num_heads": 4
         },
-        "featurizer_start_h": 10,
-        "featurizer_start_w": 10,
-        "featurizer_conv": [128,128,"M",256,240],
-        "featurizer_fc": null
+        "featurizer_start_h": 0,
+        "featurizer_start_w": 0,
+        "featurizer_conv": null,
+        "featurizer_fc": [],
+        "bb_featurizer": null,
+        "bb_featurizer_fc": []
     }
 }

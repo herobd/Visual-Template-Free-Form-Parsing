@@ -348,18 +348,23 @@ class CropBoxTransform(object):
         if type(self.crop_size) is int:
             self.crop_size = (self.crop_size,self.crop_size)
         self.random_crop_params = crop_params
-        self.rotate=rotate
         if 'pad' in crop_params:
             pad_by = crop_params['pad']
         else:
             pad_by = min(self.crop_size)//2
         self.pad_params = ((pad_by,pad_by),(pad_by,pad_by),(0,0))
         #self.all_bbs=all_bbs
-        if rotate:
+        if rotate or 'rot_degree_std_dev' in crop_params:
+            self.rotate=True
             if 'rot_degree_std_dev' in crop_params:
                 self.degree_std_dev = crop_params['rot_degree_std_dev']
             else:
                 self.degree_std_dev = 1
+        else:
+            self.rotate=False
+            self.degree_std_dev = 0 
+        self.flip_horz = crop_params['flip_horz'] if 'flip_horz' in crop_params else False
+        self.flip_vert = crop_params['flip_vert'] if 'flip_vert' in crop_params else False
 
     def __call__(self, sample,cropPoint=None):
         org_img = sample['img']
@@ -374,9 +379,13 @@ class CropBoxTransform(object):
         query_bb = sample['query_bb'] if 'query_bb' in sample else None
 
         #rotation
-        if self.rotate:
+        if self.rotate or self.flip_horz or self.flip_vert:
             amount = np.random.normal(0,self.degree_std_dev)
             M = cv2.getRotationMatrix2D((org_img.shape[1]/2,org_img.shape[0]/2),amount,1)
+            if self.flip_horz and np.random.uniform()<0.33:
+                M[0:2,0]*=-1
+            if self.flip_vert and np.random.uniform()<0.33:
+                M[0:2,1]*=-1
             #rotate image
             org_img = cv2.warpAffine(org_img,M,(org_img.shape[1],org_img.shape[0]))
             if len(org_img.shape)==2:

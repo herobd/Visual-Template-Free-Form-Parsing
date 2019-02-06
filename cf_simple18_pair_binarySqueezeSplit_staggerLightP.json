@@ -4,7 +4,7 @@
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":false,
+    "super_computer":true,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "special_dataset": "simple",
@@ -89,7 +89,7 @@
         "use_detect_layer_feats": 16,
         "graph_config": {
             "arch": "BinaryPairReal",
-            "in_channels": 128,
+            "in_channels": 36,
             "node_channels": 0,
             "edge_channels": 1,
             "layers": ["FC128", "FC128"],
@@ -98,7 +98,7 @@
         },
         "featurizer_start_h": 10,
         "featurizer_start_w": 10,
-        "featurizer_conv": [64,64,"M",128,64,"M",64],
-        "featurizer_fc": [36]
+        "featurizer_conv": [64,64,"M",128,64,"M",18],
+        "featurizer_fc": null
     }
 }

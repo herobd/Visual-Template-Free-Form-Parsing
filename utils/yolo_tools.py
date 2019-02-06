@@ -374,5 +374,6 @@ def computeAP(scores):
     for i in range(len(rank)):
         ap += float(i+1)/(rank[i]+1)
     ap/=len(rank)
-    assert(ap<=1)
+    if ap>1.00001:
+        raise ValueError('ap greater than 1({}), from {}'.format(ap,scores))
     return ap

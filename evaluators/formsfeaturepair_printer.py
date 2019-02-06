@@ -16,7 +16,7 @@ import random
 #THRESH=0
 
 def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
-    THRESH=0.9
+    THRESH=0.8
     def plotRect(img,color,xyrhw):
         xc=xyrhw[0]
         yc=xyrhw[1]
@@ -51,7 +51,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     imageName = instance['imgName']
     imagePath = instance['imgPath']
     data = instance['data'][0]
-    if data.size(0)==0:
+    if len(data.size())<1 or data.size(0)==0:
         return (
              { 
                'recall':[],
@@ -64,6 +64,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     relNodeIds = instance['nodeIds']
     gtNumNeighbors=instance['numNeighbors']+1
     useDataNN = ('optimize' in config and config['optimize']=='data') or ('nn_from_data' in config and config['nn_from_data'])
+    penalty = config['penalty'] if 'penalty' in config else None
+    
 
     if 'rule' in config:
         if config['rule']=='closest':
@@ -85,7 +87,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             newPredNN=defaultdict(list)
         else:
             predNN=newPredNN = None
-        pred = torch.sigmoid(pred)
+        if 'no_sig' not in config:
+            pred = 2*torch.sigmoid(pred)-1.0
 
     
 
@@ -121,172 +124,205 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             predNN[id]=np.mean(li)
     gtNumNeighbors=newGtNumNeighbors
  
-    if 'optimize' in config and config['optimize']:
-        #We first need to prune down as there are far too many possible pairings
-        thresh=0.3
-        while thresh<0.9:
-            keep = pred>thresh
-            newPred=pred[keep]
-            if newPred.size(0)<700:
-                break
-            thresh+=0.01
-        newIds=[]
-        newLabel=label[keep]
-        if newPred.size(0)>0:
-            if config['optimize']=='blind':
-                idNum=0
-                numIds=[]
-                idNumMap={}
-                for index,(id1,id2) in enumerate(relNodeIds):
-                    if keep[index]:
-                        if id1 not in idNumMap:
-                            idNumMap[id1]=idNum
-                            idNum+=1
-                        if id2 not in idNumMap:
-                            idNumMap[id2]=idNum
-                            idNum+=1
-                        numIds.append( [idNumMap[id1],idNumMap[id2]] )
-                print('size being optimized: {}'.format(newPred.size(0)))
-                pred[keep] *= torch.from_numpy( optimizeRelationshipsBlind(newPred,numIds) ).float()
-            elif (predNN is not None or useDataNN) and config['optimize']!='gt' and config['optimize']!='gt_noisy':
-                idMap={}
-                newId=0
-                numIds=[]
-                numNeighbors=[]
-                for index,(id1,id2) in enumerate(newNodeIds):
-                    if keep[index]:
-                        if id1 not in idMap:
-                            idMap[id1]=newId
-                            if useDataNN:
-                                numNeighbors.append(data[index,-2])
-                            else:
-                                numNeighbors.append(predNN[id1])
-                            newId+=1
-                        if id2 not in idMap:
-                            idMap[id2]=newId
-                            if useDataNN:
-                                numNeighbors.append(data[index,-1])
-                            else:
-                                numNeighbors.append(predNN[id2])
-                            newId+=1
-                        numIds.append( [idMap[id1],idMap[id2]] )
-                assert((newPred.size(0))<700)
-                print('size being optimized soft: {}'.format(newPred.size(0)))
-                pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors) ).float()
-            else:
-                for i in range(keep.size(0)):
-                    if keep[i]:
-                        newIds.append(relNodeIds[i])
-                
-                numNeighborsD=defaultdict(lambda: 0)
-                i=0
-                for id1,id2 in newIds:
-                    if newLabel[i]:
-                        numNeighborsD[id1]+=1
-                        numNeighborsD[id2]+=1
-                    else:
-                        numNeighborsD[id1]+=0
-                        numNeighborsD[id2]+=0
-                    i+=1
-                numNeighbors=[0]*len(numNeighborsD)
-                idNum=0
-                idNumMap={}
-                numIds=[]
-                for id,count in numNeighborsD.items():
-                    if config['optimize']=='gt_noisy':
-                        numNeighbors[idNum]=random.gauss(count,0.5)
-                    else:
-                        numNeighbors[idNum]=count
-                    idNumMap[id]=idNum
-                    idNum+=1
-                numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
-                print('size being optimized: {}'.format(newPred.size(0)))
-                if config['optimize']=='gt_noisy':
-                    pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors) ).float()
-                else:
-                    pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors) ).float()
-
-
-        pred[1-keep] *= 0
-        THRESH=0
-   
-    #ossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
-    image = cv2.imread(imagePath,1)
-    #image[40:50,40:50,0]=255
-    #image[50:60,50:60,1]=255
-    assert(image.shape[2]==3)
-    batchSize = pred.size(0) #data.size(0)
-    #draw GT
-    for b in range(batchSize):
-        x,y = qXY[b]
-        r = data[b,2].item()*math.pi
-        h = data[b,0].item()*50/2
-        w = data[b,1].item()*400/2
-        plotRect(image,(0,0,255),(x,y,r,h,w))
-        x2,y2 = iXY[b]
-        r = data[b,6].item()*math.pi
-        h = data[b,4].item()*50/2
-        w = data[b,5].item()*400/2
-        plotRect(image,(0,0,255),(x2,y2,r,h,w))
-
-        #r = data[b,2].item()
-        #h = data[b,0].item()
-        #w = data[b,1].item()
-        #plotRect(image,(1,0,0),(x,y,r,h,w))
-
-        if label[b].item()> 0:
-           cv2.line(image,(int(x),int(y)),(int(x2),int(y2)),(0,255,0),1)
-
-
-    totalPreds=0
-    totalGTs=0
-    truePs=0
-    scores=[]
-    wroteIds=set()
-    for b in range(batchSize):
-        id1,id2 = relNodeIds[b]
-        x,y = qXY[b]
-        x2,y2 = iXY[b]
-        x=int(x)
-        y=int(y)
-        x2=int(x2)
-        y2=int(y2)
-        if (pred[b].item()>THRESH):
-            totalPreds+=1
-            if label[b].item()>0:
-                truePs+=1
-            color = int(255*(pred[b].item()-THRESH)/(1-THRESH))
-            cv2.line(image,(x,y+3),(x2,y2-3),(color,0,0),1)
-        if label[b].item()>0:
-            scores.append( (pred[b],True) )
-            totalGTs+=1
-        else:
-            scores.append( (pred[b],False) )
-        if predNN is not None:
-            color = int(min(abs(predNN[id1]-gtNumNeighbors[b,0]),2)*127)
-            if id1 not in wroteIds:
-                cv2.putText(image,'{:.2f}/{}'.format(predNN[id1],gtNumNeighbors[b,0]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
-                wroteIds.add(id1)
-            color = int(min(abs(predNN[id2]-gtNumNeighbors[b,1]),2)*127)
-            if id2 not in wroteIds:
-                cv2.putText(image,'{:.2f}/{}'.format(predNN[id2],gtNumNeighbors[b,1]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
-                wroteIds.add(id2)
     
-    if totalGTs>0:
-        recall = truePs/float(totalGTs)
+    if 'optimize' in config and config['optimize']:
+        if penalty is None and outDir is None:
+            penalties=[0,0.1,0.2,0.3,0.4,0.5,0.6,0.8,1]
+        else:
+            penalties=[penalty]
     else:
-        recall = 1
-    if totalPreds>0:
-        prec = truePs/float(totalPreds)
-    else:
-        prec = 1
-    ap=computeAP(scores)
-    if outDir is not None:
-        saveName = '{}_AP:{:.2f}_r:{:.2f}_p:{:.2f}_.png'.format(imageName,ap,recall,prec)
-        cv2.imwrite(os.path.join(outDir,saveName),image)
-        #cv2.imshow('dfsdf',image)
-        #cv2.waitKey()
+        penalties=[0]
+    returnDict={}
+    for penalty in penalties:
 
+        if 'optimize' in config and config['optimize']:
+            #We first need to prune down as there are far too many possible pairings
+            thresh=0.3
+            while thresh<0.9:
+                keep = pred>thresh
+                newPred=pred[keep]
+                if newPred.size(0)<700:
+                    break
+                thresh+=0.01
+            newIds=[]
+            newLabel=label[keep]
+            if newPred.size(0)>0:
+                if config['optimize']=='blind':
+                    idNum=0
+                    numIds=[]
+                    idNumMap={}
+                    for index,(id1,id2) in enumerate(relNodeIds):
+                        if keep[index]:
+                            if id1 not in idNumMap:
+                                idNumMap[id1]=idNum
+                                idNum+=1
+                            if id2 not in idNumMap:
+                                idNumMap[id2]=idNum
+                                idNum+=1
+                            numIds.append( [idNumMap[id1],idNumMap[id2]] )
+                    #print('size being optimized: {}'.format(newPred.size(0)))
+                    pred[keep] *= torch.from_numpy( optimizeRelationshipsBlind(newPred,numIds,penalty) ).float()
+                elif (predNN is not None or useDataNN) and config['optimize']!='gt' and config['optimize']!='gt_noisy':
+                    idMap={}
+                    newId=0
+                    numIds=[]
+                    numNeighbors=[]
+                    for index,(id1,id2) in enumerate(newNodeIds):
+                        if keep[index]:
+                            if id1 not in idMap:
+                                idMap[id1]=newId
+                                if useDataNN:
+                                    numNeighbors.append(data[index,-2])
+                                else:
+                                    numNeighbors.append(predNN[id1])
+                                newId+=1
+                            if id2 not in idMap:
+                                idMap[id2]=newId
+                                if useDataNN:
+                                    numNeighbors.append(data[index,-1])
+                                else:
+                                    numNeighbors.append(predNN[id2])
+                                newId+=1
+                            numIds.append( [idMap[id1],idMap[id2]] )
+                    assert((newPred.size(0))<700)
+                    #print('size being optimized soft: {}'.format(newPred.size(0)))
+                    #pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors, penalty) ).float()
+                    decision= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors, penalty) )
+                    pred[keep][0==decision]-=2
+                else:
+                    for i in range(keep.size(0)):
+                        if keep[i]:
+                            newIds.append(relNodeIds[i])
+                    
+                    numNeighborsD=defaultdict(lambda: 0)
+                    i=0
+                    for id1,id2 in newIds:
+                        if newLabel[i]:
+                            numNeighborsD[id1]+=1
+                            numNeighborsD[id2]+=1
+                        else:
+                            numNeighborsD[id1]+=0
+                            numNeighborsD[id2]+=0
+                        i+=1
+                    numNeighbors=[0]*len(numNeighborsD)
+                    idNum=0
+                    idNumMap={}
+                    numIds=[]
+                    for id,count in numNeighborsD.items():
+                        if config['optimize']=='gt_noisy':
+                            numNeighbors[idNum]=random.gauss(count,0.5)
+                        else:
+                            numNeighbors[idNum]=count
+                        idNumMap[id]=idNum
+                        idNum+=1
+                    numIds = [ [idNumMap[id1],idNumMap[id2]] for id1,id2 in newIds ]
+                    #print('size being optimized: {}'.format(newPred.size(0)))
+                    if config['optimize']=='gt_noisy':
+                        pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors, penalty) ).float()
+                    else:
+                        pred[keep] *= torch.from_numpy( optimizeRelationships(newPred,numIds,numNeighbors, penalty) ).float()
+
+
+            #pred[1-keep] *= 0
+            pred[1-keep] -= 2
+            THRESH=0
+            #THRESH=-1
+       
+        if 'no_sig' in config:
+            pred = torch.sigmoid(pred)
+        #elif not ('optimize' in config and config['optimize']):
+        #    pred = (pred+1)/2
+
+        #ossThis, position_loss, conf_loss, class_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes)
+        if outDir is not None:
+            image = cv2.imread(imagePath,1)
+            #image[40:50,40:50,0]=255
+            #image[50:60,50:60,1]=255
+            assert(image.shape[2]==3)
+        batchSize = pred.size(0) #data.size(0)
+        #draw GT
+        for b in range(batchSize):
+            if outDir is not None:
+                x,y = qXY[b]
+                r = data[b,2].item()*math.pi
+                h = data[b,0].item()*50/2
+                w = data[b,1].item()*400/2
+                plotRect(image,(0,0,255),(x,y,r,h,w))
+                x2,y2 = iXY[b]
+                r = data[b,6].item()*math.pi
+                h = data[b,4].item()*50/2
+                w = data[b,5].item()*400/2
+                plotRect(image,(0,0,255),(x2,y2,r,h,w))
+
+                #r = data[b,2].item()
+                #h = data[b,0].item()
+                #w = data[b,1].item()
+                #plotRect(image,(1,0,0),(x,y,r,h,w))
+
+                if label[b].item()> 0:
+                   cv2.line(image,(int(x),int(y)),(int(x2),int(y2)),(0,255,0),1)
+
+
+        totalPreds=0
+        totalGTs=0
+        truePs=0
+        scores=[]
+        wroteIds=set()
+        for b in range(batchSize):
+            id1,id2 = relNodeIds[b]
+            x,y = qXY[b]
+            x2,y2 = iXY[b]
+            x=int(x)
+            y=int(y)
+            x2=int(x2)
+            y2=int(y2)
+            if (pred[b].item()>THRESH):
+                totalPreds+=1
+                if label[b].item()>0:
+                    truePs+=1
+                if outDir is not None:
+                    color = int(255*(pred[b].item()-THRESH)/(1-THRESH))
+                    cv2.line(image,(x,y+3),(x2,y2-3),(color,0,0),1)
+            if label[b].item()>0:
+                scores.append( (pred[b],True) )
+                totalGTs+=1
+            else:
+                scores.append( (pred[b],False) )
+            if predNN is not None and outDir is not None:
+                color = int(min(abs(predNN[id1]-gtNumNeighbors[b,0]),2)*127)
+                if id1 not in wroteIds:
+                    cv2.putText(image,'{:.2f}/{}'.format(predNN[id1],gtNumNeighbors[b,0]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
+                    wroteIds.add(id1)
+                color = int(min(abs(predNN[id2]-gtNumNeighbors[b,1]),2)*127)
+                if id2 not in wroteIds:
+                    cv2.putText(image,'{:.2f}/{}'.format(predNN[id2],gtNumNeighbors[b,1]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
+                    wroteIds.add(id2)
+        
+        if totalGTs>0:
+            recall = truePs/float(totalGTs)
+        else:
+            recall = 1
+        if totalPreds>0:
+            prec = truePs/float(totalPreds)
+        else:
+            prec = 1
+        ap=computeAP(scores)
+        if outDir is not None:
+            saveName = '{}_AP:{:.2f}_r:{:.2f}_p:{:.2f}_.png'.format(imageName,ap,recall,prec)
+            cv2.imwrite(os.path.join(outDir,saveName),image)
+            #cv2.imshow('dfsdf',image)
+            #cv2.waitKey()
+        
+        if 'optimize' in config and config['optimize']:
+            returnDict['recall-{}'.format(penalty)]=recall
+            returnDict['prec-{}'.format(penalty)]=prec
+            returnDict['Fm-{}'.format(penalty)]=(recall+prec)/2
+            returnDict['AP-{}'.format(penalty)]=ap
+        else:
+            returnDict['recall']=recall
+            returnDict['prec']=prec
+            returnDict['Fm']=(recall+prec)/2
+            returnDict['AP']=ap
 
         
     #return metricsOut
@@ -297,12 +333,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
              #  'recall':np.array(recalls_5).sum(axis=0),
              #  'prec':np.array(precs_5).sum(axis=0),
              #}, 
-             { 
-               'recall':[recall],
-               'prec':[prec],
-               'f-m':[(prec+recall)/2],
-               'AP':[ap],
-             }, 
+             returnDict,
              (recall, prec,ap)
             )
 

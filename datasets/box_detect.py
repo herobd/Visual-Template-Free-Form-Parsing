@@ -422,9 +422,9 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         w = self.transform.crop_size[1]
         h= self.transform.crop_size[0]
         if self.color:
-            shape = (3,w,h)
+            shape = (3,h,w)
         else:
-            shape = (1,w,h)
+            shape = (1,h,w)
         typ = np.random.choice(self.randomImageTypes)
         center=np.random.uniform(-1,1)
         if typ=='blank': #blank

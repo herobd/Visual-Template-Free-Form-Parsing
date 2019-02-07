@@ -108,14 +108,18 @@ if __name__ == "__main__":
         repeat = int(sys.argv[3])
     else:
         repeat=1
-    data=FormsBoxDetect(dirPath=dirPath,split='train',config={'crop_to_page':False,'rescale_range':[0.4,0.6],
-        'crop_params':{"crop_size":[652,1608], "pad":0, "rot_degree_std_dev":2}, 
+    data=FormsBoxDetect(dirPath=dirPath,split='train',config={'crop_to_page':False,'rescale_range':[0.4,0.65],
+        'crop_params':{ "crop_size":[652,1608], 
+                        "pad":0, 
+                        "rot_degree_std_dev":1.5,
+                        "flip_horz": True,
+                        "flip_vert": True}, 
         'no_blanks':False,
         'use_paired_class':True,
         "swap_circle":True,
         'no_graphics':True,
-        'rotation':True,
-        #"only_types": {"boxes":True}
+        'rotation':False,
+        "only_types": {"boxes":True}
 })
     #data.cluster(start,repeat,'anchors_rot_{}.json')
 

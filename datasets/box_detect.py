@@ -207,6 +207,12 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         self.max_dim_thresh = config['max_dim_thresh'] if 'max_dim_thresh' in config else 2700
         self.color = config['color'] if 'color' in config else True
 
+        if 'random_image_aug' in config and config['random_image_aug'] is not None:
+            self.useRandomAugProb = config['random_image_aug'] if type(config['random_image_aug']) is float else 0.05
+            self.randomImageTypes = config['random_image_types'] if 'random_image_types' in config else ['blank','uniform','gaussian']
+        else:
+            self.useRandomAugProb = None
+
 
 
 
@@ -216,6 +222,8 @@ class BoxDetectDataset(torch.utils.data.Dataset):
     def __getitem__(self,index):
         return self.getitem(index)
     def getitem(self,index,scaleP=None,cropPoint=None):
+        if self.useRandomAugProb is not None and np.random.rand()<self.useRandomAugProb and scaleP is None and cropPoint is None:
+            return self.getRandomImage()
         ##ticFull=timeit.default_timer()
         imagePath = self.images[index]['imagePath']
         imageName = self.images[index]['imageName']
@@ -407,7 +415,42 @@ class BoxDetectDataset(torch.utils.data.Dataset):
                 }
 
 
-
+    #this is a funny kind of augmentation where random images are show 
+    #simply to improve generalization. Also may help decrease false positives?
+    def getRandomImage(self):
+        assert(self.transform is not None)
+        w = self.transform.crop_size[1]
+        h= self.transform.crop_size[0]
+        if self.color:
+            shape = (3,w,h)
+        else:
+            shape = (1,w,h)
+        typ = np.random.choice(self.randomImageTypes)
+        center=np.random.uniform(-1,1)
+        if typ=='blank': #blank
+            image = torch.FloatTensor(*shape).fill_(center)
+        elif typ=='uniform': #uniform random
+            maxRange = 1-abs(center)
+            second = np.random.uniform(0,maxRange)
+            image = torch.FloatTensor(*shape).uniform_(center-maxRange,center+maxRange)
+        elif typ=='gaussian': #guassian
+            maxRange = 1-abs(center)
+            second = np.random.uniform(0,maxRange)
+            image = torch.FloatTensor(*shape).normal_(center,maxRange)
+        image = image[None,:,:]#add batch channel
+    
+        return {
+            "img": image,
+            "bb_gt": None,
+            "num_neighbors": None,
+            "line_gt": {},
+            "point_gt": {},
+            "pixel_gt": None,
+            "imgName": 'rand_'+typ,
+            "scale": 1.0,
+            "cropPoint": (0,0),
+            "pairs": None,
+            }
 
     def cluster(self,k,sample_count,outPath):
         def makePointsAndRects(h,w,r=None):

@@ -374,5 +374,5 @@ def computeAP(scores):
     for i in range(len(rank)):
         ap += float(i+1)/(rank[i]+1)
     ap/=len(rank)
-    assert(ap<=1)
+    assert(ap<=1.001)
     return ap

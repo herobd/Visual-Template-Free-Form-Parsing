@@ -1,1 +1,3 @@
+-a validation=eval=True,data_loader=num_workers=0,validation=batch_size=1,data_loader=eval=True,data_loader=batch_size=1,optimize=True
+
 python eval.py -c saved/Mix18_staggerLight_NN/checkpoint-iteration200000.pth.tar -g 0 -n 10000 -a save_json=out_json/Mix18_staggerLight_NN,data_loader=batch_size=1,data_loader=num_workers=0,data_loader=rescale_range=0.52,data_loader=crop_params=

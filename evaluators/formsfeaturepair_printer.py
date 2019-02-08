@@ -25,6 +25,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         w=xyrhw[4]
         h = min(30000,h)
         w = min(30000,w)
+        if h ==0:
+            h=10
         tr = ( int(w*math.cos(rot)-h*math.sin(rot) + xc),  int(-w*math.sin(rot)-h*math.cos(rot) + yc) )
         tl = ( int(-w*math.cos(rot)-h*math.sin(rot) + xc), int(w*math.sin(rot)-h*math.cos(rot) + yc) )
         br = ( int(w*math.cos(rot)+h*math.sin(rot) + xc),  int(-w*math.sin(rot)+h*math.cos(rot) + yc) )
@@ -99,6 +101,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     newData=torch.FloatTensor(pred.size(0)//2,data.size(1))
     newGtNumNeighbors=torch.FloatTensor(pred.size(0)//2,2)
     newNodeIds=[]
+    newQXY=[]
+    newIXY=[]
     newi=0
     for i in range(len(relNodeIds)):
         id1,id2=relNodeIds[i]
@@ -109,6 +113,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             newLabel[newi]=label[i]
             newNodeIds.append(relNodeIds[i]) #ensure order is the same
             newData[newi]=data[i]
+            newQXY.append(qXY[i])
+            newIXY.append(iXY[i])
             if predNN is not None:
                 newPredNN[id1]+=[predNN[i,0].item(),predNN[j,1].item()] # (predNN[i,0]+predNN[j,1])/2
                 newPredNN[id2]+=[predNN[i,1].item(),predNN[j,0].item()]
@@ -119,6 +125,9 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     #nnPred=newNNPred
     relNodeIds=newNodeIds
     label=newLabel
+    data=newData
+    qXY=newQXY
+    iXY=newIXY
     if predNN is not None:
         predNN={}
         for id,li in newPredNN.items():
@@ -242,6 +251,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             #image[50:60,50:60,1]=255
             assert(image.shape[2]==3)
         batchSize = pred.size(0) #data.size(0)
+
         #draw GT
         for b in range(batchSize):
             if outDir is not None:
@@ -251,9 +261,9 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
                 w = data[b,1].item()*400/2
                 plotRect(image,(0,0,255),(x,y,r,h,w))
                 x2,y2 = iXY[b]
-                r = data[b,6].item()*math.pi
-                h = data[b,4].item()*50/2
-                w = data[b,5].item()*400/2
+                r = data[b,7].item()*math.pi
+                h = data[b,5].item()*50/2
+                w = data[b,6].item()*400/2
                 plotRect(image,(0,0,255),(x2,y2,r,h,w))
 
                 #r = data[b,2].item()
@@ -314,6 +324,8 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         for i in range(missedRels):
             scores.append( (float('nan'),True) )
         ap=computeAP(scores)
+        if ap is None:
+            ap=-1
         if outDir is not None:
             saveName = '{}_AP:{:.2f}_r:{:.2f}_p:{:.2f}_.png'.format(imageName,ap,recall,prec)
             cv2.imwrite(os.path.join(outDir,saveName),image)

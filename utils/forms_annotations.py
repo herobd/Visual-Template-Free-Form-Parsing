@@ -122,6 +122,7 @@ def fixAnnotations(this,annotations):
                 )
 
 
+
     #restructure
     annotations['byId']={}
     for bb in annotations['textBBs']:
@@ -132,6 +133,11 @@ def fixAnnotations(this,annotations):
         if not this.only_opposite_pairs:
             annotations['pairs']+=annotations['samePairs']
         del annotations['samePairs']
+
+    numPairsWithoutBB=0
+    for id1,id2 in annotations['pairs']:
+        if id1 not in annotations['byId'] or id2 not in annotations['byId']:
+            numPairsWithoutBB+=1
 
     toAdd=[]
     idsToRemove=set()
@@ -374,6 +380,8 @@ def fixAnnotations(this,annotations):
 
     for pair in annotations['pairs']:
         assert(len(pair)==2)
+
+    return numPairsWithoutBB
 
 def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):
 

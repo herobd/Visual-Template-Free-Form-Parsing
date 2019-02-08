@@ -367,7 +367,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_fullFm':(relRecall+fullPrec)/2,
 
              }
-    if rel_ap>=0: #-1 ap if no relationships
+    if rel_ap is not None: #none ap if no relationships
         retData['rel_AP']=rel_ap
     return (
              retData,

@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import timeit
 import warnings
-import random
+import random, math
 
 def perform_crop(img, gt, crop):
     #csX,csY = crop['crop_size']
@@ -366,6 +366,7 @@ class CropBoxTransform(object):
         self.flip_horz = crop_params['flip_horz'] if 'flip_horz' in crop_params else False
         self.flip_vert = crop_params['flip_vert'] if 'flip_vert' in crop_params else False
 
+
     def __call__(self, sample,cropPoint=None):
         org_img = sample['img']
         bb_gt = sample['bb_gt']
@@ -381,11 +382,33 @@ class CropBoxTransform(object):
         #rotation
         if self.rotate or self.flip_horz or self.flip_vert:
             amount = np.random.normal(0,self.degree_std_dev)
-            M = cv2.getRotationMatrix2D((org_img.shape[1]/2,org_img.shape[0]/2),amount,1)
+            amount = math.pi*amount/180
+            #M = cv2.getRotationMatrix2D((org_img.shape[1]/2,org_img.shape[0]/2),amount,1)
+            rot = np.array([  [math.cos(amount), -math.sin(amount), 0],
+                            [math.sin(amount), math.cos(amount), 0],
+                            [0,0,1] ])
+            center = np.array([ [1,0,-org_img.shape[1]/2],
+                                [0,1,-org_img.shape[0]/2],
+                                [0,0,1] ])
+            #center = np.array([[1,0,-org_img.shape[1]/2],[0,1,-org_img.shape[0]/2]])
+            uncenter = np.array([   [1,0,org_img.shape[1]/2],
+                                    [0,1,org_img.shape[0]/2],
+                                    [0,0,1] ])
+            M = rot.dot(center)
+            #M=center
             if self.flip_horz and np.random.uniform()<0.33:
-                M[0:2,0]*=-1
+                flipH = np.array([  [-1,0,0],
+                                    [0,1,0],
+                                    [0,0,1] ])
+                M = flipH.dot(M)
             if self.flip_vert and np.random.uniform()<0.33:
-                M[0:2,1]*=-1
+                #M[0:2,1]*=-1
+                flipV = np.array([  [1,0,0],
+                                    [0,-1,0],
+                                    [0,0,1] ])
+                M = flipV.dot(M)
+            M = uncenter.dot(M)
+            M=M[:2]
             #rotate image
             org_img = cv2.warpAffine(org_img,M,(org_img.shape[1],org_img.shape[0]))
             if len(org_img.shape)==2:

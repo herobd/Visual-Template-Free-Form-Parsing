@@ -235,16 +235,50 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
     else:
         return [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
+    #This is an alternate metric that computes AP of all classes together
+    #Your only a hit if you have the same class
+    allIOUs = getLoc(target[:,0:],pred[:,1:])
+    allHits = allIOUs>iou_thresh
+    allScores=[]
+    #evalute hits to see if they're valid (matching class)
+    targetClasses_index = torch.argmax(target[:,13:13+numClasses],dim=1)
+    predClasses_index = torch.argmax(pred[:,beforeCls+6:beforeCls+6+numClasses],dim=1)
+    targetClasses_index_ex = targetClasses_index[:,None].expand(targetClasses_index.size(0),predClasses_index.size(0))
+    predClasses_index_ex = predClasses_index[None,:].expand(targetClasses_index.size(0),predClasses_index.size(0))
+    matchingClasses = targetClasses_index_ex==predClasses_index_ex
+    validHits = allHits*matchingClasses
+
+    #add all the preds that didn't have a hit
+    hasHit,_ = validHits.max(dim=0) #which preds have hits
+    notHitScores = pred(1-hasHit,0)
+    for i in range(notHitScores.shape[0]):
+        allScores.append( (notHitScores[i].item(), False) )
+
+    # if something has multiple hits, it gets paired to the closest (with matching class)
+    allIOUs[1-validHit] -= 9999999 #Force these to be smaller
+    maxValidHit,maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
+    for i in range(maxValidHit.size(0)):
+        if validHit[maxValidHitIndexes[i],i]:
+            allScores.append( (pred[i,0].item(),True) )
+            #but now we've consumed this pred, so we'll zero its hit
+            validHits[maxValidHitIndexes[i],i]=0
+
+    #add nan scores for missed targets
+    gotHit,gotHitIndex = torch.max(validHits,dim=1)
+    for i in range((gotHit==0).sum()):
+        allScores.append( (float('nan'),True) )
+
+
+
     if ignoreClasses:
         numClasses=1
     #by class
     #import pdb; pdb.set_trace()
     for cls in range(numClasses):
-        scores=[]
         clsTargInd = target[:,cls+13]==1
         if len(pred.size())>1 and pred.size(0)>0:
             #print(pred.size())
-            clsPredInd = torch.argmax(pred[:,beforeCls+6:],dim=1)==cls
+            clsPredInd = torch.argmax(pred[:,beforeCls+6:beforeCls+6+numClasses],dim=1)==cls
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if (ignoreClasses and pred.size(0)>0) or (clsTargInd.any() and clsPredInd.any()):
@@ -265,18 +299,19 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
             for t in range(clsTarg.size(0)):
                 p=ps[t]
                 if hits[t,p]:
-                    scores.append( (clsPred[p,0],True) )
+                    #scores.append( (clsPred[p,0],True) )
                     #hits[t,p]=0
                     truePos+=1
                 else:
-                    scores.append( (0,True) )
+                    #scores.append( (float('nan'),True) )
             
             left_conf = clsPred[left_ps,0]
             for i in range(left_conf.size(0)):
-                scores.append( (left_conf[i],False) )
+                #scores.append( (left_conf[i],False) )
             
-            ap = computeAP(scores)
-            aps.append(ap)
+            #ap = computeAP(scores)
+            #if ap is not None:
+            #    aps.append(ap)
 
             precisions.append( truePos/max(clsPred.size(0),truePos) )
             if precisions[-1]>1:
@@ -300,12 +335,13 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
             precisions.append(1)
             recalls.append(1)
 
-    return aps, precisions, recalls
+    return computeAP(allScores), precisions, recalls
 
 
 def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0):
     return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allIOU)
 def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses,beforeCls=0):
+    raise NotImplemented('Checking if preds with no intersection not implemented for dist')
     return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allBoxDistNeg)
 
 def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc):
@@ -378,5 +414,5 @@ def computeAP(scores):
     for i in range(len(rank)):
         ap += float(i+1)/(rank[i]+1)
     ap/=(len(rank)+missed)
-    assert(ap<=1)
+    assert(ap<=1.001)
     return ap

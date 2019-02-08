@@ -61,8 +61,8 @@ class GraphNet(nn.Module):
             self.transformers = nn.Sequential(*layers)
             act_layers.append(nn.Dropout(p=0.05,inplace=True))
 
-            if 'encode' in config:
-                num_encode_layers = config['encode'] if type(config['encode']) is int else num_layers
+            if 'encoder' in config:
+                num_encode_layers = config['encoder'] if type(config['encoder']) is int else num_layers
                 layers = [ GraphTransformerBlock(num_feats,num_heads,num_ffnn_layers,num_ffnn_feats) for i in range(num_encode_layers)]
                 self.encoder = nn.Sequential(*layers)
             else:

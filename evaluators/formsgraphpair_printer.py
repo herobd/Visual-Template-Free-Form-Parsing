@@ -9,7 +9,7 @@ import math
 from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
-from model.optimize import optimizeRelationships
+from model.optimize import optimizeRelationships, optimizeRelationshipsSoft
 
 
 def plotRect(img,color,xyrhw):
@@ -53,7 +53,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
         return image, bbs, adjaceny, num_neighbors
 
-    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.5
+    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.0
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -145,7 +145,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             decision= torch.from_numpy( np.round_(decision).astype(int) )
             pred[keep] = torch.where(0==decision,pred[keep]-2,pred[keep])
         relPred[1-keep] -=2
-        EDGE_THRESH=0
+        EDGE_THRESH=-1
 
     data = data.numpy()
     #threshed in model
@@ -190,8 +190,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 badPred+=1
         i+=1
     for i in range(len(adjacency)-matches):
-        scores.append( (-0.0001,True) )
-        scores.append( (0.0,False) )
+        scores.append( (float('nan'),True) )
     rel_ap=computeAP(scores)
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
@@ -352,7 +351,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #print('saved: '+os.path.join(outDir,saveName))
 
         
-    retData= { 'bb_ap_5':[ap_5],
+    retData= { 'bb_ap':[ap_5],
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,

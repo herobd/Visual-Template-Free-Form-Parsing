@@ -70,6 +70,8 @@ class GraphNet(nn.Module):
         if 'random_reps' in config:
             self.randomReps=True
             self.maxReps = config['random_reps'] if type(config['random_reps']) is int else 5
+        else:
+            self.randomReps=False
         act_layers.append(nn.ReLU(inplace=True))
             
 
@@ -97,7 +99,7 @@ class GraphNet(nn.Module):
             else:
                 repetitions=self.maxReps
         else:
-            repititions=self.repetitions
+            repetitions=self.repetitions
         #it is assumed these features are not activated
         node_featuresX = node_features
         if self.layers is None:

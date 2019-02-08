@@ -104,7 +104,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     relCand = relIndexes
     if relPred is not None:
-        relPred = torch.sigmoid(relPred)[:,0]
+        relPred = 2*torch.sigmoid(relPred)[:,0]-1
     if relCand is None:
         relCand=[]
 
@@ -142,8 +142,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             relPred[keep] *= torch.from_numpy( optimizeRelationships(newRelPred,newRelCand,numNeighbors) ).float()
         elif predNN is not None and config['optimize']:
             newPredNN=predNN[keep]
-            relPred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN) ).float()
-        relPred[1-keep] *= 0
+            #relPred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN) ).float()
+            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN)
+            decision= torch.from_numpy( np.round_(decision).astype(int) )
+            pred[keep] = torch.where(0==decision,pred[keep]-2,pred[keep])
+        relPred[1-keep] -=2
         EDGE_THRESH=0
 
     data = data.numpy()

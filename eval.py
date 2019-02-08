@@ -21,6 +21,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
     torch.manual_seed(1234)
     if resume is not None:
         checkpoint = torch.load(resume, map_location=lambda storage, location: storage)
+        print('loaded iteration {}'.format(checkpoint['iteration']))
         if config is None:
             config = checkpoint['config']
         else:

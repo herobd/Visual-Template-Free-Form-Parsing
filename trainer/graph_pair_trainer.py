@@ -304,7 +304,7 @@ class GraphPairTrainer(BaseTrainer):
 
             **metrics,
         }
-        if ap>=0:
+        if ap is not None:
             log['rel_AP']=ap
 
         #if iteration%10==0:

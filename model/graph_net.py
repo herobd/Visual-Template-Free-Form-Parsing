@@ -5,6 +5,7 @@ import math
 import json
 from .graphconvolution import GraphResConv, GraphConvWithAct, GraphTransformerBlock
 from .net_builder import getGroupSize
+import numpy as np
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 
@@ -92,9 +93,9 @@ class GraphNet(nn.Module):
 
         if self.randomReps:
             if self.training:
-                repititions=np.random.randint(0,self.maxReps+1)
+                repetitions=np.random.randint(0,self.maxReps+1)
             else:
-                repititions=self.maxReps
+                repetitions=self.maxReps
         else:
             repititions=self.repetitions
         #it is assumed these features are not activated

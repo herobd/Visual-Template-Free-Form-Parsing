@@ -652,6 +652,24 @@ class PairingGraph(BaseModel):
                 #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(brX[i]),int(brY[i])),i,1)
                 #cv2.line( boxesDrawn, (int(blX[i]),int(blY[i])),(int(tlX[i]),int(tlY[i])),i,1)
 
+                #These are to catch the wierd case of a (clipped) bb having 0 height or width
+                #we just add a bit, this shouldn't greatly effect the heuristic pairing
+                if int(tlY[i])==int(trY[i]) and int(tlY[i])==int(brY[i]) and int(tlY[i])==int(blY[i]):
+                    if int(tlY[i])<2:
+                        blY[i]+=1.1
+                        brY[i]+=1.1
+                    else:
+                        tlY[i]-=1.1
+                        trY[i]-=1.1
+                if int(tlX[i])==int(trX[i]) and int(tlX[i])==int(brX[i]) and int(tlX[i])==int(blX[i]):
+                    if int(tlX[i])<2:
+                        trX[i]+=1.1
+                        brX[i]+=1.1
+                    else:
+                        tlX[i]-=1.1
+                        blX[i]-=1.1
+
+
                 rr,cc = draw.polygon_perimeter([int(tlY[i]),int(trY[i]),int(brY[i]),int(blY[i])],[int(tlX[i]),int(trX[i]),int(brX[i]),int(blX[i])],boxesDrawn.shape,True)
                 boxesDrawn[rr,cc]=i+1
 

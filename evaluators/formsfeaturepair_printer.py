@@ -16,7 +16,7 @@ import random
 #THRESH=0
 
 def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
-    THRESH=0.8
+    THRESH=0.3#0.8
     def plotRect(img,color,xyrhw):
         xc=xyrhw[0]
         yc=xyrhw[1]
@@ -63,6 +63,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     label = instance['label']
     relNodeIds = instance['nodeIds']
     gtNumNeighbors=instance['numNeighbors']+1
+    missedRels = instance['missedRels']
     useDataNN = ('optimize' in config and config['optimize']=='data') or ('nn_from_data' in config and config['nn_from_data'])
     penalty = config['penalty'] if 'penalty' in config else None
     
@@ -127,7 +128,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
     
     if 'optimize' in config and config['optimize']:
         if penalty is None and outDir is None:
-            penalties=[0,0.1,0.2,0.3,0.4,0.5,0.6,0.8,1]
+            penalties=[0,0.1,0.2,0.3,0.4,0.5,0.6,0.8,1,1.5,2,3,5,7,10]
         else:
             penalties=[penalty]
     else:
@@ -187,8 +188,9 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
                     assert((newPred.size(0))<700)
                     #print('size being optimized soft: {}'.format(newPred.size(0)))
                     #pred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors, penalty) ).float()
-                    decision= torch.from_numpy( optimizeRelationshipsSoft(newPred,numIds,numNeighbors, penalty) )
-                    pred[keep][0==decision]-=2
+                    decision= optimizeRelationshipsSoft(newPred,numIds,numNeighbors, penalty)
+                    decision= torch.from_numpy( np.round_(decision).astype(int) )
+                    pred[keep] = torch.where(0==decision,pred[keep]-2,pred[keep])
                 else:
                     for i in range(keep.size(0)):
                         if keep[i]:
@@ -225,11 +227,11 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
 
             #pred[1-keep] *= 0
             pred[1-keep] -= 2
-            THRESH=0
-            #THRESH=-1
+            #THRESH=0
+            THRESH=-1
        
         if 'no_sig' in config:
-            pred = torch.sigmoid(pred)
+            pred = 2*torch.sigmoid(pred) -1
         #elif not ('optimize' in config and config['optimize']):
         #    pred = (pred+1)/2
 
@@ -297,8 +299,10 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
                 if id2 not in wroteIds:
                     cv2.putText(image,'{:.2f}/{}'.format(predNN[id2],gtNumNeighbors[b,1]),(x2,y2), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
                     wroteIds.add(id2)
-        
+       
+        totalGTs+=missedRels
         if totalGTs>0:
+            #recallPart = truePs/float(totalGTs)
             recall = truePs/float(totalGTs)
         else:
             recall = 1
@@ -306,6 +310,9 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             prec = truePs/float(totalPreds)
         else:
             prec = 1
+        #apPart=computeAP(scores)
+        for i in range(missedRels):
+            scores.append( (float('nan'),True) )
         ap=computeAP(scores)
         if outDir is not None:
             saveName = '{}_AP:{:.2f}_r:{:.2f}_p:{:.2f}_.png'.format(imageName,ap,recall,prec)
@@ -317,12 +324,15 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             returnDict['recall-{}'.format(penalty)]=recall
             returnDict['prec-{}'.format(penalty)]=prec
             returnDict['Fm-{}'.format(penalty)]=(recall+prec)/2
-            returnDict['AP-{}'.format(penalty)]=ap
+            if ap is not None:
+                returnDict['AP-{}'.format(penalty)]=ap
         else:
             returnDict['recall']=recall
             returnDict['prec']=prec
             returnDict['Fm']=(recall+prec)/2
-            returnDict['AP']=ap
+            if ap is not None:
+                returnDict['AP']=ap,
+            returnDict['missedRels']=missedRels
 
         
     #return metricsOut

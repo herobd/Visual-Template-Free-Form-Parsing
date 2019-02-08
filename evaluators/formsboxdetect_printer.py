@@ -162,9 +162,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
-    aps_3=[]
+    #aps_3=[]
     aps_5=[]
-    aps_7=[]
+    #aps_7=[]
     recalls_5=[]
     precs_5=[]
     numClasses = model.numBBTypes
@@ -185,17 +185,17 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             target_for_b = torch.empty(0)
         if model.rotation:
             ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.9,numClasses,beforeCls=extraPreds)
-            ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],1.3,numClasses,beforeCls=extraPreds)
-            ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.5,numClasses,beforeCls=extraPreds)
+            #ap_3, prec_3, recall_3 =AP_dist(target_for_b,outputBBs[b],1.3,numClasses,beforeCls=extraPreds)
+            #ap_7, prec_7, recall_7 =AP_dist(target_for_b,outputBBs[b],0.5,numClasses,beforeCls=extraPreds)
         else:
             ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,numClasses,beforeCls=extraPreds)
-            ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,numClasses,beforeCls=extraPreds)
-            ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,numClasses,beforeCls=extraPreds)
+            #ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,numClasses,beforeCls=extraPreds)
+            #ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,numClasses,beforeCls=extraPreds)
 
 
         aps_5.append(ap_5 )
-        aps_3.append(ap_3 )
-        aps_7.append(ap_7 )
+        #aps_3.append(ap_3 )
+        #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
         precs_5.append(prec_5)
         #for b in range(len(outputBBs)):
@@ -447,8 +447,8 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
              #  'prec':np.array(precs_5).sum(axis=0),
              #}, 
              { 'ap_5':aps_5,
-               'ap_3':aps_3,
-               'ap_7':aps_7,
+                 #'ap_3':aps_3,
+                 #'ap_7':aps_7,
                'recall':recalls_5,
                'prec':precs_5,
                'nn_loss': nn_loss,

@@ -69,6 +69,8 @@ class GraphNet(nn.Module):
         if 'random_reps' in config:
             self.randomReps=True
             self.maxReps = config['random_reps'] if type(config['random_reps']) is int else 5
+        else:
+            self.randomReps=False
         act_layers.append(nn.ReLU(inplace=True))
             
 

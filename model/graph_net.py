@@ -5,6 +5,7 @@ import math
 import json
 from .graphconvolution import GraphResConv, GraphConvWithAct, GraphTransformerBlock
 from .net_builder import getGroupSize
+import numpy as np
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 
@@ -60,8 +61,8 @@ class GraphNet(nn.Module):
             self.transformers = nn.Sequential(*layers)
             act_layers.append(nn.Dropout(p=0.05,inplace=True))
 
-            if 'encode' in config:
-                num_encode_layers = config['encode'] if type(config['encode']) is int else num_layers
+            if 'encoder' in config:
+                num_encode_layers = config['encoder'] if type(config['encoder']) is int else num_layers
                 layers = [ GraphTransformerBlock(num_feats,num_heads,num_ffnn_layers,num_ffnn_feats) for i in range(num_encode_layers)]
                 self.encoder = nn.Sequential(*layers)
             else:
@@ -94,11 +95,11 @@ class GraphNet(nn.Module):
 
         if self.randomReps:
             if self.training:
-                repititions=np.random.randint(0,self.maxReps+1)
+                repetitions=np.random.randint(0,self.maxReps+1)
             else:
-                repititions=self.maxReps
+                repetitions=self.maxReps
         else:
-            repititions=self.repetitions
+            repetitions=self.repetitions
         #it is assumed these features are not activated
         node_featuresX = node_features
         if self.layers is None:

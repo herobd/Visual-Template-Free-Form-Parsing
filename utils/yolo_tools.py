@@ -205,7 +205,7 @@ def AP_dist(target,pred,dist_thresh,numClasses=2,ignoreClasses=False,beforeCls=0
     return AP_(target,pred,-dist_thresh,numClasses,ignoreClasses,beforeCls,allBoxDistNeg)
 def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
     #mAP=0.0
-    aps=[]
+    #aps=[]
     precisions=[]
     recalls=[]
 
@@ -218,20 +218,24 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
     elif len(pred.size())>1 and pred.size(0)>0:
         #if there are no targets, we shouldn't be pred anything
         if ignoreClasses:
-            aps.append(0)
+            #aps.append(0)
+            ap=0
             precisions.append(0)
             recalls.append(1)
         else:
             #numClasses=pred.size(1)-6
+            ap=0
             for cls in range(numClasses):
                 if (torch.argmax(pred[:,beforeCls+6:],dim=1)==cls).any():
-                    aps.append(0) #but we did for this class :(
+                    #aps.append(0) #but we did for this class :(
+                    ap+=0
                     precisions.append(0)
                 else:
-                    aps.append(1) #we didn't for this class :)
+                    #aps.append(1) #we didn't for this class :)
+                    ap+=1
                     precisions.append(1)
                 recalls.append(1)
-        return aps, precisions, recalls
+        return ap/numClasses, precisions, recalls
     else:
         return [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
@@ -250,15 +254,15 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
 
     #add all the preds that didn't have a hit
     hasHit,_ = validHits.max(dim=0) #which preds have hits
-    notHitScores = pred(1-hasHit,0)
+    notHitScores = pred[1-hasHit,0]
     for i in range(notHitScores.shape[0]):
         allScores.append( (notHitScores[i].item(), False) )
 
     # if something has multiple hits, it gets paired to the closest (with matching class)
-    allIOUs[1-validHit] -= 9999999 #Force these to be smaller
-    maxValidHit,maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
-    for i in range(maxValidHit.size(0)):
-        if validHit[maxValidHitIndexes[i],i]:
+    allIOUs[1-validHits] -= 9999999 #Force these to be smaller
+    maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
+    for i in range(maxValidHitIndexes.size(0)):
+        if validHits[maxValidHitIndexes[i],i]:
             allScores.append( (pred[i,0].item(),True) )
             #but now we've consumed this pred, so we'll zero its hit
             validHits[maxValidHitIndexes[i],i]=0
@@ -302,11 +306,11 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
                     #scores.append( (clsPred[p,0],True) )
                     #hits[t,p]=0
                     truePos+=1
-                else:
+                #else:
                     #scores.append( (float('nan'),True) )
             
             left_conf = clsPred[left_ps,0]
-            for i in range(left_conf.size(0)):
+            #for i in range(left_conf.size(0)):
                 #scores.append( (left_conf[i],False) )
             
             #ap = computeAP(scores)
@@ -319,11 +323,11 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
             recalls.append( truePos/clsTarg.size(0) )
         elif ignoreClasses:
             #no pred
-            aps.append(0)
+            #aps.append(0)
             precisions.append(0)
             recalls.append(0)
         elif clsPredInd.any() or clsTargInd.any():
-            aps.append(0)
+            #aps.append(0)
             if clsPredInd.any():
                 recalls.append(1)
                 precisions.append(0)
@@ -331,7 +335,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
                 precisions.append(0)
                 recalls.append(0)
         else:
-            aps.append(1)
+            #aps.append(1)
             precisions.append(1)
             recalls.append(1)
 

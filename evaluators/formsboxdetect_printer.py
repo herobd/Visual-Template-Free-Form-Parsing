@@ -246,12 +246,16 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         if 'save_json' in config:
             assert(batchSize==1)
             scale=scale[0]
-            if model.rotation:
-                targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[b],torch.from_numpy(bbs),1.1,numClasses,extraPreds)
+            if targetBBs is not None:
+                if model.rotation:
+                    targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[b],torch.from_numpy(bbs),1.1,numClasses,extraPreds)
+                else:
+                    targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[b],torch.from_numpy(bbs),0.4,numClasses,extraPreds)
+                newId=targetBBs[b].size(0)
             else:
-                targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[b],torch.from_numpy(bbs),0.4,numClasses,extraPreds)
+                targIndex = -1*torch.ones(bbs.shape[0])
+                newId=1
             bbsData=[]
-            newId=targetBBs[b].size(0)
             for j in range(bbs.shape[0]):
                 tl,tr,br,bl = getCorners(bbs[j,1:])
                 id = targIndex[j].item()
@@ -276,6 +280,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                     bb['nnPred']=float(predNN[j])
                 bbsData.append(bb)
 
+            if instance['pairs'] is None:
+                import pdb; pdb.set_trace()
+                instance['pairs']=[]
             pairsData=[ ('m{}'.format(i1),'m{}'.format(i2)) for i1,i2 in instance['pairs'] ]
 
             saveJSON = os.path.join(config['save_json'],imageName[b]+'.json')

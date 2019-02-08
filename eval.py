@@ -45,13 +45,16 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                 addTo = addTo[add[i]]
                 printM+=add[i]+']['
             value = add[-1]
-            try:
-                value = int(value)
-            except ValueError:
+            if value=="":
+                value=None
+            else:
                 try:
-                    value = float(value)
+                    value = int(value)
                 except ValueError:
-                    pass
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        pass
             addTo[add[-2]] = value
             printM+=add[-2]+']='+add[-1]
             print(printM)

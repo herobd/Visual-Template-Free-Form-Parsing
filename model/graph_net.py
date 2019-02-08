@@ -102,7 +102,7 @@ class GraphNet(nn.Module):
         if self.layers is None:
             adjacencyMatrix = adjacencyMatrix[0].to_dense()
         if self.encoder is not None:
-            node_featuresX,_,_=self.encoder((node_featuresX,,adjacencyMatrix,numBBs))
+            node_featuresX,_,_=self.encoder((node_featuresX,adjacencyMatrix,numBBs))
         for i in range(repetitions):
             if self.layers is not None:
                 side=node_featuresX

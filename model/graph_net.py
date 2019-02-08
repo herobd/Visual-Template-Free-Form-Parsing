@@ -59,6 +59,16 @@ class GraphNet(nn.Module):
             layers = [ GraphTransformerBlock(num_feats,num_heads,num_ffnn_layers,num_ffnn_feats) for i in range(num_layers)]
             self.transformers = nn.Sequential(*layers)
             act_layers.append(nn.Dropout(p=0.05,inplace=True))
+
+            if 'encode' in config:
+                num_encode_layers = config['encode'] if type(config['encode']) is int else num_layers
+                layers = [ GraphTransformerBlock(num_feats,num_heads,num_ffnn_layers,num_ffnn_feats) for i in range(num_encode_layers)]
+                self.encoder = nn.Sequential(*layers)
+            else:
+                self.encoder = None
+        if 'random_reps' in config:
+            self.randomReps=True
+            self.maxReps = config['random_reps'] if type(config['random_reps']) is int else 5
         act_layers.append(nn.ReLU(inplace=True))
             
 
@@ -80,11 +90,20 @@ class GraphNet(nn.Module):
 
     def forward(self, node_features, adjacencyMatrix, numBBs):
 
+        if self.randomReps:
+            if self.training:
+                repititions=np.random.randint(0,self.maxReps+1)
+            else:
+                repititions=self.maxReps
+        else:
+            repititions=self.repetitions
         #it is assumed these features are not activated
         node_featuresX = node_features
         if self.layers is None:
             adjacencyMatrix = adjacencyMatrix[0].to_dense()
-        for i in range(self.repetitions):
+        if self.encoder is not None:
+            node_featuresX,_,_=self.encoder((node_featuresX,adjacencyMatrix,numBBs))
+        for i in range(repetitions):
             if self.layers is not None:
                 side=node_featuresX
                 for graph_conv in self.layers:

@@ -230,9 +230,13 @@ class FeaturePairTrainer(Trainer):
         mRecall=0
         mPrecision=0
         mAP=0
+        mAP_count=0
         
         for image in images:
-            mAP += computeAP(scores[image])
+            ap = computeAP(scores[image])
+            if ap is not None:
+                mAP+=ap
+                mAP_count+=1
             if tp_image[image]+fn_image[image]>0:
                 mRecall += tp_image[image]/(tp_image[image]+fn_image[image])
             else:
@@ -243,14 +247,14 @@ class FeaturePairTrainer(Trainer):
                 mPrecision += 1
         mRecall /= len(images)
         mPrecision /= len(images)
-        mAP /= len(images)
+        mAP /= mAP_count
 
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_lossRel': total_val_lossRel / len(self.valid_data_loader),
             'val_lossNN': total_val_lossNN / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
-            'val_recall':mRecall,
-            'val_precision':mPrecision,
-            'val_mAP': mAP
+            'val_recall*':mRecall,
+            'val_precision*':mPrecision,
+            'val_mAP*': mAP
         }

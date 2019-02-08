@@ -96,7 +96,10 @@ class FormsFeaturePair(torch.utils.data.Dataset):
         self.color = config['color'] if 'color' in config else True
         self.rotate = config['rotation'] if 'rotation' in config else True
 
-        self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
+        #self.simple_dataset = config['simple_dataset'] if 'simple_dataset' in config else False
+        self.special_dataset = config['special_dataset'] if 'special_dataset' in config else None
+        if 'simple_dataset' in config and config['simple_dataset']:
+            self.special_dataset='simple'
         self.balance = config['balance'] if 'balance' in config else False
 
         self.eval = config['eval'] if 'eval' in config else False
@@ -113,8 +116,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
         if instances is not None:
             self.instances=instances
         else:
-            if self.simple_dataset:
-                splitFile = 'simple_train_valid_test_split.json'
+            if self.special_dataset is not None:
+                splitFile = self.special_dataset+'_train_valid_test_split.json'
             else:
                 splitFile = 'train_valid_test_split.json'
             with open(os.path.join(dirPath,splitFile)) as f:
@@ -235,39 +238,47 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                                 'ids' : (id,id2),
                                                 'numNeighbors': torch.tensor([ [numN1,numN2] ])
                                                 } )
-                        if self.eval:
-                            datas=[]
-                            labels=[]
-                            qXYs=[]
-                            iXYs=[]
-                            nodeIds=[]
-                            NNs=[]
-                            for inst in pair_instances:
-                                datas.append(inst['data'])
-                                labels.append(inst['label'])
-                                qXYs.append(inst['qXY'])
-                                iXYs.append(inst['iXY'])
-                                nodeIds.append(inst['ids'])
-                                NNs.append(inst['numNeighbors'])
-                            if len(datas)>0:
-                                data = torch.cat(datas,dim=0),
-                            else:
-                                data = torch.FloatTensor((0,numFeats))
-                            if len(NNs)>0:
-                                NNs = torch.cat(NNs,dim=0)
-                            else:
-                                NNs = torch.FloatTensor((0,2))
-                            notpair_instances.append( {
-                                'data': data,
-                                'label': torch.ByteTensor(labels),
-                                'imgName': imageName,
-                                'imgPath' : path,
-                                'qXY' : qXYs,
-                                'iXY' : iXYs,
-                                'nodeIds' : nodeIds,
-                                'numNeighbors' : NNs
-                                } )
-                            pair_instances=[]
+                            if self.eval:
+                                #if evaluating, pack all instances for an image into a batch
+                                datas=[]
+                                labels=[]
+                                qXYs=[]
+                                iXYs=[]
+                                nodeIds=[]
+                                NNs=[]
+                                numTrue=0
+                                for inst in pair_instances:
+                                    datas.append(inst['data'])
+                                    labels.append(inst['label'])
+                                    numTrue += inst['label']
+                                    qXYs.append(inst['qXY'])
+                                    iXYs.append(inst['iXY'])
+                                    nodeIds.append(inst['ids'])
+                                    NNs.append(inst['numNeighbors'])
+                                if len(datas)>0:
+                                    data = torch.cat(datas,dim=0),
+                                else:
+                                    data = torch.FloatTensor((0,numFeats))
+                                if len(NNs)>0:
+                                    NNs = torch.cat(NNs,dim=0)
+                                else:
+                                    NNs = torch.FloatTensor((0,2))
+                                missedCount=0
+                                for id1,id2 in annotations['pairs']:
+                                    if id1 not in annotations['byId'] or id2 not in annotations['byId']:
+                                        missedCount+=1
+                                notpair_instances.append( {
+                                    'data': data,
+                                    'label': torch.ByteTensor(labels),
+                                    'imgName': imageName,
+                                    'imgPath' : path,
+                                    'qXY' : qXYs,
+                                    'iXY' : iXYs,
+                                    'nodeIds' : nodeIds,
+                                    'numNeighbors' : NNs,
+                                    'missedRels': missedCount
+                                    } )
+                                pair_instances=[]
             self.instances = notpair_instances
             if self.balance and not self.eval:
                 dif = len(notpair_instances)/float(len(pair_instances))

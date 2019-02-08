@@ -397,22 +397,26 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc):
 
 def computeAP(scores):
     rank=[]
+    missed=0
     for conf,rel in scores:
         if rel:
-            better=0
-            equal=-1 # as we'll iterate over this instance here
-            for conf2,rel2 in scores:
-                if conf2>conf:
-                    better+=1
-                elif conf2==conf:
-                    equal+=1
-            rank.append(better+math.ceil(equal/2.0))
+            if math.isnan(conf):
+                missed+=1
+            else:
+                better=0
+                equal=-1 # as we'll iterate over this instance here
+                for conf2,rel2 in scores:
+                    if conf2>conf:
+                        better+=1
+                    elif conf2==conf:
+                        equal+=1
+                rank.append(better+math.ceil(equal/2.0))
     if len(rank)==0:
-        return -1
+        return None
     rank.sort()
     ap=0.0
     for i in range(len(rank)):
         ap += float(i+1)/(rank[i]+1)
-    ap/=len(rank)
+    ap/=(len(rank)+missed)
     assert(ap<=1.001)
     return ap

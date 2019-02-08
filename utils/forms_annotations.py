@@ -578,6 +578,7 @@ def getBBInfo(bb,rotate,useBlankClass=False):
 
     return cX,cY,height,width,rot,text,field,blank,nn
 
+
 def getResponseBBIdList_(this,queryId,annotations):
     responseBBList=[]
     for pair in annotations['pairs']: #done already +annotations['samePairs']:

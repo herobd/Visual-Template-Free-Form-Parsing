@@ -150,7 +150,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 #print(os.path.join(jsonPath))
 
                                 #fix assumptions made in GTing
-                                fixAnnotations(self,annotations)
+                                missedCount=fixAnnotations(self,annotations)
 
                             #print(path)
                             numNeighbors=defaultdict(lambda:0)
@@ -263,10 +263,10 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                     NNs = torch.cat(NNs,dim=0)
                                 else:
                                     NNs = torch.FloatTensor((0,2))
-                                missedCount=0
-                                for id1,id2 in annotations['pairs']:
-                                    if id1 not in annotations['byId'] or id2 not in annotations['byId']:
-                                        missedCount+=1
+                                #missedCount=0
+                                #for id1,id2 in annotations['pairs']:
+                                #    if id1 not in annotations['byId'] or id2 not in annotations['byId']:
+                                #        missedCount+=1
                                 notpair_instances.append( {
                                     'data': data,
                                     'label': torch.ByteTensor(labels),

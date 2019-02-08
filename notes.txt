@@ -1,0 +1,1 @@
+-a validation=eval=True,data_loader=num_workers=0,validation=batch_size=1,data_loader=eval=True,data_loader=batch_size=1,optimize=True

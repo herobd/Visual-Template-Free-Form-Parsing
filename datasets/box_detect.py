@@ -36,6 +36,7 @@ def collate(batch):
         pairs = batch[0]['pairs']
     else:
         pairs = None
+    
     for b in batch:
         if b is None:
             continue
@@ -187,6 +188,8 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         else:
             self.transform = None
         self.rescale_range = config['rescale_range']
+        if type(self.rescale_range) is float or type(self.rescale_range) is int:
+            self.rescale_range = [self.rescale_range,self.rescale_range]
         if self.rescale_range[0]==450:
             self.rescale_range[0]=0.2
         elif self.rescale_range[0]>1.0:

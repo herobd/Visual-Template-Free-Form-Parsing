@@ -122,28 +122,37 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             newRelPred = relPred[keep]
             if newRelPred.size(0)<700:
                 break
-        newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+        #newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+        usePredNN= predNN is not None and config['optimize']!='gt'
+        idMap={}
+        newId=0
+        newRelCand=[]
+        numNeighbors=[]
+        for index,(id1,id2) in enumerate(relCand):
+            if keep[index]:
+                if id1 not in idMap:
+                    idMap[id1]=newId
+                    if not usePredNN:
+                        numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                    else:
+                        numNeighbors.append(predNN[id1])
+                    newId+=1
+                if id2 not in idMap:
+                    idMap[id2]=newId
+                    if not usePredNN:
+                        numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                    else:
+                        numNeighbors.append(predNN[id2])
+                    newId+=1
+                newRelCand.append( [idMap[id1],idMap[id2]] )            
 
-        if config['optimize']=='gt' or predNN is None:
-            numNeighbors=[0]*len(newRelCand)
-            rev={}
-            newInd=0
-            for ind in range(outputBBs.size(0)):
-                if keep[ind]:
-                    rev[targIndex[ind]]=newInd
-                    newInd+=1
-            for t0,t1 in adjacency:
-                if t0 in rev:
-                    numNeighbors[rev[t0]]+=1
-                if t1 in rev:
-                    numNeighbors[rev[t1]]+=1
-            relPred[keep] *= torch.from_numpy( optimizeRelationships(newRelPred,newRelCand,numNeighbors) ).float()
-        elif predNN is not None and config['optimize']:
-            newPredNN=predNN[keep]
-            #relPred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN) ).float()
-            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN)
-            decision= torch.from_numpy( np.round_(decision).astype(int) )
-            pred[keep] = torch.where(0==decision,pred[keep]-2,pred[keep])
+
+        if not usePredNN:
+            decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors)
+        else:
+            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors)
+        decision= torch.from_numpy( np.round_(decision).astype(int) )
+        relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
         relPred[1-keep] -=2
         EDGE_THRESH=-1
 

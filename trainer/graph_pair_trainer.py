@@ -433,7 +433,7 @@ class GraphPairTrainer(BaseTrainer):
             'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
             #'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
             'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
-            'val_bb_mAP':(mAP/mAP_count)
+            'val_bb_mAP':(mAP/mAP_count),
             'val_rel_recall':total_rel_recall/len(self.valid_data_loader),
             'val_rel_prec':total_rel_prec/len(self.valid_data_loader),
             'val_rel_F':(total_rel_prec+total_rel_recall)/(2*len(self.valid_data_loader)),

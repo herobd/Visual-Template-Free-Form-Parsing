@@ -576,7 +576,7 @@ def getBBInfo(bb,rotate,useBlankClass=False):
     hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
     hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
     h = (np.abs(hl)+np.abs(hr))/2.0
-    h=0
+    #h=0
 
     cX = (lX+rX)/2.0
     cY = (lY+rY)/2.0

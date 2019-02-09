@@ -324,10 +324,12 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
         for i in range(missedRels):
             scores.append( (float('nan'),True) )
         ap=computeAP(scores)
-        if ap is None:
-            ap=-1
         if outDir is not None:
-            saveName = '{}_AP:{:.2f}_r:{:.2f}_p:{:.2f}_.png'.format(imageName,ap,recall,prec)
+            if ap is None:
+                wap=-1
+            else:
+                wap=ap
+            saveName = '{}_AP:{:.2f}_r:{:.2f}_p:{:.2f}_.png'.format(imageName,wap,recall,prec)
             cv2.imwrite(os.path.join(outDir,saveName),image)
             #cv2.imshow('dfsdf',image)
             #cv2.waitKey()
@@ -344,6 +346,9 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             returnDict['Fm']=(recall+prec)/2
             if ap is not None:
                 returnDict['AP']=ap,
+                returnDict['no_targs']=0
+            else:
+                returnDict['no_targs']=1
             returnDict['missedRels']=missedRels
 
         

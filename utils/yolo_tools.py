@@ -412,6 +412,8 @@ def computeAP(scores):
                         equal+=1
                 rank.append(better+math.ceil(equal/2.0))
     if len(rank)==0:
+        if missed>0:
+            return 0
         return None
     rank.sort()
     ap=0.0

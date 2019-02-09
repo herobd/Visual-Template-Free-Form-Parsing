@@ -164,6 +164,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #aps_3=[]
     aps_5=[]
+    aps_5all=[]
     #aps_7=[]
     recalls_5=[]
     precs_5=[]

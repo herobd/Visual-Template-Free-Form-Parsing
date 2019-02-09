@@ -1,10 +1,10 @@
 {
     "name": "Simple18_pair_transRand_staggerLight_NNP",
-    "cuda": false,
+    "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":false,
+    "super_computer":true,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "special_dataset": "simple",
@@ -40,7 +40,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.01,
+        "lr": 0.001,
         "weight_decay": 0
     },
     "loss": {
@@ -48,8 +48,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 1,
-        "edge": 1
+        "box": 1.25,
+        "edge": 0.5
     },
     "loss_params": 
         {

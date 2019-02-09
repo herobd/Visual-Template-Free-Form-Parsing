@@ -1,5 +1,5 @@
 {
-    "name": "Forms18_augRFhv_staggerLight_retrain",
+    "name": "Forms18_augRFhv_staggerLight",
     "cuda": true,
     "gpu": 0,
     "super_computer":false,

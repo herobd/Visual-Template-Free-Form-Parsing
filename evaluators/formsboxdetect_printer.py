@@ -192,8 +192,11 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,numClasses,beforeCls=extraPreds)
             #ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,numClasses,beforeCls=extraPreds)
 
-
-        aps_5.append(ap_5 )
+        if ap_5 is not None:
+            aps_5.append(ap_5 )
+            aps_5all.append(ap_5)
+        else:
+            aps_5all.append(-1)
         #aps_3.append(ap_3 )
         #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
@@ -380,7 +383,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #    #print(rad)
             #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-            saveName = '{}_boxes_t:{:.2f}_f:{:.2f}'.format(imageName[b],aps_5[b][0],aps_5[b][1])
+            saveName = '{}_boxes_t:{:.2f}_f:{:.2f}'.format(imageName[b],aps_5all[b][0],aps_5all[b][1])
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

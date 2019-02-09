@@ -9,6 +9,7 @@ import math
 from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
+from model.optimize import optimizeRelationships, optimizeRelationshipsSoft
 
 
 def plotRect(img,color,xyrhw):
@@ -52,7 +53,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
         return image, bbs, adjaceny, num_neighbors
 
-    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.5
+    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.0
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -118,36 +119,49 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         target_for_b = torch.empty(0)
     if 'optimize' in config and config['optimize']:
+        if 'penalty' in config:
+            penalty = config['penalty']
+        else:
+            penalty = 0.5
         thresh=0.3
         while thresh<0.9:
             keep = relPred>thresh
             newRelPred = relPred[keep]
             if newRelPred.size(0)<700:
                 break
-        newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+        #newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+        usePredNN= predNN is not None and config['optimize']!='gt'
+        idMap={}
+        newId=0
+        newRelCand=[]
+        numNeighbors=[]
+        for index,(id1,id2) in enumerate(relCand):
+            if keep[index]:
+                if id1 not in idMap:
+                    idMap[id1]=newId
+                    if not usePredNN:
+                        numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                    else:
+                        numNeighbors.append(predNN[id1])
+                    newId+=1
+                if id2 not in idMap:
+                    idMap[id2]=newId
+                    if not usePredNN:
+                        numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                    else:
+                        numNeighbors.append(predNN[id2])
+                    newId+=1
+                newRelCand.append( [idMap[id1],idMap[id2]] )            
 
-        if config['optimize']=='gt' or predNN is None:
-            numNeighbors=[0]*len(newRelCand)
-            rev={}
-            newInd=0
-            for ind in range(outputBBs.size(0)):
-                if keep[ind]:
-                    rev[targIndex[ind]]=newInd
-                    newInd+=1
-            for t0,t1 in adjacency:
-                if t0 in rev:
-                    numNeighbors[rev[t0]]+=1
-                if t1 in rev:
-                    numNeighbors[rev[t1]]+=1
-            relPred[keep] *= torch.from_numpy( optimizeRelationships(newRelPred,newRelCand,numNeighbors) ).float()
-        elif predNN is not None and config['optimize']:
-            newPredNN=predNN[keep]
-            #relPred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN) ).float()
-            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN)
-            decision= torch.from_numpy( np.round_(decision).astype(int) )
-            pred[keep] = torch.where(0==decision,pred[keep]-2,pred[keep])
+
+        if not usePredNN:
+            decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
+        else:
+            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
+        decision= torch.from_numpy( np.round_(decision).astype(int) )
+        relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
         relPred[1-keep] -=2
-        EDGE_THRESH=0
+        EDGE_THRESH=-1
 
     data = data.numpy()
     #threshed in model
@@ -193,8 +207,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 badPred+=1
         i+=1
     for i in range(len(adjacency)-matches):
-        scores.append( (-0.0001,True) )
-        scores.append( (0.0,False) )
+        scores.append( (float('nan'),True) )
     rel_ap=computeAP(scores)
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
@@ -355,7 +368,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #print('saved: '+os.path.join(outDir,saveName))
 
         
-    retData= { 'bb_ap_5':[ap_5],
+    retData= { 'bb_ap':[ap_5],
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,

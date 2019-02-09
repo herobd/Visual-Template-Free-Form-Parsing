@@ -352,7 +352,7 @@ class GraphPairTrainer(BaseTrainer):
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
         mAP = 0
-        mAP_count =0
+        mAP_count = 0
         mRecall = np.zeros(numClasses)
         mPrecision = np.zeros(numClasses)
 
@@ -416,8 +416,8 @@ class GraphPairTrainer(BaseTrainer):
 
                 #import pdb;pdb.set_trace()
                 if ap_5 is not None:
-                    mAP += ap_5
-                    mAP_count += 1
+                    mAP+=ap_5
+                    mAP_count+=1
                 mRecall += np.array(recall_5)
                 mPrecision += np.array(prec_5)
 

@@ -237,7 +237,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
                 recalls.append(1)
         return ap/numClasses, precisions, recalls
     else:
-        return [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
+        return 1, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
     #This is an alternate metric that computes AP of all classes together
     #Your only a hit if you have the same class

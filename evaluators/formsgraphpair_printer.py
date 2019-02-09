@@ -116,6 +116,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         target_for_b = torch.empty(0)
     if 'optimize' in config and config['optimize']:
+        if 'penalty' in config:
+            penalty = config['penalty']
+        else:
+            penalty = 0.5
         thresh=0.3
         while thresh<0.9:
             keep = relPred>thresh
@@ -148,9 +152,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
         if not usePredNN:
-            decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors)
+            decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
         else:
-            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors)
+            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
         decision= torch.from_numpy( np.round_(decision).astype(int) )
         relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
         relPred[1-keep] -=2

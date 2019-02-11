@@ -9,6 +9,7 @@ import math
 from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
+from model.optimize import optimizeRelationships, optimizeRelationshipsSoft
 
 
 def plotRect(img,color,xyrhw):
@@ -52,7 +53,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
         return image, bbs, adjaceny, num_neighbors
 
-    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.5
+    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.0
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -88,7 +89,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets, relPred, relIndexes = model(dataT)
+    outputBBs, outputOffsets, relPred, relIndexes = model(dataT,hard_detect_limit=600)
 
     if model.detector.predNumNeighbors:
         predNN = outputBBs[:,6]
@@ -108,46 +109,68 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if relCand is None:
         relCand=[]
 
-    numClasses=2
-    if model.rotation:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
+    numClasses=2 #TODO not fixed
+    if model.detector.predNumNeighbors:
+        #useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
+        extraPreds=1
     else:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
+        extraPreds=0
+        #useOutputBBs=outputBBs
+
+    if model.rotation:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses,extraPreds)
+    else:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses,extraPreds)
     if targetBBs is not None:
         target_for_b = targetBBs[0,:,:]
     else:
         target_for_b = torch.empty(0)
     if 'optimize' in config and config['optimize']:
+        if 'penalty' in config:
+            penalty = config['penalty']
+        else:
+            penalty = 0.5
         thresh=0.3
         while thresh<0.9:
             keep = relPred>thresh
             newRelPred = relPred[keep]
             if newRelPred.size(0)<700:
                 break
-        newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+        if newRelPred.size(0)>0:
+            #newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+            usePredNN= predNN is not None and config['optimize']!='gt'
+            idMap={}
+            newId=0
+            newRelCand=[]
+            numNeighbors=[]
+            for index,(id1,id2) in enumerate(relCand):
+                if keep[index]:
+                    if id1 not in idMap:
+                        idMap[id1]=newId
+                        if not usePredNN:
+                            numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                        else:
+                            numNeighbors.append(predNN[id1])
+                        newId+=1
+                    if id2 not in idMap:
+                        idMap[id2]=newId
+                        if not usePredNN:
+                            numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                        else:
+                            numNeighbors.append(predNN[id2])
+                        newId+=1
+                    newRelCand.append( [idMap[id1],idMap[id2]] )            
 
-        if config['optimize']=='gt' or predNN is None:
-            numNeighbors=[0]*len(newRelCand)
-            rev={}
-            newInd=0
-            for ind in range(outputBBs.size(0)):
-                if keep[ind]:
-                    rev[targIndex[ind]]=newInd
-                    newInd+=1
-            for t0,t1 in adjacency:
-                if t0 in rev:
-                    numNeighbors[rev[t0]]+=1
-                if t1 in rev:
-                    numNeighbors[rev[t1]]+=1
-            relPred[keep] *= torch.from_numpy( optimizeRelationships(newRelPred,newRelCand,numNeighbors) ).float()
-        elif predNN is not None and config['optimize']:
-            newPredNN=predNN[keep]
-            #relPred[keep] *= torch.from_numpy( optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN) ).float()
-            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,newPredNN)
+
+            if not usePredNN:
+                decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
+            else:
+                decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
             decision= torch.from_numpy( np.round_(decision).astype(int) )
-            pred[keep] = torch.where(0==decision,pred[keep]-2,pred[keep])
-        relPred[1-keep] -=2
-        EDGE_THRESH=0
+            decision=decision.to(relPred.device)
+            relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
+            relPred[1-keep] -=2
+            EDGE_THRESH=-1
 
     data = data.numpy()
     #threshed in model
@@ -160,20 +183,17 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #else:
     #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
-    if model.detector.predNumNeighbors:
-        useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
-    else:
-        useOutputBBs=outputBBs
     if model.rotation:
-        ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBBs,0.9,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes,beforeCls=extraPreds)
     else:
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBBs,0.5,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes,beforeCls=extraPreds)
     useOutputBBs=None
 
     truePred=falsePred=badPred=0
     scores=[]
     matches=0
     i=0
+    numMissedByHeur=0
     for n0,n1 in relCand:
         t0 = targIndex[n0].item()
         t1 = targIndex[n1].item()
@@ -193,9 +213,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 badPred+=1
         i+=1
     for i in range(len(adjacency)-matches):
-        scores.append( (-0.0001,True) )
-        scores.append( (0.0,False) )
+        numMissedByHeur+=1
+        scores.append( (float('nan'),True) )
     rel_ap=computeAP(scores)
+
+    numMissedByDetect=0
+    for t0,t1 in adjacency:
+        if t0 not in targIndex or t1 not in targIndex:
+            numMissedByHeur-=1
+            numMissedByDetect+=1
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
     else:
@@ -239,6 +265,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
         #if name=='text_start_gt':
 
+        #Draw GT bbs
         for j in range(targetSize):
             plotRect(image,(1,0.5,0),targetBBs[0,j,0:5])
             #x=int(targetBBs[b,j,0])
@@ -272,6 +299,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #pred_points.append(
         #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
         #import pdb; pdb.set_trace()
+
+        #Draw pred bbs
         bbs = outputBBs
         for j in range(bbs.shape[0]):
             #circle aligned predictions
@@ -294,13 +323,13 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if model.detector.predNumNeighbors:
                     x=int(bbs[j,1])
                     y=int(bbs[j,2]-bbs[j,4])
-                    targ_j = targIndex[j].item()
-                    if targ_j>=0:
-                        gtNN = gtNumNeighbors[targ_j]
-                    else:
-                        gtNN = 0
-                    color = int(min(abs(predNN[j]-gtNN),2)*127)
-                    cv2.putText(image,'{}/{}'.format(predNN[j],gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                    #targ_j = targIndex[j].item()
+                    #if targ_j>=0:
+                    #    gtNN = gtNumNeighbors[targ_j]
+                    #else:
+                    #    gtNN = 0
+                    #color = int(min(abs(predNN[j]-gtNN),2)*127)
+                    #cv2.putText(image,'{}/{}'.format(predNN[j],gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
         #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
@@ -310,6 +339,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(mid)
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
+
+        #Draw GT pairings
         for i,j in adjacency:
             x1 = round(targetBBs[0,i,0].item())
             y1 = round(targetBBs[0,i,1].item())
@@ -317,6 +348,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             y2 = round(targetBBs[0,j,1].item())
             cv2.line(image,(x1,y1),(x2,y2),(0.25,0,0.25),3)
 
+        #Draw pred pairings
         numrelpred=0
         for i in range(len(relCand)):
             #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
@@ -335,15 +367,20 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 numrelpred+=1
         #print('number of pred rels: {}'.format(numrelpred))
 
+        #Draw alginment between gt and pred bbs
         for predI in range(bbs.shape[0]):
             targI=targIndex[predI].item()
+            x1 = int(round(bbs[predI,1]))
+            y1 = int(round(bbs[predI,2]))
             if targI>0:
-                x1 = round(bbs[predI,1])
-                y1 = round(bbs[predI,2])
 
                 x2 = round(targetBBs[0,targI,0].item())
                 y2 = round(targetBBs[0,targI,1].item())
                 cv2.line(image,(x1,y1),(x2,y2),(1,0,1),1)
+            else:
+                #draw 'x', indicating not match
+                cv2.line(image,(x1-5,y1-5),(x1+5,y1+5),(.1,0,.1),1)
+                cv2.line(image,(x1+5,y1-5),(x1-5,y1+5),(.1,0,.1),1)
 
 
 
@@ -354,8 +391,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         io.imsave(os.path.join(outDir,saveName),image)
         #print('saved: '+os.path.join(outDir,saveName))
 
-        
-    retData= { 'bb_ap_5':[ap_5],
+    print('\n{} ap:{}\tnumMissedByDetect:{}\tmissedByHuer:{}'.format(imageName,rel_ap,numMissedByDetect,numMissedByHeur))
+    retData= { 'bb_ap':[ap_5],
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],
                'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
@@ -365,10 +402,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_Fm':(relRecall+relPrec)/2,
                'rel_fullPrec':fullPrec,
                'rel_fullFm':(relRecall+fullPrec)/2,
+               'relMissedByHeur':numMissedByHeur,
+               'relMissedByDetect':numMissedByDetect,
 
              }
-    if rel_ap>=0: #-1 ap if no relationships
+    if rel_ap is not None: #none ap if no relationships
         retData['rel_AP']=rel_ap
+        retData['no_targs']=0
+    else:
+        retData['no_targs']=1
     return (
              retData,
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)

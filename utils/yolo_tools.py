@@ -237,7 +237,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
                 recalls.append(1)
         return ap/numClasses, precisions, recalls
     else:
-        return [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
+        return 1, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
     #This is an alternate metric that computes AP of all classes together
     #Your only a hit if you have the same class
@@ -412,6 +412,8 @@ def computeAP(scores):
                         equal+=1
                 rank.append(better+math.ceil(equal/2.0))
     if len(rank)==0:
+        if missed>0:
+            return 0
         return None
     rank.sort()
     ap=0.0

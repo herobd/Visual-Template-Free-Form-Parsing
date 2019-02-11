@@ -122,6 +122,7 @@ def fixAnnotations(this,annotations):
                 )
 
 
+
     #restructure
     annotations['byId']={}
     for bb in annotations['textBBs']:
@@ -132,6 +133,11 @@ def fixAnnotations(this,annotations):
         if not this.only_opposite_pairs:
             annotations['pairs']+=annotations['samePairs']
         del annotations['samePairs']
+
+    numPairsWithoutBB=0
+    for id1,id2 in annotations['pairs']:
+        if id1 not in annotations['byId'] or id2 not in annotations['byId']:
+            numPairsWithoutBB+=1
 
     toAdd=[]
     idsToRemove=set()
@@ -375,6 +381,8 @@ def fixAnnotations(this,annotations):
     for pair in annotations['pairs']:
         assert(len(pair)==2)
 
+    return numPairsWithoutBB
+
 def getBBWithPoints(useBBs,s,useBlankClass=False,usePairedClass=False):
 
     numClasses=2
@@ -568,7 +576,7 @@ def getBBInfo(bb,rotate,useBlankClass=False):
     hl = ((tlX-lX)*-(rY-lY) + (tlY-lY)*(rX-lX))/d #projection of half-left edge onto transpose horz run
     hr = ((brX-rX)*-(lY-rY) + (brY-rY)*(lX-rX))/d #projection of half-right edge onto transpose horz run
     h = (np.abs(hl)+np.abs(hr))/2.0
-    h=0
+    #h=0
 
     cX = (lX+rX)/2.0
     cY = (lY+rY)/2.0

@@ -164,6 +164,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #aps_3=[]
     aps_5=[]
+    aps_5all=[]
     #aps_7=[]
     recalls_5=[]
     precs_5=[]
@@ -192,8 +193,11 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,numClasses,beforeCls=extraPreds)
             #ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,numClasses,beforeCls=extraPreds)
 
-
-        aps_5.append(ap_5 )
+        if ap_5 is not None:
+            aps_5.append(ap_5 )
+            aps_5all.append(ap_5)
+        else:
+            aps_5all.append(-1)
         #aps_3.append(ap_3 )
         #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
@@ -240,8 +244,8 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             else:
                 predClass= bbs[:,6:]
         else:
-            predNN=bbs
-            predVlass=bbs
+            predNN=bbs #i.e. a zero size tensor
+            predClass=bbs
 
         if 'save_json' in config:
             assert(batchSize==1)
@@ -281,7 +285,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 bbsData.append(bb)
 
             if instance['pairs'] is None:
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
                 instance['pairs']=[]
             pairsData=[ ('m{}'.format(i1),'m{}'.format(i2)) for i1,i2 in instance['pairs'] ]
 
@@ -380,7 +384,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #    #print(rad)
             #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-            saveName = '{}_boxes_t:{:.2f}_f:{:.2f}'.format(imageName[b],aps_5[b][0],aps_5[b][1])
+            saveName = '{}_boxes_AP:{:.2f}'.format(imageName[b],aps_5all[b])
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

@@ -351,7 +351,8 @@ class GraphPairTrainer(BaseTrainer):
         numClasses = self.model.numBBTypes
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
-        mAP = np.zeros(numClasses)
+        mAP = 0
+        mAP_count = 0
         mRecall = np.zeros(numClasses)
         mPrecision = np.zeros(numClasses)
 
@@ -414,7 +415,9 @@ class GraphPairTrainer(BaseTrainer):
                     ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,numClasses)
 
                 #import pdb;pdb.set_trace()
-                mAP += np.array(ap_5)
+                if ap_5 is not None:
+                    mAP+=ap_5
+                    mAP_count+=1
                 mRecall += np.array(recall_5)
                 mPrecision += np.array(prec_5)
 
@@ -431,7 +434,7 @@ class GraphPairTrainer(BaseTrainer):
             'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
             #'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
             'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
-            'val_bb_mAP':(mAP/len(self.valid_data_loader)).tolist(),
+            'val_bb_mAP':(mAP/mAP_count),
             'val_rel_recall':total_rel_recall/len(self.valid_data_loader),
             'val_rel_prec':total_rel_prec/len(self.valid_data_loader),
             'val_rel_F':(total_rel_prec+total_rel_recall)/(2*len(self.valid_data_loader)),

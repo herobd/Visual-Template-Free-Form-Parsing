@@ -176,6 +176,8 @@ class PairingGraph(BaseModel):
             self.debug=True
         else:
             self.debug=False
+        if type(self.pairer) is BinaryPairReal and type(self.pairer.shape_layers) is not nn.Sequential:
+            print("Shape feats aligned to feat dataset.")
 
  
     def unfreeze(self): 
@@ -427,6 +429,8 @@ class PairingGraph(BaseModel):
                 if self.detector.predNumNeighbors:
                     shapeFeats[i,startNN +0] = bbs[index1,5]
                     shapeFeats[i,startNN +1] = bbs[index2,5]
+            
+                #if self.us
 
 
 

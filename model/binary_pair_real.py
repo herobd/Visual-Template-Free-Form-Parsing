@@ -74,6 +74,7 @@ class BinaryPairReal(nn.Module):
             else:
                 weight = self.split_weighting.clamp(0,1)
                 res = weight*res + (1-weight)*res2
+        #import pdb;pdb.set_trace()
         return None,res
 
 

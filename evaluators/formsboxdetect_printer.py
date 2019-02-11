@@ -244,8 +244,8 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             else:
                 predClass= bbs[:,6:]
         else:
-            predNN=bbs
-            predVlass=bbs
+            predNN=bbs #i.e. a zero size tensor
+            predClass=bbs
 
         if 'save_json' in config:
             assert(batchSize==1)
@@ -285,7 +285,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 bbsData.append(bb)
 
             if instance['pairs'] is None:
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
                 instance['pairs']=[]
             pairsData=[ ('m{}'.format(i1),'m{}'.format(i2)) for i1,i2 in instance['pairs'] ]
 
@@ -384,7 +384,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #    #print(rad)
             #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-            saveName = '{}_boxes_t:{:.2f}_f:{:.2f}'.format(imageName[b],aps_5all[b][0],aps_5all[b][1])
+            saveName = '{}_boxes_AP:{:.2f}'.format(imageName[b],aps_5all[b])
             #for j in range(metricsOut.shape[1]):
             #    saveName+='_m:{0:.3f}'.format(metricsOut[i,j])
             saveName+='.png'

@@ -126,39 +126,40 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             newRelPred = relPred[keep]
             if newRelPred.size(0)<700:
                 break
-        #newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
-        usePredNN= predNN is not None and config['optimize']!='gt'
-        idMap={}
-        newId=0
-        newRelCand=[]
-        numNeighbors=[]
-        for index,(id1,id2) in enumerate(relCand):
-            if keep[index]:
-                if id1 not in idMap:
-                    idMap[id1]=newId
-                    if not usePredNN:
-                        numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
-                    else:
-                        numNeighbors.append(predNN[id1])
-                    newId+=1
-                if id2 not in idMap:
-                    idMap[id2]=newId
-                    if not usePredNN:
-                        numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
-                    else:
-                        numNeighbors.append(predNN[id2])
-                    newId+=1
-                newRelCand.append( [idMap[id1],idMap[id2]] )            
+        if newRelPred.size(0)>0:
+            #newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+            usePredNN= predNN is not None and config['optimize']!='gt'
+            idMap={}
+            newId=0
+            newRelCand=[]
+            numNeighbors=[]
+            for index,(id1,id2) in enumerate(relCand):
+                if keep[index]:
+                    if id1 not in idMap:
+                        idMap[id1]=newId
+                        if not usePredNN:
+                            numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                        else:
+                            numNeighbors.append(predNN[id1])
+                        newId+=1
+                    if id2 not in idMap:
+                        idMap[id2]=newId
+                        if not usePredNN:
+                            numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                        else:
+                            numNeighbors.append(predNN[id2])
+                        newId+=1
+                    newRelCand.append( [idMap[id1],idMap[id2]] )            
 
 
-        if not usePredNN:
-            decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
-        else:
-            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
-        decision= torch.from_numpy( np.round_(decision).astype(int) )
-        relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
-        relPred[1-keep] -=2
-        EDGE_THRESH=-1
+            if not usePredNN:
+                decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
+            else:
+                decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
+            decision= torch.from_numpy( np.round_(decision).astype(int) )
+            relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
+            relPred[1-keep] -=2
+            EDGE_THRESH=-1
 
     data = data.numpy()
     #threshed in model

@@ -106,11 +106,18 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     relCand = relIndexes
     relPred = 2*torch.sigmoid(relPred)[:,0] -1
 
-    numClasses=2
-    if model.rotation:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses)
+    numClasses=2 #TODO not fixed
+    if model.detector.predNumNeighbors:
+        #useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
+        extraPreds=1
     else:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses)
+        extraPreds=0
+        #useOutputBBs=outputBBs
+
+    if model.rotation:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses,extraPreds)
+    else:
+        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses,extraPreds)
     if targetBBs is not None:
         target_for_b = targetBBs[0,:,:]
     else:
@@ -170,14 +177,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #else:
     #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
-    if model.detector.predNumNeighbors:
-        useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
-    else:
-        useOutputBBs=outputBBs
     if model.rotation:
-        ap_5, prec_5, recall_5 =AP_dist(target_for_b,useOutputBBs,0.9,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes,beforeCls=extraPreds)
     else:
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,useOutputBBs,0.5,model.numBBTypes)
+        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes,beforeCls=extraPreds)
     useOutputBBs=None
 
     truePred=falsePred=badPred=0
@@ -256,6 +259,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
         #if name=='text_start_gt':
 
+        #Draw GT bbs
         for j in range(targetSize):
             plotRect(image,(1,0.5,0),targetBBs[0,j,0:5])
             #x=int(targetBBs[b,j,0])
@@ -289,6 +293,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #pred_points.append(
         #bbs.sort(key=lambda a: a[0]) #so most confident bbs are draw last (on top)
         #import pdb; pdb.set_trace()
+
+        #Draw pred bbs
         bbs = outputBBs
         for j in range(bbs.shape[0]):
             #circle aligned predictions
@@ -327,6 +333,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(mid)
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
+
+        #Draw GT pairings
         for i,j in adjacency:
             x1 = round(targetBBs[0,i,0].item())
             y1 = round(targetBBs[0,i,1].item())
@@ -334,6 +342,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             y2 = round(targetBBs[0,j,1].item())
             cv2.line(image,(x1,y1),(x2,y2),(0.25,0,0.25),3)
 
+        #Draw pred pairings
         numrelpred=0
         for i in range(len(relCand)):
             #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
@@ -352,15 +361,20 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 numrelpred+=1
         #print('number of pred rels: {}'.format(numrelpred))
 
+        #Draw alginment between gt and pred bbs
         for predI in range(bbs.shape[0]):
             targI=targIndex[predI].item()
+            x1 = int(round(bbs[predI,1]))
+            y1 = int(round(bbs[predI,2]))
             if targI>0:
-                x1 = round(bbs[predI,1])
-                y1 = round(bbs[predI,2])
 
                 x2 = round(targetBBs[0,targI,0].item())
                 y2 = round(targetBBs[0,targI,1].item())
                 cv2.line(image,(x1,y1),(x2,y2),(1,0,1),1)
+            else:
+                #draw 'x', indicating not match
+                cv2.line(image,(x1-5,y1-5),(x1+5,y1+5),(.1,0,.1),1)
+                cv2.line(image,(x1+5,y1-5),(x1-5,y1+5),(.1,0,.1),1)
 
 
 
@@ -371,7 +385,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         io.imsave(os.path.join(outDir,saveName),image)
         #print('saved: '+os.path.join(outDir,saveName))
 
-    print('\n{} ap:{}\tmissedByHuer:{}'.format(imageName,rel_ap,numMissedByHeur))
+    print('\n{} ap:{}\tnumMissedByDetect:{}\tmissedByHuer:{}'.format(imageName,rel_ap,numMissedByDetect,numMissedByHeur))
     retData= { 'bb_ap':[ap_5],
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],

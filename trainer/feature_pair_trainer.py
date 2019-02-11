@@ -247,7 +247,8 @@ class FeaturePairTrainer(Trainer):
                 mPrecision += 1
         mRecall /= len(images)
         mPrecision /= len(images)
-        mAP /= mAP_count
+        if mAP_count>0:
+            mAP /= mAP_count
 
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),

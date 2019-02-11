@@ -89,7 +89,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets, relPred, relIndexes = model(dataT)
+    outputBBs, outputOffsets, relPred, relIndexes = model(dataT,hard_detect_limit=600)
 
     if model.detector.predNumNeighbors:
         predNN = outputBBs[:,6]
@@ -184,6 +184,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     scores=[]
     matches=0
     i=0
+    numMissedByHeur=0
     for n0,n1 in relCand:
         t0 = targIndex[n0].item()
         t1 = targIndex[n1].item()
@@ -203,8 +204,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 badPred+=1
         i+=1
     for i in range(len(adjacency)-matches):
+        numMissedByHeur+=1
         scores.append( (float('nan'),True) )
     rel_ap=computeAP(scores)
+
+    numMissedByDetect=0
+    for t0,t1 in adjacency:
+        if t0 not in targIndex or t1 not in targIndex:
+            numMissedByHeur-=1
+            numMissedByDetect+=1
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
     else:
@@ -303,13 +311,13 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if model.detector.predNumNeighbors:
                     x=int(bbs[j,1])
                     y=int(bbs[j,2]-bbs[j,4])
-                    targ_j = targIndex[j].item()
-                    if targ_j>=0:
-                        gtNN = gtNumNeighbors[targ_j]
-                    else:
-                        gtNN = 0
-                    color = int(min(abs(predNN[j]-gtNN),2)*127)
-                    cv2.putText(image,'{}/{}'.format(predNN[j],gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                    #targ_j = targIndex[j].item()
+                    #if targ_j>=0:
+                    #    gtNN = gtNumNeighbors[targ_j]
+                    #else:
+                    #    gtNN = 0
+                    #color = int(min(abs(predNN[j]-gtNN),2)*127)
+                    #cv2.putText(image,'{}/{}'.format(predNN[j],gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
         #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
@@ -363,7 +371,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         io.imsave(os.path.join(outDir,saveName),image)
         #print('saved: '+os.path.join(outDir,saveName))
 
-        
+    print('\n{} ap:{}\tmissedByHuer:{}'.format(imageName,rel_ap,numMissedByHeur))
     retData= { 'bb_ap':[ap_5],
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],
@@ -374,10 +382,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_Fm':(relRecall+relPrec)/2,
                'rel_fullPrec':fullPrec,
                'rel_fullFm':(relRecall+fullPrec)/2,
+               'relMissedByHeur':numMissedByHeur,
+               'relMissedByDetect':numMissedByDetect,
 
              }
     if rel_ap is not None: #none ap if no relationships
         retData['rel_AP']=rel_ap
+        retData['no_targs']=0
+    else:
+        retData['no_targs']=1
     return (
              retData,
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)

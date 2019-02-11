@@ -61,8 +61,10 @@ class FormsGraphPair(GraphPairDataset):
             self.images=[]
             groupNames = list(groupsToUse.keys())
             groupNames.sort()
+            
             for groupName in groupNames:
                 imageNames=groupsToUse[groupName]
+                
                 #print('{} {}'.format(groupName, imageNames))
                 #oneonly=False
                 if groupName in SKIP:

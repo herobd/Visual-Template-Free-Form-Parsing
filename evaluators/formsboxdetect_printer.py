@@ -244,8 +244,8 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             else:
                 predClass= bbs[:,6:]
         else:
-            predNN=bbs
-            predVlass=bbs
+            predNN=bbs #i.e. a zero size tensor
+            predClass=bbs
 
         if 'save_json' in config:
             assert(batchSize==1)

@@ -82,6 +82,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
             exit()
     else:
         dataT = data.to(gpu)#__to_tensor(data,gpu)
+        #import pdb;pdb.set_trace()
         predAll = model(dataT)
         pred = predAll[:,0]
 
@@ -353,6 +354,7 @@ def FormsFeaturePair_printer(config,instance, model, gpu, metrics, outDir=None, 
 
         
     #return metricsOut
+    print('\n{} ap:{}\tmissedRels:{}'.format(imageName,ap,missedRels))
     return (
              #{ 'ap_5':np.array(aps_5).sum(axis=0),
              #  'ap_3':np.array(aps_3).sum(axis=0),

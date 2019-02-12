@@ -57,12 +57,13 @@ class FormsGraphPair(GraphPairDataset):
                 #    trainTest='train'
                 #else:
                 #    trainTest=split
+                readFile = json.loads(f.read())
                 if type(split) is str:
-                    groupsToUse = json.loads(f.read())[split]
+                    groupsToUse = readFile[split]
                 elif type(split) is list:
                     groupsToUse = {}
                     for spstr in split:
-                        newGroups = json.loads(f.read())[spstr]
+                        newGroups = readFile[spstr]
                         groupsToUse.update(newGroups)
                 else:
                     print("Error, unknown split {}".format(split))

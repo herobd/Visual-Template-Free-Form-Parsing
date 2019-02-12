@@ -129,7 +129,7 @@ def basic(setObj,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers
         validLoader = torch.utils.data.DataLoader(validData, batch_size=valid_batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
         return trainLoader, validLoader
     elif split=='test':
-        testData = setObj(dirPath=data_dir, split='test', config=config['data_loader'])
+        testData = setObj(dirPath=data_dir, split='test', config=config['validation'])
         testLoader = torch.utils.data.DataLoader(testData, batch_size=valid_batch_size, shuffle=False, num_workers=numDataWorkers)
         return testLoader, None
 def withCollate(setObj,collateFunc,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config):
@@ -140,7 +140,7 @@ def withCollate(setObj,collateFunc,batch_size,valid_batch_size,shuffle,shuffleVa
         validLoader = torch.utils.data.DataLoader(validData, batch_size=valid_batch_size, shuffle=shuffleValid, num_workers=numDataWorkers, collate_fn=collateFunc)
         return trainLoader, validLoader
     elif split=='test':
-        testData = setObj(dirPath=data_dir, split='test', config=config['data_loader'])
+        testData = setObj(dirPath=data_dir, split='test', config=config['validation'])
         testLoader = torch.utils.data.DataLoader(testData, batch_size=valid_batch_size, shuffle=False, num_workers=numDataWorkers, collate_fn=collateFunc)
         return testLoader, None
     

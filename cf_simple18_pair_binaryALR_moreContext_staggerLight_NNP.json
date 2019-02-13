@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_transRand_staggerLight_NNP",
+    "name": "Simple18_pair_binaryALR_moreContext_staggerLight_NNP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -40,7 +40,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.001,
+        "lr": 0.01,
         "weight_decay": 0
     },
     "loss": {
@@ -48,8 +48,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 1.25,
-        "edge": 0.5
+        "box": 1,
+        "edge": 1
     },
     "loss_params": 
         {
@@ -62,7 +62,7 @@
         "class": "GraphPairTrainer",
         "iterations": 300000,
         "save_dir": "saved/",
-        "val_step": 5000,
+        "val_step": 10000,
         "save_step": 50000,
         "save_step_minor": 250,
         "log_step": 250,
@@ -88,23 +88,18 @@
         "conf_thresh": 0.5,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",
-        "expand_rel_context": 100,
+        "expand_rel_context": 200,
         "use_detect_layer_feats": 16,
-        "use_rel_rel_edges": false,
         "graph_config": {
-            "arch": "GraphNet",
+            "arch": "BinaryPairReal",
             "in_channels": 256,
-            "bb_out": 0,
-            "rel_out": 1,
-            "num_trans": 2,
-            "num_heads": 4,
-            "num_ffnn_feats": 312,
-            "encoder": 3,
-            "random_reps": 4
+            "node_channels": 0,
+            "edge_channels": 1,
+            "layers": ["FC256","FC256"]
         },
-        "featurizer_start_h": 10,
-        "featurizer_start_w": 10,
-        "featurizer_conv": [128,128,"M",256,238],
+        "featurizer_start_h": 20,
+        "featurizer_start_w": 20,
+        "featurizer_conv": [64,64,"M",128,"M",238],
         "featurizer_fc": null
     }
 }

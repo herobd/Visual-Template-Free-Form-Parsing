@@ -57,7 +57,17 @@ class FormsGraphPair(GraphPairDataset):
                 #    trainTest='train'
                 #else:
                 #    trainTest=split
-                groupsToUse = json.loads(f.read())[split]
+                readFile = json.loads(f.read())
+                if type(split) is str:
+                    groupsToUse = readFile[split]
+                elif type(split) is list:
+                    groupsToUse = {}
+                    for spstr in split:
+                        newGroups = readFile[spstr]
+                        groupsToUse.update(newGroups)
+                else:
+                    print("Error, unknown split {}".format(split))
+                    exit()
             self.images=[]
             groupNames = list(groupsToUse.keys())
             groupNames.sort()

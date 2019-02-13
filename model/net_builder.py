@@ -42,7 +42,7 @@ def getGroupSize(channels):
         if abs(f-goalSize)<=bestDist: #favor larger
             bestDist=abs(f-goalSize)
             bestGroup=f
-    return bestGroup
+    return int(bestGroup)
 
 class ncReLU(nn.Module):
     def __init__(self):

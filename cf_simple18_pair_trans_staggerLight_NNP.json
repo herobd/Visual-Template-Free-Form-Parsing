@@ -4,7 +4,7 @@
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":false,
+    "super_computer":true,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "special_dataset": "simple",
@@ -40,7 +40,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.01,
+        "lr": 0.001,
         "weight_decay": 0
     },
     "loss": {
@@ -96,8 +96,8 @@
             "in_channels": 256,
             "bb_out": 0,
             "rel_out": 1,
-            "repetitions": 4,
-            "num_trans": 2,
+            "repetitions": 1,
+            "num_trans": 6,
             "num_heads": 4,
             "num_ffnn_feats": 312
         },

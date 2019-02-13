@@ -67,6 +67,8 @@ class PairingGraph(BaseModel):
         if 'use_rel_shape_feats' in config:
              config['use_shape_feats'] =  config['use_rel_shape_feats']
         self.useShapeFeats= config['use_shape_feats'] if 'use_shape_feats' in config else False
+        self.usePositionFeature = config['use_position_feats'] if 'use_position_feats' in config else False
+        assert(not self.usePositionFeature or self.useShapeFeats)
         #TODO HACK, fixed values
         self.normalizeHorz=400
         self.normalizeVert=50
@@ -82,6 +84,9 @@ class PairingGraph(BaseModel):
            if self.detector.predNumNeighbors:
                self.numShapeFeats+=2
                self.numShapeFeatsBB+=1
+           if self.usePositionFeature:
+               self.numShapeFeats+=4
+               self.numShapeFeatsBB+=2
         else:
            self.numShapeFeats=0
            self.numShapeFeatsBB=0
@@ -429,6 +434,21 @@ class PairingGraph(BaseModel):
                 if self.detector.predNumNeighbors:
                     shapeFeats[i,startNN +0] = bbs[index1,5]
                     shapeFeats[i,startNN +1] = bbs[index2,5]
+                    startPos=startNN+2
+                else:
+                    startPos=startNN
+                if self.usePositionFeature:
+                    if self.usePositionFeature=='absolute':
+                        shapeFeats[i,startPos +0] = (bbs[index1,0]-imageWidth/2)/(5*self.normalizeHorz)
+                        shapeFeats[i,startPos +1] = (bbs[index1,1]-imageHeight/2)/(10*self.normalizeVert)
+                        shapeFeats[i,startPos +2] = (bbs[index2,0]-imageWidth/2)/(5*self.normalizeHorz)
+                        shapeFeats[i,startPos +3] = (bbs[index2,1]-imageHeight/2)/(10*self.normalizeVert)
+                    else:
+                        shapeFeats[i,startPos +0] = (bbs[index1,0]-imageWidth/2)/(imageWidth/2)
+                        shapeFeats[i,startPos +1] = (bbs[index1,1]-imageHeight/2)/(imageHeight/2)
+                        shapeFeats[i,startPos +2] = (bbs[index2,0]-imageWidth/2)/(imageWidth/2)
+                        shapeFeats[i,startPos +3] = (bbs[index2,1]-imageHeight/2)/(imageHeight/2)
+
             
                 #if self.us
 
@@ -470,7 +490,14 @@ class PairingGraph(BaseModel):
                     bb_shapeFeats[i,2]=bbs[i,4]/self.normalizeHorz
                     if self.detector.predNumNeighbors:
                         bb_shapeFeats[i,3]=bbs[i,5]
-                    bb_shapeFeats[i,3+extraPred:]=torch.sigmoid(bbs[i,5+extraPred:])
+                    bb_shapeFeats[i,3+extraPred:self.numBBTypes+3+extraPred]=torch.sigmoid(bbs[i,5+extraPred:self.numBBTypes+5+extraPred])
+                    if self.usePositionFeature:
+                        if self.usePositionFeature=='absolute':
+                            bb_shapeFeats[i,self.numBBTypes+3+extraPred] = (bbs[i,0]-imageWidth/2)/(5*self.normalizeHorz)
+                            bb_shapeFeats[i,self.numBBTypes+4+extraPred] = (bbs[i,1]-imageHeight/2)/(10*self.normalizeVert)
+                        else:
+                            bb_shapeFeats[i,self.numBBTypes+3+extraPred] = (bbs[i,0]-imageWidth/2)/(imageWidth/2)
+                            bb_shapeFeats[i,self.numBBTypes+4+extraPred] = (bbs[i,1]-imageHeight/2)/(imageHeight/2)
             if self.useShapeFeats != "only":
                 #bb_features[i]= F.avg_pool2d(features[0,:,minY:maxY+1,minX:maxX+1], (1+maxY-minY,1+maxX-minX)).view(-1)
                 bb_features = self.avg_box(features,rois.to(features.device))

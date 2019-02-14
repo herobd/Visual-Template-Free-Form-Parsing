@@ -26,7 +26,8 @@ def main(config, resume):
     #np.random.seed(1234) I don't have a way of restarting the DataLoader at the same place, so this makes it totaly random
     train_logger = Logger()
 
-    data_loader, valid_data_loader = getDataLoader(config,'train')
+    split = config['split'] if 'split' in config else 'train'
+    data_loader, valid_data_loader = getDataLoader(config,split)
     #valid_data_loader = data_loader.split_validation()
 
     model = eval(config['arch'])(config['model'])
@@ -76,6 +77,8 @@ if __name__ == '__main__':
                         help='path to checkpoint that may or may not exist (default: None)')
     parser.add_argument('-g', '--gpu', default=None, type=int,
                         help='gpu to use (overrides config) (default: None)')
+    #parser.add_argument('-m', '--merged', default=False, action='store_const', const=True,
+    #                    help='Use combine train and valid sets.')
 
     args = parser.parse_args()
 

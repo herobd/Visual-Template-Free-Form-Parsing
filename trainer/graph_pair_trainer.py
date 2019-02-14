@@ -374,7 +374,7 @@ class GraphPairTrainer(BaseTrainer):
                 total_rel_recall+=recall
                 total_rel_prec+=prec
                 total_rel_fullPrec+=fullPrec
-                if ap>=0:
+                if ap is not None:
                     total_AP+=ap
                     AP_count+=1
                 #relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)

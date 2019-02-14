@@ -425,6 +425,8 @@ class GraphPairTrainer(BaseTrainer):
                 loss=relFalseLoss=relLoss=boxLoss=None
                 instance=predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
+        if mAP_count==0:
+            mAP_count=1
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_box_loss': total_box_loss / len(self.valid_data_loader),

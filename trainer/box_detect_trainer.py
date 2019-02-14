@@ -309,8 +309,6 @@ class BoxDetectTrainer(BaseTrainer):
         losses={}
         mAP = 0
         mAP_count = 0
-        mRecall = np.zeros(self.model.numBBTypes)
-        mPrecision = np.zeros(self.model.numBBTypes)
         numClasses = self.model.numBBTypes
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
@@ -318,6 +316,8 @@ class BoxDetectTrainer(BaseTrainer):
             extraPreds=1
         else:
             extraPreds=0
+        mRecall = np.zeros(numClasses)
+        mPrecision = np.zeros(numClasses)
 
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
@@ -404,6 +404,8 @@ class BoxDetectTrainer(BaseTrainer):
                 #total_val_metrics += self._eval_metrics(output, target)
         for name in losses:
             losses[name]/=len(self.valid_data_loader)
+        if mAP_count==0:
+            mAP_count=1
         return {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),

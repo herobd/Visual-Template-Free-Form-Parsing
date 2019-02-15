@@ -1,6 +1,6 @@
 {
     "name": "Simple18_pair_binaryALR_moreContext_staggerLight_NNP",
-    "cuda": false,
+    "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,

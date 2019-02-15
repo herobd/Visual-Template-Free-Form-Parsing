@@ -247,7 +247,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
                 self.saved_features2=output
             typ = type( self.net_down_modules[f2Scale][f2Here])
             if typ == torch.nn.modules.activation.ReLU or typ==torch.nn.modules.MaxPool2d:
-                self.net_down_modules[f2Scale][f2Here].register_forward_hook(save_feats)
+                self.net_down_modules[f2Scale][f2Here].register_forward_hook(save_feats2)
                 if f2Scale<0:
                     f2Scale = len(self.net_down_modules)+f2Scale
                 self.save2_scale = 2**f2Scale

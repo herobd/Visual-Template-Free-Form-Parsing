@@ -15,6 +15,7 @@ from datasets.forms_feature_pair import FormsFeaturePair
 from datasets import forms_feature_pair
 from datasets.forms_pair import FormsPair
 from datasets.forms_lf import FormsLF
+from datasets import random_messages
 #from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -115,6 +116,10 @@ def getDataLoader(config,split):
                 validData = CancerDataset(data_dir, train=False)
                 validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
                 return trainLoader, validLoader
+        elif data_set_name=='RandomMessagesDataset':
+            data = random_messages.RandomMessagesDataset(config)
+            dataLoader = torch.utils.data.DataLoader(data,batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers,collate_fn=random_messages.collate)
+            return dataLoader,dataLoader
         else:
             print('Error, no dataloader has no set for {}'.format(data_set_name))
             exit()

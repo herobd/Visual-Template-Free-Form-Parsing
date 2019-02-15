@@ -18,6 +18,9 @@ class SimpleNN(BaseModel):
         norm = config['norm'] if 'norm' in config else 'batch_norm'
         dropout = float(config['dropout']) if 'dropout' in config else 0.4
 
+        if numLayers==0:
+            assert(featSize==hiddenSize)
+
         layers= []
         for i in range(numLayers):
             if i==0:

@@ -61,11 +61,11 @@ def optimizeRelationshipsSoft(relPred,relNodes,predNodeNeighbors,penalty=1.2):
                 difference[i] += useRel[relI]
             relI+=1
         difference[i] -= predNodeNeighbors[i]
-        #obj -= cvxpy.power(penalty,(cvxpy.abs(difference[i]))) #this causes it to not miss on the same node more than once
-        difference[i] = cvxpy.abs(difference[i])
-        obj -= penalty*difference[i]
-        obj -= penalty*cvxpy.maximum(1,difference[i]) - penalty #double penalty if difference>1
-        obj -= 2*(penalty*cvxpy.maximum(2,difference[i]) - 2*penalty) #quadruple penalty if difference>2
+        #difference[i] = cvxpy.abs(difference[i])
+        #obj -= cvxpy.power(penalty,difference[i]) #this causes it to not miss on the same node more than once
+        obj -= penalty*cvxpy.power(difference[i],2)
+        #obj -= penalty*cvxpy.maximum(1,difference[i]) - penalty #double penalty if difference>1
+        #obj -= penalty*cvxpy.maximum(2,difference[i]) - 2*penalty #triple penalty if difference>2
 
 
     cs=[]

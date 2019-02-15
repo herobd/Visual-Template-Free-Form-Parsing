@@ -111,6 +111,9 @@ def attention(query, key, value, mask=None, dropout=None):
     d_k = query.size(-1)
     scores = torch.matmul(query, key.transpose(-2, -1)) \
              / math.sqrt(d_k)
+    ###
+    #scores.fill_(0.1)
+    ###
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
     p_attn = F.softmax(scores, dim = -1)
@@ -182,15 +185,17 @@ class GraphTransformerBlock(nn.Module):
                 'feat_size': features,
                 'num_layers': num_ffnn_layers-1,
                 'hidden_size': ffnn_features,
-                'outSize': -1,
-                'reverse': True,
+                'out_size': features,
+                #'reverse': True,
                 'norm': None,
                 'dropout': 0.1
                 }
         self.ffnn = SimpleNN(config_ffnn)
         self.att = GraphSelfAttention(features,num_heads)
-        self.norm1 = nn.GroupNorm(getGroupSize(features),features)
-        self.norm2 = nn.GroupNorm(getGroupSize(features),features)
+        #self.norm1 = nn.GroupNorm(getGroupSize(features),features)
+        #self.norm2 = nn.GroupNorm(getGroupSize(features),features)
+        self.norm1 = nn.GroupNorm(features,features)
+        self.norm2 = nn.GroupNorm(features,features)
 
     def forward(self,input,adj=None,numBBs=None):
         if adj is None:
@@ -202,6 +207,8 @@ class GraphTransformerBlock(nn.Module):
         #TODO allow splitting into rel and box sides
         side1 = self.norm1(side1)
         side2=self.ffnn(side1)
+        #return self.norm2(side2),adj,numBBs
+        #import pdb;pdb.set_trace()
         if adj is None:
             return self.norm2(side2+side1),adj,numBBs
         else:

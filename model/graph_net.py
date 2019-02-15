@@ -4,14 +4,16 @@ import torch.nn.functional as F
 import math
 import json
 from .graphconvolution import GraphResConv, GraphConvWithAct, GraphTransformerBlock
-from .net_builder import getGroupSize
+from .net_builder import make_layers, getGroupSize
 import numpy as np
+import logging
 
 #This assumes the classification of edges was done by the pairing_graph modules featurizer
 
 class GraphNet(nn.Module):
     def __init__(self, config): # predCount, base_0, base_1):
         super(GraphNet, self).__init__()
+        self.logger = logging.getLogger(self.__class__.__name__)
 
         
         self.useRes = config['use_res'] if 'use_res' in config else 'loop'
@@ -62,14 +64,31 @@ class GraphNet(nn.Module):
             act_layers.append(nn.Dropout(p=0.05,inplace=True))
 
             if 'encoder' in config:
-                num_encode_layers = config['encoder'] if type(config['encoder']) is int else num_layers
-                layers = [ GraphTransformerBlock(num_feats,num_heads,num_ffnn_layers,num_ffnn_feats) for i in range(num_encode_layers)]
-                self.encoder = nn.Sequential(*layers)
+                if type(config['encoder']) is list:
+                    encoder_layers = config['encoder'] + ['FCnR{}'.format(num_feats)]
+                    layers,_ = make_layers(encoder_layers)
+                    self.encoder_fc = nn.Sequential(*layers)
+                    self.encoder=None
+                else:
+                    num_encode_layers = config['encoder'] if type(config['encoder']) is int else num_layers
+                    layers = [ GraphTransformerBlock(num_feats,num_heads,num_ffnn_layers,num_ffnn_feats) for i in range(num_encode_layers)]
+                    self.encoder = nn.Sequential(*layers)
+                    self.encoder_fc = None
             else:
                 self.encoder = None
         if 'random_reps' in config:
             self.randomReps=True
-            self.maxReps = config['random_reps'] if type(config['random_reps']) is int else 5
+            if type(config['random_reps']) is int:
+                self.minReps = 0
+                self.maxReps = config['random_reps']
+            elif type(config['random_reps']) is list:
+                assert(len(config['random_reps'])==2)
+                self.minReps = config['random_reps'][0]
+                self.maxReps = config['random_reps'][1]
+            else:
+                print('Bad random_reps: {}'.format(config['random_reps']))
+                exit()
+
         else:
             self.randomReps=False
         act_layers.append(nn.ReLU(inplace=True))
@@ -95,7 +114,7 @@ class GraphNet(nn.Module):
 
         if self.randomReps:
             if self.training:
-                repetitions=np.random.randint(0,self.maxReps+1)
+                repetitions=np.random.randint(self.minReps,self.maxReps+1)
             else:
                 repetitions=self.maxReps
         else:
@@ -106,6 +125,8 @@ class GraphNet(nn.Module):
             adjacencyMatrix = adjacencyMatrix[0].to_dense()
         if self.encoder is not None:
             node_featuresX,_,_=self.encoder((node_featuresX,adjacencyMatrix,numBBs))
+        elif self.encoder_fc is not None:
+            node_featuresX=self.encoder_fc(node_featuresX)
         for i in range(repetitions):
             if self.layers is not None:
                 side=node_featuresX
@@ -133,4 +154,11 @@ class GraphNet(nn.Module):
 
 
 
-
+    def summary(self):
+        """
+        Model summary
+        """
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        self.logger.info('Trainable parameters: {}'.format(params))
+        self.logger.info(self)

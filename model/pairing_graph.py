@@ -43,11 +43,12 @@ class PairingGraph(BaseModel):
         useFLayer2 = config['use_2nd_detect_layer_feats'] if 'use_2nd_detect_layer_feats' in config else None
         useFScale2 = config['use_2nd_detect_scale_feats'] if 'use_2nd_detect_scale_feats' in config else None
         detectorSavedFeatSize = config['use_detect_feats_size'] if 'use_detect_feats_size' in config else self.detector.last_channels
+        assert((useFeatsScale==-2) or ('use_detect_feats_size' in config))
         detectorSavedFeatSize2 = config['use_2nd_detect_feats_size'] if 'use_2nd_detect_feats_size' in config else None
-        #self.use2ndFeatures = useFLayer2 is not None
-        if useFLayer2 is not None:
+        self.use2ndFeatures = useFLayer2 is not None
+        if self.use2ndFeatures:
             detectorSavedFeatSize += detectorSavedFeatSize2
-            self.use2ndFeatures=True
+            
         self.detector.setForGraphPairing(useBeginningOfLast,useFeatsLayer,useFeatsScale,useFLayer2,useFScale2)
 
         if (config['start_frozen'] if 'start_frozen' in config else False):
@@ -117,7 +118,7 @@ class PairingGraph(BaseModel):
         if self.useShapeFeats!='only':
             self.roi_align = RoIAlign(self.pool_h,self.pool_w,1.0/detect_save_scale)
             self.roi_alignBB = RoIAlign(self.poolBB_h,self.poolBB_w,1.0/detect_save_scale)
-            self.use2ndFeatures:
+            if self.use2ndFeatures:
                 self.roi_align2 = RoIAlign(self.pool_h,self.pool_w,1.0/detect_save2_scale)
                 self.roi_alignBB2 = RoIAlign(self.poolBB_h,self.poolBB_w,1.0/detect_save2_scale)
 
@@ -257,7 +258,7 @@ class PairingGraph(BaseModel):
             saved_features2=None
         ##print('detector: {}'.format(timeit.default_timer()-tic))
 
-        if final_features is None:
+        if saved_features is None:
             print('ERROR:no saved features!')
             import pdb;pdb.set_trace()
 

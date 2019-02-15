@@ -91,10 +91,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
     outputBBs, outputOffsets, relPred, relIndexes = model(dataT,hard_detect_limit=600)
 
+    numClasses=2 #TODO no
     if model.detector.predNumNeighbors:
+        #useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
+        extraPreds=1
         predNN = outputBBs[:,6]
     else:
+        extraPreds=0
         predNN = None
+        #useOutputBBs=outputBBs
 
     if targetBBsT is not None:
         targetSize=targetBBsT.size(1)
@@ -102,17 +107,63 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         targetSize=0
     lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize], gtNumNeighborsT)
 
+    if 'rule' in config:
+        if config['rule']=='closest':
+            dists = torch.FloatTensor(relPred.size())
+            differentClass = torch.FloatTensor(relPred.size())
+            predClasses = torch.argmax(outputBBs[:,extraPreds+6:extraPreds+6+numClasses],dim=1)
+            for i,(bb1,bb2) in enumerate(relIndexes):
+                dists[i] = math.sqrt((outputBBs[bb1,1]-outputBBs[bb2,1])**2 + (outputBBs[bb1,2]-outputBBs[bb2,2])**2)
+                differentClass[i] = predClasses[bb1]!=predClasses[bb2]
+            maxDist = torch.max(dists)
+            minDist = torch.min(dists)
+            relPred = 1-(dists-minDist)/(maxDist-minDist)
+            relPred *= differentClass
+        elif config['rule']=='icdar':
+            height = torch.FloatTensor(relPred.size())
+            dists = torch.FloatTensor(relPred.size())
+            right = torch.FloatTensor(relPred.size())
+            sameClass = torch.FloatTensor(relPred.size())
+            predClasses = torch.argmax(outputBBs[:,extraPreds+6:extraPreds+6+numClasses],dim=1)
+            for i,(bb1,bb2) in enumerate(relIndexes):
+                sameClass[i] = predClasses[bb1]==predClasses[bb2]
+                
+                #g4 of the paper
+                height[i] = max(outputBBs[bb1,4],outputBBs[bb2,4])/min(outputBBs[bb1,4],outputBBs[bb2,4])
+
+                #g5 of the paper
+                if predClasses[bb1]==0:
+                    widthLabel = outputBBs[bb1,5]*2 #we predict half width
+                    widthValue = outputBBs[bb2,5]*2
+                    dists[i] = math.sqrt(((outputBBs[bb1,1]+widthLabel)-(outputBBs[bb2,1]-widthValue))**2 + (outputBBs[bb1,2]-outputBBs[bb2,2])**2)
+                else:
+                    widthLabel = outputBBs[bb2,5]*2 #we predict half width
+                    widthValue = outputBBs[bb1,5]*2
+                    dists[i] = math.sqrt(((outputBBs[bb1,1]-widthValue)-(outputBBs[bb2,1]+widthLabel))**2 + (outputBBs[bb1,2]-outputBBs[bb2,2])**2)
+                if dists[i]>2*widthLabel:
+                    dists[i]/=widthLabel
+                else: #undefined
+                    dists[i] = min(1,dists[i]/widthLabel)
+            
+                #g6 of the paper
+                if predClasses[bb1]==0:
+                    widthValue = outputBBs[bb2,5]*2
+                    hDist = outputBBs[bb1,1]-outputBBs[bb2,1]
+                else:
+                    widthValue = outputBBs[bb1,5]*2
+                    hDist = outputBBs[bb2,1]-outputBBs[bb1,1]
+                right[i] = hDist/widthValue
+
+            relPred = 1-(height+dists+right + 10000*sameClass)
+        else:
+            print('ERROR, unknown rule {}'.format(config['rule']))
+            exit()
+    else:
+        relPred = 2*torch.sigmoid(relPred)[:,0] -1
+
 
     relCand = relIndexes
-    relPred = 2*torch.sigmoid(relPred)[:,0] -1
 
-    numClasses=2 #TODO not fixed
-    if model.detector.predNumNeighbors:
-        #useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
-        extraPreds=1
-    else:
-        extraPreds=0
-        #useOutputBBs=outputBBs
 
     if model.rotation:
         targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses,extraPreds)

@@ -226,7 +226,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
         def save_final(module,input,output):
             self.final_features=output
         self.net_down_modules[-2].register_forward_hook(save_final)
-    def setForGraphPairing(self,beginningOfLast=False,featuresFromHere=-1,featuresFromScale=-a,f2Here=None,f2Scale=None):
+    def setForGraphPairing(self,beginningOfLast=False,featuresFromHere=-1,featuresFromScale=-2,f2Here=None,f2Scale=None):
         def save_feats(module,input,output):
             self.saved_features=output
         if beginningOfLast:
@@ -234,7 +234,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
             self.last_channels= self.last_channels//2 #HACK
         else:
             typ = type( self.net_down_modules[featuresFromScale][featuresFromHere])
-            if typ == torch.nn.modules.activation.ReLU or typ = torch.nn.modules.MaxPool2d:
+            if typ == torch.nn.modules.activation.ReLU or typ == torch.nn.modules.MaxPool2d:
                 self.net_down_modules[featuresFromScale][featuresFromHere].register_forward_hook(save_feats)
                 if featuresFromScale<0:
                     featuresFromScale = len(self.net_down_modules)+featuresFromScale

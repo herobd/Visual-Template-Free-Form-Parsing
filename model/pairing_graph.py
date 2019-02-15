@@ -55,13 +55,20 @@ class PairingGraph(BaseModel):
         self.scale = self.detector.scale
         self.anchors = self.detector.anchors
         self.confThresh = config['conf_thresh'] if 'conf_thresh' in config else 0.5
+        self.predNN = config['pred_nn'] if 'pred_nn' in config else False
+        self.predClass = config['pred_class'] if 'pred_class' in config else False
+
 
         graph_in_channels = config['graph_config']['in_channels'] if 'in_channels' in config['graph_config'] else 1
         self.useBBVisualFeats=True
-        if config['graph_config']['arch'][:10]=='BinaryPair':
+        if config['graph_config']['arch'][:10]=='BinaryPair' and not self.predNN:
             self.useBBVisualFeats=False
         self.includeRelRelEdges= config['use_rel_rel_edges'] if 'use_rel_rel_edges' in config else True
         #rel_channels = config['graph_config']['rel_channels']
+        self.pool_h = config['featurizer_start_h']
+        self.pool_w = config['featurizer_start_w']
+        self.poolBB_h = config['featurizer_bb_start_h'] if 'featurizer_bb_start_h' in config else 2
+        self.poolBB_w = config['featurizer_bb_start_w'] if 'featurizer_bb_start_w' in config else 3
 
 
         if 'use_rel_shape_feats' in config:
@@ -93,16 +100,19 @@ class PairingGraph(BaseModel):
         config['graph_config']['num_shape_feats']=self.numShapeFeats
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if self.useShapeFeats!='only':
-            self.pool_h = config['featurizer_start_h']
-            self.pool_w = config['featurizer_start_w']
-            self.roi_align = ROIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
-            self.avg_box = ROIAlign(2,3,1.0/detect_scale)
+            self.roi_align = RoIAlign(self.pool_h,self.pool_w,1.0/detect_scale)
+            self.roi_alignBB = RoIAlign(self.poolBB_h,self.poolBB_w,1.0/detect_scale)
 
             self.expandedRelContext = config['expand_rel_context'] if 'expand_rel_context' in config else None
             if self.expandedRelContext is not None:
                 bbMasks=3
             else:
                 bbMasks=2
+            self.expandedBBContext = config['expand_bb_context'] if 'expand_bb_context' in config else None
+            if self.expandedBBContext is not None:
+                bbMasks_bb=2
+            else:
+                bbMasks_bb=0
 
             feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
             featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
@@ -147,19 +157,43 @@ class PairingGraph(BaseModel):
             #TODO un-hardcode
             #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
             #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
-            #featurizer = config['bb_featurizer'] if 'bb_featurizer' in config else []
+            featurizer = config['bb_featurizer_conv'] if 'bb_featurizer_conv' in config else None
             featurizer_fc = config['bb_featurizer_fc'] if 'bb_featurizer_fc' in config else None
             if self.useShapeFeats!='only':
                 if featurizer_fc is None:
                     convOut=graph_in_channels-self.numShapeFeatsBB
                 else:
                     convOut=featurizer_fc[0]-self.numShapeFeatsBB
-                convlayers = [ nn.Conv2d(self.detector.last_channels,convOut,kernel_size=(2,3)) ]
-                if featurizer_fc is not None:
-                    convlayers+=[   nn.GroupNorm(getGroupSize(convOut),convOut),
-                                    nn.Dropout2d(p=0.1,inplace=True),
-                                    nn.ReLU(inplace=True)
-                                ]
+                if featurizer is None:
+                    convlayers = [ nn.Conv2d(self.detector.last_channels+bbMasks_bb,convOut,kernel_size=(2,3)) ]
+                    if featurizer_fc is not None:
+                        convlayers+=[   nn.GroupNorm(getGroupSize(convOut),convOut),
+                                        nn.Dropout2d(p=0.1,inplace=True),
+                                        nn.ReLU(inplace=True)
+                                    ]
+                else:
+                    featurizer_conv = [self.detector.last_channels+bbMasks_bb] + featurizer
+                    if featurizer_fc is None:
+                         featurizer_conv += ['C3-{}'.format(convOut)]
+                    else:
+                         featurizer_conv += [convOut]
+                    convlayers, _  = make_layers(featurizer_conv,norm=feat_norm,dropout=True)
+                    scaleX=1
+                    scaleY=1
+                    for a in featurizer_conv:
+                        if a=='M' or (type(a) is str and a[0]=='D'):
+                            scaleX*=2
+                            scaleY*=2
+                        elif type(a) is str and a[0]=='U':
+                            scaleX/=2
+                            scaleY/=2
+                        elif type(a) is str and a[0:4]=='long': #long pool
+                            scaleX*=3
+                            scaleY*=2
+                    #self.scale=(scaleX,scaleY) this holds scale for detector
+                    fsizeX = self.poolBB_w//scaleX
+                    fsizeY = self.poolBB_h//scaleY
+                    convlayers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
                 self.bbFeaturizerConv = nn.Sequential(*convlayers)
             else:
                 featurizer_fc = [self.numShapeFeatsBB]+featurizer_fc
@@ -225,11 +259,11 @@ class PairingGraph(BaseModel):
         #Otherwise we have to to alignment first
         if not useGTBBs:
             if bbPredictions.size(0)==0:
-                return bbPredictions, offsetPredictions, None, None
+                return bbPredictions, offsetPredictions, None, None, None
             useBBs = bbPredictions[:,1:] #remove confidence score
         else:
             if gtBBs is None:
-                return bbPredictions, offsetPredictions, None, None
+                return bbPredictions, offsetPredictions, None, None, None
             useBBs = gtBBs[0,:,0:5]
             if self.useShapeFeats:
                 classes = gtBBs[0,:,13:]
@@ -249,7 +283,7 @@ class PairingGraph(BaseModel):
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
             bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,final_features,image.size(-2),image.size(-1), debug_image=None)
             if bbAndRel_features is None:
-                return bbPredictions, offsetPredictions, None, None
+                return bbPredictions, offsetPredictions, None, None, None
 
             ##tic=timeit.default_timer()
             #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
@@ -262,9 +296,9 @@ class PairingGraph(BaseModel):
             #for rel in relOuts:
             #    i,j,a=graphToDetectionsMap(
 
-            return bbPredictions, offsetPredictions, relOuts, relIndexes
+            return bbPredictions, offsetPredictions, relOuts, relIndexes, bbOuts
         else:
-            return bbPredictions, offsetPredictions, None, None
+            return bbPredictions, offsetPredictions, None, None, None
 
     def createGraph(self,bbs,features,imageHeight,imageWidth,debug_image=None):
         ##tic=timeit.default_timer()
@@ -474,12 +508,20 @@ class PairingGraph(BaseModel):
             assert(features.size(0)==1)
             if self.useShapeFeats:
                 bb_shapeFeats=torch.FloatTensor(bbs.size(0),self.numShapeFeatsBB)
+            if self.useShapeFeats != "only" and self.expandedBBContext:
+                masks = torch.zeros(bbs.size(0),2,self.poolBB_h,self.poolBB_w)
+            
             rois = torch.zeros((bbs.size(0),5))
             for i in range(bbs.size(0)):
                 minY = round(min(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))
                 maxY = round(max(tlY[i].item(),trY[i].item(),blY[i].item(),brY[i].item()))
                 minX = round(min(tlX[i].item(),trX[i].item(),blX[i].item(),brX[i].item()))
                 maxX = round(max(tlX[i].item(),trX[i].item(),blX[i].item(),brX[i].item()))
+                if self.expandedBBContext is not None:
+                    maxX = min(maxX+self.expandedBBContext,imageWidth-1)
+                    minX = max(minX-self.expandedBBContext,0)
+                    maxY = min(maxY+self.expandedBBContext,imageHeight-1)
+                    minY = max(minY-self.expandedBBContext,0)
                 rois[i,1]=minX
                 rois[i,2]=minY
                 rois[i,3]=maxX
@@ -498,9 +540,34 @@ class PairingGraph(BaseModel):
                         else:
                             bb_shapeFeats[i,self.numBBTypes+3+extraPred] = (bbs[i,0]-imageWidth/2)/(imageWidth/2)
                             bb_shapeFeats[i,self.numBBTypes+4+extraPred] = (bbs[i,1]-imageHeight/2)/(imageHeight/2)
+                if self.useShapeFeats != "only":
+                    #Add detected BB masks
+                    #warp to roi space
+                    feature_w = rois[i,3]-rois[i,1] +1
+                    feature_h = rois[i,4]-rois[i,2] +1
+                    w_m = self.poolBB_w/feature_w
+                    h_m = self.poolBB_h/feature_h
+
+                    tlX1 = round(((tlX[i]-rois[i,1])*w_m).item())
+                    trX1 = round(((trX[i]-rois[i,1])*w_m).item())
+                    brX1 = round(((brX[i]-rois[i,1])*w_m).item())
+                    blX1 = round(((blX[i]-rois[i,1])*w_m).item())
+                    tlY1 = round(((tlY[i]-rois[i,2])*h_m).item())
+                    trY1 = round(((trY[i]-rois[i,2])*h_m).item())
+                    brY1 = round(((brY[i]-rois[i,2])*h_m).item())
+                    blY1 = round(((blY[i]-rois[i,2])*h_m).item())
+
+                    rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], [self.poolBB_h,self.poolBB_w])
+                    masks[i,0,rr,cc]=1
+                    if self.expandedBBContext is not None:
+                        cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
+                        masks[i,1] = F.upsample(cropArea[None,None,...], size=(self.poolBB_h,self.poolBB_w), mode='bilinear')[0,0]
+                        #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
             if self.useShapeFeats != "only":
                 #bb_features[i]= F.avg_pool2d(features[0,:,minY:maxY+1,minX:maxX+1], (1+maxY-minY,1+maxX-minX)).view(-1)
-                bb_features = self.avg_box(features,rois.to(features.device))
+                bb_features = self.roi_alignBB(features,rois.to(features.device))
+                if self.expandedBBContext:
+                    bb_features = torch.cat( (bb_features,masks.to(bb_features.device)) ,dim=1)
                 bb_features = self.bbFeaturizerConv(bb_features)
                 bb_features = bb_features.view(bb_features.size(0),bb_features.size(1))
                 if self.useShapeFeats:

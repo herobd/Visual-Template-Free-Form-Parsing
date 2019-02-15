@@ -15,7 +15,6 @@ class BinaryPairReal(nn.Module):
         super(BinaryPairReal, self).__init__()
         numBBOut = config['bb_out'] if 'bb_out' in config else 0
         numRelOut = config['rel_out'] if 'rel_out' in config else 1
-        assert(numBBOut==0)
 
         in_ch=config['in_channels']
 
@@ -26,6 +25,12 @@ class BinaryPairReal(nn.Module):
         layer_desc = [in_ch]+layer_desc+['FCnR{}'.format(numRelOut)]
         layers, last_ch_relC = make_layers(layer_desc,norm=norm,dropout=dropout)
         self.layers = nn.Sequential(*layers)
+
+        if numBBOut>0:
+            layer_desc = config['layers_bb'] if 'layers_bb' in config else ['FC256','FC256','FC256']
+            layer_desc = [in_ch]+layer_desc+['FCnR{}'.format(numBBOut)]
+            layers, last_ch_relC = make_layers(layer_desc,norm=norm,dropout=dropout)
+            self.layersBB = nn.Sequential(*layers)
 
         #This is written to by the PairingGraph object (which holds this one)
         self.numShapeFeats = config['num_shape_feats'] if 'num_shape_feats' in config else 16
@@ -64,17 +69,23 @@ class BinaryPairReal(nn.Module):
 
 
     def forward(self, node_features, adjacencyMatrix, numBBs):
-        res = self.layers(node_features)
+        node_featuresR = node_features[numBBs:]
+        res = self.layers(node_featuresR)
         if self.shape_layers is not None:
             if self.frozen_shape_layers:
                 self.shape_layers.eval()
-            res2 = self.shape_layers(node_features[:,-self.numShapeFeats:])
+            res2 = self.shape_layers(node_featuresR[:,-self.numShapeFeats:])
             if self.split_weighting is None:
                 res = (res+res2)/2
             else:
                 weight = self.split_weighting.clamp(0,1)
                 res = weight*res + (1-weight)*res2
+        if numBBs>0:
+            node_featuresB = node_features[:numBBs]
+            resB = self.layersBB(node_featuresB)
+        else:
+            resB=None
         #import pdb;pdb.set_trace()
-        return None,res
+        return resB,res
 
 

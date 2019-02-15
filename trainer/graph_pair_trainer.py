@@ -183,7 +183,8 @@ class GraphPairTrainer(BaseTrainer):
             #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.prealignedEdgePred(adj,relPred,relIndexes)
             if self.model.predNN or self.model.predClass:
-                alignedNN_use = target_num_neighbors[0]
+                if target_num_neighbors is not None:
+                    alignedNN_use = target_num_neighbors[0]
                 bbPred_use = bbPred
         else:
             outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image,

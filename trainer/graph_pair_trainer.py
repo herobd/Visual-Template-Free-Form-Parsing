@@ -177,16 +177,34 @@ class GraphPairTrainer(BaseTrainer):
         image, targetBoxes, adj, target_num_neighbors = self._to_tensor(thisInstance)
         useGT = self.useGT(iteration)
         if useGT:
-            outputBoxes, outputOffsets, relPred, relIndexes = self.model(image,targetBoxes,target_num_neighbors,True,
+            outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image,targetBoxes,target_num_neighbors,True,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.prealignedEdgePred(adj,relPred,relIndexes)
+            if self.model.predNN or self.model.predClass:
+                alignedNN_use = target_num_neighbors[0]
+                bbPred_use = bbPred
         else:
-            outputBoxes, outputOffsets, relPred, relIndexes = self.model(image,
+            outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred)
-            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
+            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap, bbAlignment, bbNoIntersections = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
+            if (self.model.predNN or self.model.predClass) and bbPred is not None:
+                #create aligned GT
+                #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+                toKeep = 1-(bbNoIntersections==1 * bbAlignment==-1)
+                bbPred_use = bbPred[toKeep]
+                alignedNN_use = alignedNN[toKeep]
+                bbAlignment_use = bbAlignment[toKeep]
+                #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                if target_num_neighbors is not None:
+                    target_num_neighbors_use = torch.cat((target_num_neighbors[0],torch.zeros(1).to(target_num_neighbors.device())),dim=0)
+                else:
+                    target_num_neighbors_use = torch.zeros(1).to(bbPred.device())
+                alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+            else:
+                bbPred_use = None
         if relPred is not None:
             numEdgePred = relPred.size(0)
             if predPairingShouldBeTrue is not None:
@@ -227,6 +245,8 @@ class GraphPairTrainer(BaseTrainer):
         if relLoss is not None:
             relLoss *= self.lossWeights['rel']
 
+
+
         if not self.model.detector_frozen:
             if targetBoxes is not None:
                 targSize = targetBoxes.size(1)
@@ -243,6 +263,18 @@ class GraphPairTrainer(BaseTrainer):
             loss = relLoss
 
 
+        if self.model.predNN and bbPred_use is not None:
+            nn_loss_final = self.loss['nn'](bbPred_use[:,0],alignedNN_use)
+            nn_loss_final *= self.lossWeights['nn']
+
+            loss += nn_loss_final
+            nn_loss_final = nn_loss_final.item()
+        else:
+            nn_loss_final=0
+
+        if self.model.predClass and bbPred_use is not None:
+            raise NotImplemented('havent implemented loss for graph pred of classes')
+            
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
@@ -293,11 +325,12 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'relLoss': relLoss,
+            'nn_loss_final': nn_loss_final,
             'edgePredLens':np.array([numEdgePred,numBoxPred,numEdgePred+numBoxPred,-1],dtype=np.float),
             'rel_recall':eRecall,
-            'rel_prec': ePrec,
+            #'rel_prec': ePrec,
             'rel_fullPrec':fullPrec,
-            'rel_F': (eRecall+ePrec)/2,
+            'rel_F': (eRecall+fullPrec)/2,
             #'debug_avg_relTrue': debug_avg_relTrue,
             #'debug_avg_relFalse': debug_avg_relFalse,
 
@@ -346,6 +379,7 @@ class GraphPairTrainer(BaseTrainer):
         total_AP=0
         AP_count=0
         total_val_metrics = np.zeros(len(self.metrics))
+        nn_loss_final_total=0
 
         numClasses = self.model.numBBTypes
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
@@ -370,7 +404,7 @@ class GraphPairTrainer(BaseTrainer):
                 loss = 0
                 index=0
                 
-                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec, ap = self.alignEdgePred(targetBoxes,adjM,outputBoxes,relPred,relIndexes)
+                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec, ap, bbAlignment, bbNoIntersections = self.alignEdgePred(targetBoxes,adjM,outputBoxes,relPred,relIndexes)
                 total_rel_recall+=recall
                 total_rel_prec+=prec
                 total_rel_fullPrec+=fullPrec
@@ -399,6 +433,25 @@ class GraphPairTrainer(BaseTrainer):
                     loss = relLoss*self.lossWeights['rel']
                 total_box_loss+=boxLoss.item()
                 total_rel_loss+=relLoss.item()
+                if self.model.predNN:
+                    #create aligned GT
+                    #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+                    toKeep = 1-(bbNoIntersections==1 * bbAlignment==-1)
+                    bbPred_use = bbPred[toKeep]
+                    alignedNN_use = alignedNN[toKeep]
+                    bbAlignment_use = bbAlignment[toKeep]
+                    #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                    target_num_neighbors = torch.cat((target_num_neighbors,torch.zeros(1).to(target_num_neighbors.device())),dim=0)
+                    alignedNN_use = target_num_neighbors[bbAlignment_use]
+                    
+                    nn_loss_final = self.loss['nn'](bbPred_use[:,0],alignedNN_use)
+                    nn_loss_final *= self.lossWeights['nn']
+
+                    loss += nn_loss_final
+                    nn_loss_final = nn_loss_final.item()
+                    nn_loss_final_total += nn_loss_final
+                else:
+                    nn_loss_final=0
                 
                 if self.model.detector.predNumNeighbors:
                     outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
@@ -424,7 +477,7 @@ class GraphPairTrainer(BaseTrainer):
                 loss=relFalseLoss=relLoss=boxLoss=None
                 instance=predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
-        return {
+        toRet= {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_box_loss': total_box_loss / len(self.valid_data_loader),
             'val_rel_loss': total_rel_loss / len(self.valid_data_loader),
@@ -443,6 +496,9 @@ class GraphPairTrainer(BaseTrainer):
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
             #'val_class_loss':tota_class_loss / len(self.valid_data_loader),
         }
+        if self.model.predNN:
+            toRet['nn_loss_final']=nn_loss_final_total/len(self.valid_data_loader)
+        return toRet
 
 
     def alignEdgePred(self,targetBoxes,adj,outputBoxes,relPred,relIndexes):
@@ -455,6 +511,7 @@ class GraphPairTrainer(BaseTrainer):
                     prec=1
                     ap=1
                 recall=1
+                targIndex = -torch.ones(outputBoxes.size(0))
             elif relPred is None:
                 if targetBoxes is not None:
                     recall=0
@@ -463,8 +520,9 @@ class GraphPairTrainer(BaseTrainer):
                     recall=1
                     ap=1
                 prec=1
+                targIndex = None
 
-            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
+            return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap, targIndex, torch.ones(outputBoxes.size(0))
         targetBoxes = targetBoxes.cpu()
         #decide which predicted boxes belong to which target boxes
         #should this be the same as AP_?
@@ -542,7 +600,7 @@ class GraphPairTrainer(BaseTrainer):
             fullPrec = truePred/(truePred+falsePred+badPred)
         else:
             fullPrec = 1
-        return predsPos,predsNeg, recall, prec ,fullPrec, computeAP(scores)
+        return predsPos,predsNeg, recall, prec ,fullPrec, computeAP(scores), targIndex, predsWithNoIntersection
 
 
     def prealignedEdgePred(self,adj,relPred,relIndexes):

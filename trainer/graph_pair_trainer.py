@@ -400,7 +400,7 @@ class GraphPairTrainer(BaseTrainer):
 
                 image, targetBoxes, adjM, target_num_neighbors = self._to_tensor(instance)
 
-                outputBoxes, outputOffsets, relPred, relIndexes = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
+                outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
@@ -434,7 +434,7 @@ class GraphPairTrainer(BaseTrainer):
                     loss = relLoss*self.lossWeights['rel']
                 total_box_loss+=boxLoss.item()
                 total_rel_loss+=relLoss.item()
-                if self.model.predNN:
+                if self.model.predNN and bbPred is not None:
                     #create aligned GT
                     #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
                     toKeep = 1-(bbNoIntersections==1 * bbAlignment==-1)

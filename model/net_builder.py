@@ -149,9 +149,9 @@ def fcReLU(in_ch,out_ch,norm,dropout=None,relu=True):
     else:
         layers = [fc]
     if norm=='batch_norm':
-        layers.append(nn.BatchNorm2d(out_ch))
+        layers.append(nn.BatchNorm1d(out_ch))
     elif norm=='instance_norm':
-        layers.append(nn.InstanceNorm2d(out_ch))
+        layers.append(nn.InstanceNorm1d(out_ch))
     elif norm=='group_norm':
         layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
     if dropout is not None:

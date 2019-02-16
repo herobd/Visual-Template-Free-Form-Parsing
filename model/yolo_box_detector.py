@@ -135,7 +135,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
 
 
             if self.predNumNeighbors:
-                stackedPred.append(1+y[:,6+offset:7+offset,:,:])
+                stackedPred.append(1+y[:,6+offset:7+offset,:,:]) #+1 so predicted -1 is 0 neighbors
                 extra=1
             else:
                 extra=0

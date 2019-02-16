@@ -135,6 +135,7 @@ class PairingGraph(BaseModel):
                 bbMasks_bb=0
 
             feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
+            feat_norm_fc = detector_config['norm_type_fc'] if 'norm_type_fc' in detector_config else None
             featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
             featurizer_conv = [detectorSavedFeatSize+bbMasks] + featurizer_conv #bbMasks are appended
             scaleX=1
@@ -164,11 +165,11 @@ class PairingGraph(BaseModel):
         else:
             last_ch_relC=0
 
-        if config['graph_config']['arch'][:10]=='BinaryPair' or self.useShapeFeats=='only':
-            feat_norm=None
+        #if config['graph_config']['arch'][:10]=='BinaryPair' or self.useShapeFeats=='only':
+        #    feat_norm_fc=None
         if featurizer_fc is not None:
             featurizer_fc = [last_ch_relC+self.numShapeFeats] + featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
-            layers, last_ch_rel = make_layers(featurizer_fc,norm=feat_norm,dropout=True) 
+            layers, last_ch_rel = make_layers(featurizer_fc,norm=feat_norm_fc,dropout=True) 
             self.relFeaturizerFC = nn.Sequential(*layers)
         else:
             self.relFeaturizerFC = None
@@ -219,7 +220,7 @@ class PairingGraph(BaseModel):
                 featurizer_fc = [self.numShapeFeatsBB]+featurizer_fc
             if featurizer_fc is not None:
                 featurizer_fc = featurizer_fc + ['FCnR{}'.format(graph_in_channels)]
-                layers, last_ch_node = make_layers(featurizer_fc,norm=feat_norm)
+                layers, last_ch_node = make_layers(featurizer_fc,norm=feat_norm_fc)
                 self.bbFeaturizerFC = nn.Sequential(*layers)
             else:
                 self.bbFeaturizerFC = None

@@ -12,6 +12,7 @@ import json
 class BinaryPairNet(nn.Module):
     def __init__(self, config): # predCount, base_0, base_1):
         super(BinaryPairNet, self).__init__()
+        raise NotImplemented('Changes have broken this class, use BinaryPairReal')
 
 
     def forward(self, node_features, adjacencyMatrix, numBBs):

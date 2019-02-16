@@ -319,7 +319,8 @@ class PairingGraph(BaseModel):
             #adjacencyMatrix = torch.zeros((bbPredictions.size(1),bbPredictions.size(1)))
             #for rel in relOuts:
             #    i,j,a=graphToDetectionsMap(
-
+            if self.predNN:
+                bbOuts[:,0]+=1 #make pred range -1 (to pred o nieghbors)
             return bbPredictions, offsetPredictions, relOuts, relIndexes, bbOuts
         else:
             return bbPredictions, offsetPredictions, None, None, None

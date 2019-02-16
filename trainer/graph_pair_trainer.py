@@ -194,15 +194,15 @@ class GraphPairTrainer(BaseTrainer):
             if (self.model.predNN or self.model.predClass) and bbPred is not None:
                 #create aligned GT
                 #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
-                toKeep = 1-(bbNoIntersections==1 * bbAlignment==-1)
+                toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
                 bbPred_use = bbPred[toKeep]
-                alignedNN_use = alignedNN[toKeep]
+                #alignedNN_use = alignedNN[toKeep]
                 bbAlignment_use = bbAlignment[toKeep]
                 #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
                 if target_num_neighbors is not None:
-                    target_num_neighbors_use = torch.cat((target_num_neighbors[0],torch.zeros(1).to(target_num_neighbors.device())),dim=0)
+                    target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
                 else:
-                    target_num_neighbors_use = torch.zeros(1).to(bbPred.device())
+                    target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
                 alignedNN_use = target_num_neighbors_use[bbAlignment_use]
             else:
                 bbPred_use = None
@@ -437,13 +437,15 @@ class GraphPairTrainer(BaseTrainer):
                 if self.model.predNN and bbPred is not None:
                     #create aligned GT
                     #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
-                    toKeep = 1-(bbNoIntersections==1 * bbAlignment==-1)
+                    toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
                     bbPred_use = bbPred[toKeep]
-                    alignedNN_use = alignedNN[toKeep]
                     bbAlignment_use = bbAlignment[toKeep]
                     #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-                    target_num_neighbors = torch.cat((target_num_neighbors,torch.zeros(1).to(target_num_neighbors.device())),dim=0)
-                    alignedNN_use = target_num_neighbors[bbAlignment_use]
+                    if target_num_neighbors is not None:
+                        target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                    else:
+                        target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+                    alignedNN_use = target_num_neighbors_use[bbAlignment_use]
                     
                     nn_loss_final = self.loss['nn'](bbPred_use[:,0],alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
@@ -498,7 +500,7 @@ class GraphPairTrainer(BaseTrainer):
             #'val_class_loss':tota_class_loss / len(self.valid_data_loader),
         }
         if self.model.predNN:
-            toRet['nn_loss_final']=nn_loss_final_total/len(self.valid_data_loader)
+            toRet['val_nn_loss_final']=nn_loss_final_total/len(self.valid_data_loader)
         return toRet
 
 

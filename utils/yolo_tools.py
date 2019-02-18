@@ -342,13 +342,13 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
     return computeAP(allScores), precisions, recalls
 
 
-def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0):
-    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allIOU)
-def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses,beforeCls=0):
+def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0,hard_thresh=True):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allIOU,hard_thresh)
+def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses,beforeCls=0,hard_thresh=True):
     raise NotImplemented('Checking if preds with no intersection not implemented for dist')
-    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allBoxDistNeg)
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allBoxDistNeg,hard_thresh)
 
-def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc):
+def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, hard_thresh):
     targIndex = torch.LongTensor((pred.size(0)))
     targIndex[:] = -1
     #mAP=0.0
@@ -368,7 +368,8 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc):
     predsWithNoIntersection=maxIOUsForPred==0
 
     hits = allIOUs>iou_thresh
-    allIOUs *= hits.float()
+    if hard_thresh:
+        allIOUs *= hits.float()
 
 
     for cls in range(numClasses):
@@ -393,7 +394,10 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc):
             targIndex[clsPredInd] =  targIndexes
             
     #import pdb;pdb.set_trace()
-    return targIndex, predsWithNoIntersection
+    if hard_thresh:
+        return targIndex, predsWithNoIntersection
+    else:
+        return targIndex, hits
 
 def computeAP(scores):
     rank=[]

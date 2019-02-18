@@ -530,10 +530,18 @@ class GraphPairTrainer(BaseTrainer):
         #decide which predicted boxes belong to which target boxes
         #should this be the same as AP_?
         numClasses = 2
-        if self.model.rotation:
-            targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
+
+        if self.useBadBBPredForRelLoss == 'fixed':
+            #fullHit = predsWithNoIntersection
+            if self.model.rotation:
+                targIndex, fullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,hard_thresh=False)
+            else:
+                targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False)
         else:
-            targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
+            if self.model.rotation:
+                targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
+            else:
+                targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
         #Create gt vector to match relPred.values()
 
@@ -556,18 +564,21 @@ class GraphPairTrainer(BaseTrainer):
                 #newGT.append( int((t0,t1) in adj) )#adjM[ min(t0,t1), max(t0,t1) ])
                 #preds.append(predsAll[i])
                 if (min(t0,t1),max(t0,t1)) in adj:
-                    matches+=1
-                    predsPos.append(predsAll[i])
-                    scores.append( (sigPredsAll[i],True) )
-                    if sigPredsAll[i]>self.thresh_rel:
-                        truePred+=1
+                    if self.useBadBBPredForRelLoss!='fixed' or (fullHit[n0] and fullHit[n1]):
+                        matches+=1
+                        predsPos.append(predsAll[i])
+                        scores.append( (sigPredsAll[i],True) )
+                        if sigPredsAll[i]>self.thresh_rel:
+                            truePred+=1
+                    else:
+                        scores.append( (sigPredsAll[i],False) ) #for the sake of scoring, this is a bad relationship
                 else:
                     predsNeg.append(predsAll[i])
                     scores.append( (sigPredsAll[i],False) )
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
             else:
-                if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
+                if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
                     predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:

@@ -48,8 +48,8 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 1,
-        "edge": 1
+        "box": 1.25,
+        "edge": 0.5
     },
     "loss_params": 
         {

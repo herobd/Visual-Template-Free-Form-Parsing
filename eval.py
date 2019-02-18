@@ -16,7 +16,7 @@ from datasets import forms_detect
 logging.basicConfig(level=logging.INFO, format='')
 
 
-def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None, thresh=None, addToConfig=None, test=False):
+def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=None, config=None, thresh=None, addToConfig=None, test=False,verbose=2):
     np.random.seed(1234)
     torch.manual_seed(1234)
     if resume is not None:
@@ -37,14 +37,17 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         config['gpu']=gpu
     if thresh is not None:
         config['THRESH'] = thresh
-        print('Threshold at {}'.format(thresh))
+        if verbose:
+            print('Threshold at {}'.format(thresh))
     if addToConfig is not None:
         for add in addToConfig:
             addTo=config
-            printM='added config['
+            if verbose:
+                printM='added config['
             for i in range(len(add)-2):
                 addTo = addTo[add[i]]
-                printM+=add[i]+']['
+                if verbose:
+                    printM+=add[i]+']['
             value = add[-1]
             if value=="":
                 value=None
@@ -57,8 +60,9 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                     except ValueError:
                         pass
             addTo[add[-2]] = value
-            printM+=add[-2]+']='+add[-1]
-            print(printM)
+            if verbose:
+                printM+=add[-2]+']='+add[-1]
+                print(printM)
 
         
     #config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
@@ -110,7 +114,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
     else:
         model = eval(config['arch'])(config['model'])
     model.eval()
-    model.summary()
+    if verbose:
+        model.summary()
 
     if gpu is not None:
         model = model.to(gpu)
@@ -185,7 +190,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                 if not test:
                     for trainIndex in range(index,index+step*batchSize, batchSize):
                         if trainIndex/batchSize < len(data_loader):
-                            print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
+                            if verbose>1:
+                                print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
                             #data, target = train_iter.next() #data_loader[trainIndex]
                             #dataT = _to_tensor(gpu,data)
                             #output = model(dataT)
@@ -199,7 +205,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
             
                 for validIndex in range(index,index+step*vBatchSize, vBatchSize):
                     if validIndex/vBatchSize < len(valid_data_loader):
-                        print('valid batch index: {}/{}'.format(validIndex/vBatchSize,len(valid_data_loader)),end='\r')
+                        if verbose>1:
+                            print('valid batch index: {}/{}'.format(validIndex/vBatchSize,len(valid_data_loader)),end='\r')
                         #data, target = valid_iter.next() #valid_data_loader[validIndex]
                         curVI+=1
                         #dataT  = _to_tensor(gpu,data)
@@ -225,7 +232,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
             #if gpu is not None or numberOfImages==0:
             try:
                 for vi in range(curVI,len(valid_data_loader)):
-                    print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
+                    if verbose>1:
+                        print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
                     instance = valid_iter.next()
                     metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
                     if type(metricsO) == dict:
@@ -322,6 +330,8 @@ if __name__ == '__main__':
                         help='Arbitrary key-value pairs to add to config of the form "k1=v1,k2=v2,...kn=vn"')
     parser.add_argument('-T', '--test', default=False, action='store_const', const=True,
                         help='Run test set')
+    parser.add_argument('-v', '--verbosity', default=2, type=int,
+                        help='How much stuff to print [0,1,2] (default: 2)')
 
     args = parser.parse_args()
 
@@ -345,6 +355,6 @@ if __name__ == '__main__':
         index = args.imgname
     if args.gpu is not None:
         with torch.cuda.device(args.gpu):
-            main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh, addToConfig=addtoconfig,test=args.test)
+            main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh, addToConfig=addtoconfig,test=args.test,verbose=args.verbosity)
     else:
-        main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh, addToConfig=addtoconfig,test=args.test)
+        main(args.checkpoint, args.savedir, args.number, index, gpu=args.gpu, shuffle=args.shuffle, setBatch=args.batchsize, config=args.config, thresh=args.thresh, addToConfig=addtoconfig,test=args.test,verbose=args.verbosity)

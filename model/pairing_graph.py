@@ -8,7 +8,7 @@ from model.graph_net import GraphNet
 from model.binary_pair_net import BinaryPairNet
 from model.binary_pair_real import BinaryPairReal
 #from model.roi_align.roi_align import RoIAlign
-from model.roi_align import ROIAlign
+from model.roi_align import ROIAlign as RoIAlign
 from skimage import draw
 from model.net_builder import make_layers, getGroupSize
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist

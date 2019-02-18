@@ -241,37 +241,46 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
 
     #This is an alternate metric that computes AP of all classes together
     #Your only a hit if you have the same class
-    allIOUs = getLoc(target[:,0:],pred[:,1:])
-    allHits = allIOUs>iou_thresh
-    allScores=[]
-    #evalute hits to see if they're valid (matching class)
-    targetClasses_index = torch.argmax(target[:,13:13+numClasses],dim=1)
-    predClasses_index = torch.argmax(pred[:,beforeCls+6:beforeCls+6+numClasses],dim=1)
-    targetClasses_index_ex = targetClasses_index[:,None].expand(targetClasses_index.size(0),predClasses_index.size(0))
-    predClasses_index_ex = predClasses_index[None,:].expand(targetClasses_index.size(0),predClasses_index.size(0))
-    matchingClasses = targetClasses_index_ex==predClasses_index_ex
-    validHits = allHits*matchingClasses
+    if pred.size(0)>0:
+        allIOUs = getLoc(target[:,0:],pred[:,1:])
+        allHits = allIOUs>iou_thresh
+        allScores=[]
+        #evalute hits to see if they're valid (matching class)
+        targetClasses_index = torch.argmax(target[:,13:13+numClasses],dim=1)
+        predClasses = pred[:,beforeCls+6:beforeCls+6+numClasses]
+        if predClasses.size(0)==0 or predClasses.size(1)==0:
+            print('ERROR, zero sized predClasses: {}. pred is {}'.format(predClasses.size(),pred.size()))
+        predClasses_index = torch.argmax(predClasses,dim=1)
+        targetClasses_index_ex = targetClasses_index[:,None].expand(targetClasses_index.size(0),predClasses_index.size(0))
+        predClasses_index_ex = predClasses_index[None,:].expand(targetClasses_index.size(0),predClasses_index.size(0))
+        matchingClasses = targetClasses_index_ex==predClasses_index_ex
+        validHits = allHits*matchingClasses
 
-    #add all the preds that didn't have a hit
-    hasHit,_ = validHits.max(dim=0) #which preds have hits
-    notHitScores = pred[1-hasHit,0]
-    for i in range(notHitScores.shape[0]):
-        allScores.append( (notHitScores[i].item(), False) )
+        #add all the preds that didn't have a hit
+        hasHit,_ = validHits.max(dim=0) #which preds have hits
+        notHitScores = pred[1-hasHit,0]
+        for i in range(notHitScores.shape[0]):
+            allScores.append( (notHitScores[i].item(), False) )
 
-    # if something has multiple hits, it gets paired to the closest (with matching class)
-    allIOUs[1-validHits] -= 9999999 #Force these to be smaller
-    maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
-    for i in range(maxValidHitIndexes.size(0)):
-        if validHits[maxValidHitIndexes[i],i]:
-            allScores.append( (pred[i,0].item(),True) )
-            #but now we've consumed this pred, so we'll zero its hit
-            validHits[maxValidHitIndexes[i],i]=0
+        # if something has multiple hits, it gets paired to the closest (with matching class)
+        allIOUs[1-validHits] -= 9999999 #Force these to be smaller
+        maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
+        for i in range(maxValidHitIndexes.size(0)):
+            if validHits[maxValidHitIndexes[i],i]:
+                allScores.append( (pred[i,0].item(),True) )
+                #but now we've consumed this pred, so we'll zero its hit
+                validHits[maxValidHitIndexes[i],i]=0
 
-    #add nan scores for missed targets
-    gotHit,gotHitIndex = torch.max(validHits,dim=1)
-    for i in range((gotHit==0).sum()):
-        allScores.append( (float('nan'),True) )
-
+        #add nan scores for missed targets
+        gotHit,gotHitIndex = torch.max(validHits,dim=1)
+        for i in range((gotHit==0).sum()):
+            allScores.append( (float('nan'),True) )
+        
+        ap=computeAP(allScores)
+    elif target.size(0)>0:
+        ap=0
+    else:
+        ap=1
 
 
     if ignoreClasses:
@@ -339,7 +348,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
             precisions.append(1)
             recalls.append(1)
 
-    return computeAP(allScores), precisions, recalls
+    return ap, precisions, recalls
 
 
 def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0):

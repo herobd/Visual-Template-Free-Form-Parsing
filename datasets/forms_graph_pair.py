@@ -53,10 +53,6 @@ class FormsGraphPair(GraphPairDataset):
             else:
                 splitFile = 'train_valid_test_split.json'
             with open(os.path.join(dirPath,splitFile)) as f:
-                #if split=='valid' or split=='validation':
-                #    trainTest='train'
-                #else:
-                #    trainTest=split
                 readFile = json.loads(f.read())
                 if type(split) is str:
                     groupsToUse = readFile[split]

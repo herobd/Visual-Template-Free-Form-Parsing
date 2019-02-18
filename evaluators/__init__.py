@@ -13,6 +13,7 @@ from evaluators.formsfeaturepair_printer import FormsFeaturePair_printer
 from evaluators.formslf_printer import FormsLF_printer
 #from evaluators.formspair_printer import FormsPair_printer
 from evaluators.ai2d_printer import AI2D_printer
+from evaluators.randommessages_printer import RandomMessagesDataset_printer
 
 
 #def FormsPair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):

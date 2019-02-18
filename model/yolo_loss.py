@@ -41,7 +41,7 @@ class YoloLoss (nn.Module):
         #r = prediction[..., 3]  # Rotation (not used here)
         pred_conf = prediction[..., 0]  # Conf 
         if target_num_neighbors is not None: #self.predNumNeighbors:
-            pred_neighbors = 1+prediction[..., 6]  # num of neighbors
+            pred_neighbors = 1+prediction[..., 6]  # num of neighbors, offset pred range so -1 is 0 neighbirs
             pred_cls = prediction[..., 7:]  # Cls pred.
         else:
             pred_cls = prediction[..., 6:]  # Cls pred.

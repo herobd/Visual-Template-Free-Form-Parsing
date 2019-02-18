@@ -89,16 +89,37 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets, relPred, relIndexes = model(dataT,hard_detect_limit=600)
+    outputBBs, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
 
     numClasses=2 #TODO no
-    if model.detector.predNumNeighbors:
+    if (model.predNN or model.predClass) and bbPred is not None:
+        #create aligned GT
+        #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+        toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
+        bbPred_use = bbPred[toKeep]
+        #alignedNN_use = alignedNN[toKeep]
+        bbAlignment_use = bbAlignment[toKeep]
+        #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+        if target_num_neighbors is not None:
+            target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+        else:
+            target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+        
+        if model.predNN:
+            predNN = bbPred[:,0]
+
+    else:
+        bbPred_use = None
+    if  model.detector.predNumNeighbors:
         #useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
         extraPreds=1
-        predNN = outputBBs[:,6]
+        if not model.predNN:
+            predNN = outputBBs[:,6]
     else:
         extraPreds=0
-        predNN = None
+        if not model.predNN:
+            predNN = None
         #useOutputBBs=outputBBs
 
     if targetBBsT is not None:
@@ -161,8 +182,21 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         relPred = 2*torch.sigmoid(relPred)[:,0] -1
 
+    if model.predNN and bbPred_use is not None:
+        nn_loss_final = F.mse_loss(bbPred_use[:,0],alignedNN_use)
+        #nn_loss_final *= self.lossWeights['nn']
+
+        #loss += nn_loss_final
+        nn_loss_final = nn_loss_final.item()
+    else:
+        nn_loss_final=None
+
+    if model.predClass and bbPred_use is not None:
+        raise NotImplemented('havent implemented loss for graph pred of classes')
 
     relCand = relIndexes
+    if relCand is None:
+        relCand=[]
 
 
     if model.rotation:
@@ -222,8 +256,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     data = data.numpy()
     #threshed in model
-    maxConf = outputBBs[:,0].max().item()
-    minConf = outputBBs[:,0].min().item()
+    if outputBBs.size(0)>0:
+        maxConf = outputBBs[:,0].max().item()
+        minConf = outputBBs[:,0].min().item()
     #threshConf = max(maxConf*THRESH,0.5)
     #if model.rotation:
     #    outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,3)
@@ -458,6 +493,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         retData['no_targs']=0
     else:
         retData['no_targs']=1
+    if nn_loss_final is not None:
+        retData['nn_loss_final']=nn_loss_final
     return (
              retData,
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)

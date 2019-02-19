@@ -41,13 +41,21 @@ class GraphPairTrainer(BaseTrainer):
         #self.log_step = int(np.sqrt(self.batch_size))
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
-        self.useLearningSchedule = 'use_learning_schedule' in config['trainer'] and config['trainer']['use_learning_schedule']
-        if self.useLearningSchedule:
+        self.useLearningSchedule = config['trainer']['use_learning_schedule'] if 'use_learning_schedule' in config['trainer'] else False
+        if self.useLearningSchedule=='cyclic':
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.001
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
+            lr_lambda = lambda step_num: (1-(1-min_lr_mul)*((step_num-1)%cycle_size)/(cycle_size-1))
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule is True:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
             lr_lambda = lambda step_num: min((max(0.000001,step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
             #y=((x-(2000-3))/100)^-0.1 and y=x*(1.485/2000)+0.01
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        else:
+            print('Unrecognized learning schedule: {}'.format(self.useLearningSchedule))
+            exit()
 
 
         #default is unfrozen, can be frozen by setting 'start_froze' in the PairingGraph models params
@@ -533,10 +541,18 @@ class GraphPairTrainer(BaseTrainer):
         #decide which predicted boxes belong to which target boxes
         #should this be the same as AP_?
         numClasses = 2
-        if self.model.rotation:
-            targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
+
+        if self.useBadBBPredForRelLoss == 'fixed':
+            #fullHit = predsWithNoIntersection
+            if self.model.rotation:
+                targIndex, fullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,hard_thresh=False)
+            else:
+                targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False)
         else:
-            targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
+            if self.model.rotation:
+                targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
+            else:
+                targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
         #Create gt vector to match relPred.values()
 
@@ -559,26 +575,28 @@ class GraphPairTrainer(BaseTrainer):
                 #newGT.append( int((t0,t1) in adj) )#adjM[ min(t0,t1), max(t0,t1) ])
                 #preds.append(predsAll[i])
                 if (min(t0,t1),max(t0,t1)) in adj:
-                    matches+=1
-                    predsPos.append(predsAll[i])
-                    scores.append( (sigPredsAll[i],True) )
-                    if sigPredsAll[i]>self.thresh_rel:
-                        truePred+=1
+                    if self.useBadBBPredForRelLoss!='fixed' or (fullHit[n0] and fullHit[n1]):
+                        matches+=1
+                        predsPos.append(predsAll[i])
+                        scores.append( (sigPredsAll[i],True) )
+                        if sigPredsAll[i]>self.thresh_rel:
+                            truePred+=1
+                    else:
+                        scores.append( (sigPredsAll[i],False) ) #for the sake of scoring, this is a bad relationship
                 else:
                     predsNeg.append(predsAll[i])
                     scores.append( (sigPredsAll[i],False) )
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
             else:
-                if self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1]):
+                if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
                     predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     badPred+=1
         #Add score 0 for instances we didn't predict
         for i in range(len(adj)-matches):
-            scores.append( (-1.0,True) )
-            scores.append( (0.0,False) )
+            scores.append( (float('nan'),True) )
         #if len(preds)==0:
         #    return torch.tensor([]),torch.tensor([])
         #newGT = torch.tensor(newGT).float().to(relPred[1].device)

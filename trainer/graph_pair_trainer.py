@@ -41,13 +41,21 @@ class GraphPairTrainer(BaseTrainer):
         #self.log_step = int(np.sqrt(self.batch_size))
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
-        self.useLearningSchedule = 'use_learning_schedule' in config['trainer'] and config['trainer']['use_learning_schedule']
-        if self.useLearningSchedule:
+        self.useLearningSchedule = config['trainer']['use_learning_schedule'] if 'use_learning_schedule' in config['trainer'] else False
+        if self.useLearningSchedule=='cyclic':
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.001
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
+            lr_lambda = lambda step_num: (1-(1-min_lr_mul)*((step_num-1)%cycle_size)/(cycle_size-1))
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule is True:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
             lr_lambda = lambda step_num: min((max(0.000001,step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
             #y=((x-(2000-3))/100)^-0.1 and y=x*(1.485/2000)+0.01
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        else:
+            print('Unrecognized learning schedule: {}'.format(self.useLearningSchedule))
+            exit()
 
 
         #default is unfrozen, can be frozen by setting 'start_froze' in the PairingGraph models params

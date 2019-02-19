@@ -276,7 +276,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     matches=0
     i=0
     numMissedByHeur=0
-    for n0,n1 in relCand:
+    for i,(n0,n1) in enumerate(relCand):
         t0 = targIndex[n0].item()
         t1 = targIndex[n1].item()
         if t0>=0 and t1>=0:
@@ -293,7 +293,6 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             scores.append( (relPred[i],False) )
             if relPred[i]>EDGE_THRESH:
                 badPred+=1
-        i+=1
     for i in range(len(adjacency)-matches):
         numMissedByHeur+=1
         scores.append( (float('nan'),True) )

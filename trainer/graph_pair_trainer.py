@@ -585,8 +585,7 @@ class GraphPairTrainer(BaseTrainer):
                     badPred+=1
         #Add score 0 for instances we didn't predict
         for i in range(len(adj)-matches):
-            scores.append( (-1.0,True) )
-            scores.append( (0.0,False) )
+            scores.append( (float('nan'),True) )
         #if len(preds)==0:
         #    return torch.tensor([]),torch.tensor([])
         #newGT = torch.tensor(newGT).float().to(relPred[1].device)

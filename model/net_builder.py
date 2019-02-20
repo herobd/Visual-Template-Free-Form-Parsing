@@ -112,6 +112,64 @@ class ResBlock(nn.Module):
         x=self.transform(x)
         return x+self.side(x)
 
+class GeneralRes(nn.Module):
+    def __init__(self,ms,in_ch,out_ch,norm,dropout):
+        layers=[]
+        skipFirstReLU=False
+        if in_ch!=out_ch:
+            assert(out_ch==2*in_ch)
+            layers.append(ncReLU())
+            skipFirstReLU=True
+        if downsample:
+            layers.append(nn.AvgPool2d(2)) #could be learned, but this allows a better identity?
+        if len(layers)>0:
+            self.transform = nn.Sequential(*layers)
+        else:
+            self.transform = lambda x: x
+
+        layers=[]
+        if not skipFirstReLU:
+            #I'm not sure if this is the best thing
+            #there should be a way to normalize (mask after normalization?)
+            if norm=='batch_norm':
+                layers.append(nn.BatchNorm2d(out_ch))
+            if norm=='instance_norm':
+                layers.append(nn.InstanceNorm2d(out_ch))
+            if norm=='group_norm':
+                layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
+            layers.append(nn.ReLU(inplace=True)) 
+        if norm=='weight_norm' or skipFirstReLU: #or just use this normalization?
+            layers.append(weight_norm(ms[0]))
+        else:
+            layers.append(ms[0])
+
+        for m in ms[1:]:
+            if norm=='batch_norm':
+                layers.append(nn.BatchNorm2d(out_ch))
+            if norm=='instance_norm':
+                layers.append(nn.InstanceNorm2d(out_ch))
+            if norm=='group_norm':
+                layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
+            if dropout is not None:
+                if dropout==True or dropout=='2d':
+                    layers.append(nn.Dropout2d(p=0.1,inplace=True))
+                elif dropout=='normal':
+                    layers.append(nn.Dropout2d(p=0.1,inplace=True))
+            layers.append(nn.ReLU(inplace=True)) 
+            assert(secondKernel%2 == 1)
+            if norm=='weight_norm':
+                layers.append(weight_norm(m))
+            else:
+                layers.append(m)
+
+        self.side = nn.Sequential(*layers)
+
+    def forward(self,x):
+        x=self.transform(x)
+        return x+self.side(x)
+
+
+
 def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
     if type(dilation) is int:
         dilation=(dilation,dilation)

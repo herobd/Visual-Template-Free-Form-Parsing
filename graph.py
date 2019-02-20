@@ -38,7 +38,8 @@ def graph(log,plot=True,prefix=None):
         for metric, data in graphs.items():
             if metric in skip:
                 continue
-            if (prefix is None and metric[:3]=='avg' or metric[:3]=='val') or (prefix is not None and metric[:len(prefix)]==prefix):
+            if (prefix is None and (metric[:3]=='avg' or metric[:3]=='val')) or (prefix is not None and metric[:len(prefix)]==prefix):
+                #print('{} == {}? {}'.format(metric[:len(prefix)],prefix,metric[:len(prefix)]==prefix))
                 plt.figure(i)
                 i+=1
                 plt.plot(data['iters'], data['values'], '.-')

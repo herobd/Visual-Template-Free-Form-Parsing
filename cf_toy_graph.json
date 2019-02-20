@@ -1,0 +1,49 @@
+{
+    "name": "toy_graph",
+    "cuda": true,
+    "gpu": 0,
+    "override": true,
+    "data_loader": {
+        "data_set_name": "RandomMessagesDataset",
+        "data_dir": ".",
+        "batch_size": 1,
+        "shuffle": false,
+        "num_workers": 0
+    },
+    "validation": {
+    },
+
+    
+    "lr_scheduler_type": "none",
+ 
+    "optimizer_type": "Adam",
+    "optimizer": {
+        "lr": 0.001
+    },
+    "loss": "sigmoid_BCE_loss",
+    "metrics": [],
+    "trainer": {
+        "class": "ToyGraphTrainer",
+        "iterations": 50000,
+        "save_dir": "saved/",
+        "val_step": 500,
+        "save_step": 5000,
+        "save_step_minor": 250,
+        "log_step": 250,
+        "verbosity": 1,
+        "monitor": "loss",
+        "monitor_mode": "none",
+        "adapt_lr": false
+    },
+    "arch": "GraphNet", 
+    "model": {
+        "in_channels": 500,
+        "bb_out": 10,
+        "rel_out": 0,
+        "num_trans": 3,
+        "num_heads": 1,
+        "num_ffnn_feats": 550,
+        "encoder": [12,"FC256"],
+        "random_reps": [1,1]
+    }
+}

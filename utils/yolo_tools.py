@@ -239,12 +239,12 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
     else:
         return 1, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
-    #This is an alternate metric that computes AP of all classes together
-    #Your only a hit if you have the same class
-    if pred.size(0)>0:
+    allScores=[]
+    if len(pred.size())>1 and pred.size(0)>0:
+        #This is an alternate metric that computes AP of all classes together
+        #Your only a hit if you have the same class
         allIOUs = getLoc(target[:,0:],pred[:,1:])
         allHits = allIOUs>iou_thresh
-        allScores=[]
         #evalute hits to see if they're valid (matching class)
         targetClasses_index = torch.argmax(target[:,13:13+numClasses],dim=1)
         predClasses = pred[:,beforeCls+6:beforeCls+6+numClasses]

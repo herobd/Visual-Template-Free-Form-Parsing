@@ -406,15 +406,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
                 if predNN is not None: #model.detector.predNumNeighbors:
                     x=int(bbs[j,1])
-                    y=int(bbs[j,2]-bbs[j,4])
+                    y=int(bbs[j,2])#-bbs[j,4])
                     targ_j = bbAlignment[j].item()
                     if targ_j>=0:
                         gtNN = target_num_neighbors[0,targ_j]
                     else:
                         gtNN = 0
                     pred_nn = predNN[j].item()
-                    color = int(min(abs(pred_nn-gtNN),2)*0.5)
-                    cv2.putText(image,'{}/{}'.format(pred_nn,gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                    color = min(abs(pred_nn-gtNN),2)*0.5
+                    cv2.putText(image,'{:.2}/{}'.format(pred_nn,gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
         #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])

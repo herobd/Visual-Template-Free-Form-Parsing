@@ -2,7 +2,7 @@
     "name": "Mix18_staggerLight_NN",
     "cuda": true,
     "gpu": 0,
-    "super_computer": true,
+    "super_computer":false,
     "save_mode": "state_dict",
     "override": true,
     "data_loader": {

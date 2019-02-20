@@ -71,10 +71,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     adjacency = instance['adj']
     imageName = instance['imgName']
     scale = instance['scale']
-    gtNumNeighbors = instance['num_neighbors']
+    target_num_neighbors = instance['num_neighbors']
     if not model.detector.predNumNeighbors:
         instance['num_neighbors']=None
-    dataT, targetBBsT, adjT, gtNumNeighborsT = __to_tensor(instance,gpu)
+    dataT, targetBBsT, adjT, target_num_neighborsT = __to_tensor(instance,gpu)
 
 
     resultsDirName='results'
@@ -92,25 +92,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     outputBBs, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
 
     numClasses=2 #TODO no
-    if (model.predNN or model.predClass) and bbPred is not None:
-        #create aligned GT
-        #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
-        toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
-        bbPred_use = bbPred[toKeep]
-        #alignedNN_use = alignedNN[toKeep]
-        bbAlignment_use = bbAlignment[toKeep]
-        #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-        if target_num_neighbors is not None:
-            target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
-        else:
-            target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
-        
-        if model.predNN:
-            predNN = bbPred[:,0]
-
+    if model.predNN and bbPred is not None:
+        predNN = bbPred[:,0]
     else:
-        bbPred_use = None
+        predNN=None
     if  model.detector.predNumNeighbors:
         #useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
         extraPreds=1
@@ -126,7 +111,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         targetSize=targetBBsT.size(1)
     else:
         targetSize=0
-    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize], gtNumNeighborsT)
+    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize], target_num_neighborsT)
 
     if 'rule' in config:
         if config['rule']=='closest':
@@ -182,17 +167,6 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         relPred = 2*torch.sigmoid(relPred)[:,0] -1
 
-    if model.predNN and bbPred_use is not None:
-        nn_loss_final = F.mse_loss(bbPred_use[:,0],alignedNN_use)
-        #nn_loss_final *= self.lossWeights['nn']
-
-        #loss += nn_loss_final
-        nn_loss_final = nn_loss_final.item()
-    else:
-        nn_loss_final=None
-
-    if model.predClass and bbPred_use is not None:
-        raise NotImplemented('havent implemented loss for graph pred of classes')
 
     relCand = relIndexes
     if relCand is None:
@@ -200,9 +174,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
     if model.rotation:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses,extraPreds)
+        bbAlignment, bbNoIntersections = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses,extraPreds)
     else:
-        targIndex, predWithNoIntersection = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses,extraPreds)
+        bbAlignment, bbNoIntersections = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses,extraPreds)
     if targetBBs is not None:
         target_for_b = targetBBs[0,:,:]
     else:
@@ -230,14 +204,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if id1 not in idMap:
                         idMap[id1]=newId
                         if not usePredNN:
-                            numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                            numNeighbors.append(target_num_neighbors[0,bbAlignment[index]])
                         else:
                             numNeighbors.append(predNN[id1])
                         newId+=1
                     if id2 not in idMap:
                         idMap[id2]=newId
                         if not usePredNN:
-                            numNeighbors.append(gtNumNeighbors[0,targIndex[index]])
+                            numNeighbors.append(target_num_neighbors[0,bbAlignment[index]])
                         else:
                             numNeighbors.append(predNN[id2])
                         newId+=1
@@ -269,6 +243,35 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes,beforeCls=extraPreds)
     else:
         ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes,beforeCls=extraPreds)
+    #align bb predictions (final) with GT
+    if (model.predNN or model.predClass) and bbPred is not None:
+        #create aligned GT
+        #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+        toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
+        bbPred_use = bbPred[toKeep]
+        #alignedNN_use = alignedNN[toKeep]
+        bbAlignment_use = bbAlignment[toKeep]
+        #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+        if target_num_neighbors is not None:
+            target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+        else:
+            target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+        
+
+    else:
+        bbPred_use = None
+    if model.predNN and bbPred_use is not None:
+        nn_loss_final = F.mse_loss(bbPred_use[:,0],alignedNN_use.to(bbPred_use.device))
+        #nn_loss_final *= self.lossWeights['nn']
+
+        #loss += nn_loss_final
+        nn_loss_final = nn_loss_final.item()
+    else:
+        nn_loss_final=None
+
+    if model.predClass and bbPred_use is not None:
+        raise NotImplemented('havent implemented loss for graph pred of classes')
     useOutputBBs=None
 
     truePred=falsePred=badPred=0
@@ -277,8 +280,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     i=0
     numMissedByHeur=0
     for i,(n0,n1) in enumerate(relCand):
-        t0 = targIndex[n0].item()
-        t1 = targIndex[n1].item()
+        t0 = bbAlignment[n0].item()
+        t1 = bbAlignment[n1].item()
         if t0>=0 and t1>=0:
             if (min(t0,t1),max(t0,t1)) in adjacency:
                 matches+=1
@@ -300,7 +303,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     numMissedByDetect=0
     for t0,t1 in adjacency:
-        if t0 not in targIndex or t1 not in targIndex:
+        if t0 not in bbAlignment or t1 not in bbAlignment:
             numMissedByHeur-=1
             numMissedByDetect+=1
     if len(adjacency)>0:
@@ -351,7 +354,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             plotRect(image,(1,0.5,0),targetBBs[0,j,0:5])
             #x=int(targetBBs[b,j,0])
             #y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
-            #cv2.putText(image,'{:.2f}'.format(gtNumNeighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
+            #cv2.putText(image,'{:.2f}'.format(target_num_neighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
             #if alignmentBBs[b] is not None:
             #    aj=alignmentBBs[b][j]
             #    xc_gt = targetBBs[b,j,0]
@@ -401,16 +404,17 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     color=(shade,0,0) #field
                 plotRect(image,color,bbs[j,1:6])
 
-                if model.detector.predNumNeighbors:
+                if predNN is not None: #model.detector.predNumNeighbors:
                     x=int(bbs[j,1])
-                    y=int(bbs[j,2]-bbs[j,4])
-                    #targ_j = targIndex[j].item()
-                    #if targ_j>=0:
-                    #    gtNN = gtNumNeighbors[targ_j]
-                    #else:
-                    #    gtNN = 0
-                    #color = int(min(abs(predNN[j]-gtNN),2)*127)
-                    #cv2.putText(image,'{}/{}'.format(predNN[j],gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                    y=int(bbs[j,2])#-bbs[j,4])
+                    targ_j = bbAlignment[j].item()
+                    if targ_j>=0:
+                        gtNN = target_num_neighbors[0,targ_j]
+                    else:
+                        gtNN = 0
+                    pred_nn = predNN[j].item()
+                    color = min(abs(pred_nn-gtNN),2)*0.5
+                    cv2.putText(image,'{:.2}/{}'.format(pred_nn,gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
         #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
@@ -450,7 +454,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
         #Draw alginment between gt and pred bbs
         for predI in range(bbs.shape[0]):
-            targI=targIndex[predI].item()
+            targI=bbAlignment[predI].item()
             x1 = int(round(bbs[predI,1]))
             y1 = int(round(bbs[predI,2]))
             if targI>0:

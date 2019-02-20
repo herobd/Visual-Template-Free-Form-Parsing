@@ -567,7 +567,7 @@ class PairingGraph(BaseModel):
                         else:
                             bb_shapeFeats[i,self.numBBTypes+3+extraPred] = (bbs[i,0]-imageWidth/2)/(imageWidth/2)
                             bb_shapeFeats[i,self.numBBTypes+4+extraPred] = (bbs[i,1]-imageHeight/2)/(imageHeight/2)
-                if self.useShapeFeats != "only":
+                if self.useShapeFeats != "only" and self.expandedBBContext:
                     #Add detected BB masks
                     #warp to roi space
                     feature_w = rois[i,3]-rois[i,1] +1
@@ -584,7 +584,7 @@ class PairingGraph(BaseModel):
                     brY1 = round(((brY[i]-rois[i,2])*h_m).item())
                     blY1 = round(((blY[i]-rois[i,2])*h_m).item())
 
-                    rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], [self.poolBB_h,self.poolBB_w])
+                    rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], (self.poolBB_h,self.poolBB_w))
                     masks[i,0,rr,cc]=1
                     if self.expandedBBContext is not None:
                         cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]

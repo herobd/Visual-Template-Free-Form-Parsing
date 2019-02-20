@@ -239,39 +239,41 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
     else:
         return 1, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
-    #This is an alternate metric that computes AP of all classes together
-    #Your only a hit if you have the same class
-    allIOUs = getLoc(target[:,0:],pred[:,1:])
-    allHits = allIOUs>iou_thresh
     allScores=[]
-    #evalute hits to see if they're valid (matching class)
-    targetClasses_index = torch.argmax(target[:,13:13+numClasses],dim=1)
-    predClasses_index = torch.argmax(pred[:,beforeCls+6:beforeCls+6+numClasses],dim=1)
-    targetClasses_index_ex = targetClasses_index[:,None].expand(targetClasses_index.size(0),predClasses_index.size(0))
-    predClasses_index_ex = predClasses_index[None,:].expand(targetClasses_index.size(0),predClasses_index.size(0))
-    matchingClasses = targetClasses_index_ex==predClasses_index_ex
-    validHits = allHits*matchingClasses
+    if len(pred.size())>1 and pred.size(0)>0:
+        #This is an alternate metric that computes AP of all classes together
+        #Your only a hit if you have the same class
+        allIOUs = getLoc(target[:,0:],pred[:,1:])
+        allHits = allIOUs>iou_thresh
+        #evalute hits to see if they're valid (matching class)
+        targetClasses_index = torch.argmax(target[:,13:13+numClasses],dim=1)
+        predClasses_index = torch.argmax(pred[:,beforeCls+6:beforeCls+6+numClasses],dim=1)
+        targetClasses_index_ex = targetClasses_index[:,None].expand(targetClasses_index.size(0),predClasses_index.size(0))
+        predClasses_index_ex = predClasses_index[None,:].expand(targetClasses_index.size(0),predClasses_index.size(0))
+        matchingClasses = targetClasses_index_ex==predClasses_index_ex
+        validHits = allHits*matchingClasses
 
-    #add all the preds that didn't have a hit
-    hasHit,_ = validHits.max(dim=0) #which preds have hits
-    notHitScores = pred[1-hasHit,0]
-    for i in range(notHitScores.shape[0]):
-        allScores.append( (notHitScores[i].item(), False) )
+        #add all the preds that didn't have a hit
+        hasHit,_ = validHits.max(dim=0) #which preds have hits
+        notHitScores = pred[1-hasHit,0]
+        for i in range(notHitScores.shape[0]):
+            allScores.append( (notHitScores[i].item(), False) )
 
-    # if something has multiple hits, it gets paired to the closest (with matching class)
-    allIOUs[1-validHits] -= 9999999 #Force these to be smaller
-    maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
-    for i in range(maxValidHitIndexes.size(0)):
-        if validHits[maxValidHitIndexes[i],i]:
-            allScores.append( (pred[i,0].item(),True) )
-            #but now we've consumed this pred, so we'll zero its hit
-            validHits[maxValidHitIndexes[i],i]=0
+        # if something has multiple hits, it gets paired to the closest (with matching class)
+        allIOUs[1-validHits] -= 9999999 #Force these to be smaller
+        maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
+        for i in range(maxValidHitIndexes.size(0)):
+            if validHits[maxValidHitIndexes[i],i]:
+                allScores.append( (pred[i,0].item(),True) )
+                #but now we've consumed this pred, so we'll zero its hit
+                validHits[maxValidHitIndexes[i],i]=0
 
-    #add nan scores for missed targets
-    gotHit,gotHitIndex = torch.max(validHits,dim=1)
-    for i in range((gotHit==0).sum()):
+        #add nan scores for missed targets
+        gotHit,gotHitIndex = torch.max(validHits,dim=1)
+        for i in range((gotHit==0).sum()):
+            allScores.append( (float('nan'),True) )
+    else:
         allScores.append( (float('nan'),True) )
-
 
 
     if ignoreClasses:

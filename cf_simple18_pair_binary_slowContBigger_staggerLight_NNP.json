@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binaryALR_F2B+16_staggerLight_NNP",
+    "name": "Simple18_pair_binary_slowContBigger_staggerLight_NNP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -60,7 +60,7 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 300000,
+        "iterations": 150000,
         "save_dir": "saved/",
         "val_step": 10000,
         "save_step": 50000,
@@ -80,7 +80,7 @@
         "use_bad_bb_pred_for_rel_loss": true,
 
         "use_learning_schedule": true,
-        "adapt_lr": true
+        "adapt_lr": false
     },
     "arch": "PairingGraph", 
     "model": {
@@ -90,9 +90,6 @@
 	"use_rel_shape_feats": "corner",
         "expand_rel_context": 200,
         "use_detect_layer_feats": 16,
-        "use_2nd_detect_layer_feats": 8,
-        "use_2nd_detect_scale_feats": 1,
-        "use_2nd_detect_feats_size": 64,
         "graph_config": {
             "arch": "BinaryPairReal",
             "in_channels": 256,
@@ -100,9 +97,9 @@
             "edge_channels": 1,
             "layers": ["FC256","FC256"]
         },
-        "featurizer_start_h": 32,
-        "featurizer_start_w": 32,
-        "featurizer_conv": [128,"M",128,128,"M",256,256,"M",238],
+        "featurizer_start_h": 20,
+        "featurizer_start_w": 20,
+        "featurizer_conv": [256,128,128,"M",256,256,"M",238],
         "featurizer_fc": null
     }
 }

@@ -1,10 +1,10 @@
 {
-    "name": "Simple18_pair_binaryALR_F2B+16_staggerLight_NNP",
+    "name": "Simple18_pair_binaryALR_F1A+16_B_staggerLight_NNP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":true,
+    "super_computer":false,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "special_dataset": "simple",
@@ -60,7 +60,7 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 300000,
+        "iterations": 150000,
         "save_dir": "saved/",
         "val_step": 10000,
         "save_step": 50000,
@@ -90,9 +90,9 @@
 	"use_rel_shape_feats": "corner",
         "expand_rel_context": 200,
         "use_detect_layer_feats": 16,
-        "use_2nd_detect_layer_feats": 8,
+        "use_2nd_detect_layer_feats": 0,
         "use_2nd_detect_scale_feats": 1,
-        "use_2nd_detect_feats_size": 64,
+        "use_2nd_detect_feats_size": 32,
         "graph_config": {
             "arch": "BinaryPairReal",
             "in_channels": 256,
@@ -102,7 +102,7 @@
         },
         "featurizer_start_h": 32,
         "featurizer_start_w": 32,
-        "featurizer_conv": [128,"M",128,128,"M",256,256,"M",238],
+        "featurizer_conv": [256,"M",256,256,"M",256,256,"M",238],
         "featurizer_fc": null
     }
 }

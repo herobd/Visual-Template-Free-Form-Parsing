@@ -170,13 +170,14 @@ class GeneralRes(nn.Module):
 
 
 
-def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None):
+def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None,depthwise=False):
     if type(dilation) is int:
         dilation=(dilation,dilation)
     if type(kernel) is int:
         kernel=(kernel,kernel)
     padding = ( dilation[0]*(kernel[0]//2), dilation[1]*(kernel[1]//2) )
-    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=padding,dilation=dilation)
+    groups = in_ch if depthwise else 1
+    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=padding,dilation=dilation,groups=groups)
     #if i == len(cfg)-1:
     #    layers += [conv2d]
     #    break
@@ -376,6 +377,12 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
         #    modules.append(nn.Sequential(*layers))
         #    layers = [nn.MaxPool2d(kernel_size=2, stride=2)]
         #    layerCodes = [v]
+        elif type(v)==str and v[:3] == 'sep': #depth-wise seperable conv
+            outCh=int(v[3:])
+            layers += convReLU(in_channels[-1],in_channels[-1],norm,kernel=(3,3),dropout=dropout,depthwise=True)
+            layers += convReLU(in_channels[-1],outCh,norm,kernel=(1,1),dropout=dropout,depthwise=False)
+            layerCodes.append(outCh)
+            in_channels.append(outCh)
             
         elif type(v)==str:
             print('Error reading net cfg, unknown layer: '+v)

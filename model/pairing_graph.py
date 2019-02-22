@@ -428,6 +428,7 @@ class PairingGraph(BaseModel):
         for i,(index1, index2) in enumerate(candidates):
             if self.useShapeFeats!='only':
                 #... or make it so index1 is always to top-left one
+                #TODO not random during validation
                 if random.random()<0.5 and not self.debug:
                     temp=index1
                     index1=index2

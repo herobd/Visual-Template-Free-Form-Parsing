@@ -90,7 +90,6 @@
         "conf_thresh": 0.5,
         "start_frozen": true,
 	"use_shape_feats": "corner",
-        "expand_rel_context": 200,
         "expand_bb_context": 150,
         "use_detect_layer_feats": 16,
         "graph_config": {
@@ -101,14 +100,16 @@
             "layers": ["FC256","FC256"],
             "layers_bb": ["FC256"]
         },
-        "pred_nn": true,
+        "expand_rel_context": 200,
         "featurizer_start_h": 20,
         "featurizer_start_w": 20,
-        "featurizer_conv": [64,64,64,"M",128,"M",238],
+        "featurizer_conv": [256,128,128,"M",256,256,"M",238],
         "featurizer_fc": null,
 
+        "pred_nn": true,
+        "expand_bb_context": 200,
         "featurizer_bb_start_h": 20,
         "featurizer_bb_start_w": 20,
-        "bb_featurizer_conv": [64,64,64,"M",128,"M",238]
+        "bb_featurizer_conv": [64,64,64,"M",128,128,"M",238]
     }
 }

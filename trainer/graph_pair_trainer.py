@@ -68,6 +68,7 @@ class GraphPairTrainer(BaseTrainer):
         #we iniailly train the pairing using GT BBs, but eventually need to fine-tune the pairing using the networks performance
         self.stop_from_gt = config['trainer']['stop_from_gt'] if 'stop_from_gt' in config['trainer'] else None
         self.partial_from_gt = config['trainer']['partial_from_gt'] if 'partial_from_gt' in config['trainer'] else None
+        self.max_use_pred = config['trainer']['max_use_pred'] if 'max_use_pred' in config['trainer'] else 0.9
 
         self.conf_thresh_init = config['trainer']['conf_thresh_init'] if 'conf_thresh_init' in config['trainer'] else 0.9
         self.conf_thresh_change_iters = config['trainer']['conf_thresh_change_iters'] if 'conf_thresh_change_iters' in config['trainer'] else 5000
@@ -119,9 +120,9 @@ class GraphPairTrainer(BaseTrainer):
 
     def useGT(self,iteration):
         if self.stop_from_gt is not None and iteration>=self.stop_from_gt:
-            return random.random()>0.9 #I think it's best to always have some GT examples
+            return random.random()>self.max_use_pred #I think it's best to always have some GT examples
         elif self.partial_from_gt is not None and iteration>=self.partial_from_gt:
-            return random.random()> 0.9*(iteration-self.partial_from_gt)/(self.stop_from_gt-self.partial_from_gt)
+            return random.random()> self.max_use_pred*(iteration-self.partial_from_gt)/(self.stop_from_gt-self.partial_from_gt)
         else:
             return True
 
@@ -458,7 +459,7 @@ class GraphPairTrainer(BaseTrainer):
                     nn_loss_final = self.loss['nn'](bbPred_use[:,0],alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
 
-                    loss += nn_loss_final
+                    loss += nn_loss_final.to(loss.device)
                     nn_loss_final = nn_loss_final.item()
                     nn_loss_final_total += nn_loss_final
                 else:

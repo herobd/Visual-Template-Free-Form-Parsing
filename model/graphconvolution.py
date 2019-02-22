@@ -194,21 +194,21 @@ class GraphTransformerBlock(nn.Module):
         self.att = GraphSelfAttention(features,num_heads)
         #self.norm1 = nn.GroupNorm(getGroupSize(features),features)
         #self.norm2 = nn.GroupNorm(getGroupSize(features),features)
-        self.norm1 = nn.GroupNorm(features,features)
-        self.norm2 = nn.GroupNorm(features,features)
+        self.norm1 = nn.GroupNorm(1,features)
+        self.norm2 = nn.GroupNorm(1,features)
 
     def forward(self,input,adj=None,numBBs=None):
         if adj is None:
             input,adjMine,numBBs = input
         else:
-            adjMin=adj
+            adjMine=adj
+        #import pdb;pdb.set_trace()
         side1=self.att(input,adjMine)[0]
         side1+=input
         #TODO allow splitting into rel and box sides
         side1 = self.norm1(side1)
         side2=self.ffnn(side1)
         #return self.norm2(side2),adj,numBBs
-        #import pdb;pdb.set_trace()
         if adj is None:
             return self.norm2(side2+side1),adj,numBBs
         else:

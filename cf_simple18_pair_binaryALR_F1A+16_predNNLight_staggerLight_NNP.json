@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binary_F1A+16_predNN_staggerLight_NNP",
+    "name": "Simple19_pair_binary_F1A+16_predNNDS_staggerLight_NNP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -76,7 +76,7 @@
         "conf_thresh_change_iters": 5000,
         "retry_count":3,
 
-        "unfreeze_detector": 4000,
+        "unfreeze_detector": 100,
         "partial_from_gt": 8000,
         "stop_from_gt": 100000,
         "use_bad_bb_pred_for_rel_loss": "fixed",
@@ -89,7 +89,7 @@
         "detector_checkpoint": "saved/Simple18_staggerLight_NN/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
-	"use_shape_feats": "corner",
+	"use_rel_shape_feats": "corner",
         "use_detect_layer_feats": 16,
         "use_2nd_detect_layer_feats": 0,
         "use_2nd_detect_scale_feats": 1,
@@ -99,19 +99,19 @@
             "in_channels": 256,
             "bb_out": 1,
             "rel_out": 1,
-            "layers": ["FC256","FC256"],
-            "layers_bb": ["FC256"]
+            "layers": ["FC256"],
+            "layers_bb": []
         },
         "expand_rel_context": 150,
-        "featurizer_start_h": 32,
-        "featurizer_start_w": 32,
-        "featurizer_conv": [128,"M",128,128,"M",256,256,"M",238],
+        "featurizer_start_h": 24,
+        "featurizer_start_w": 24,
+        "featurizer_conv": ["sep64","M","sep64","sep64","M","sep128","sep128",238],
         "featurizer_fc": null,
 
         "pred_nn": true,
         "expand_bb_context": 150,
-        "featurizer_bb_start_h": 32,
-        "featurizer_bb_start_w": 32,
-        "bb_featurizer_conv": [64,"M",64,64,"M",128,128,"M",238]
+        "featurizer_bb_start_h": 24,
+        "featurizer_bb_start_w": 24,
+        "bb_featurizer_conv": ["sep32","M","sep32","sep32","M","sep64","sep64",238]
     }
 }

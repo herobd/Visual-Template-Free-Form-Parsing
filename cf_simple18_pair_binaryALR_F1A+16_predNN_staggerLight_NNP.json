@@ -89,7 +89,7 @@
         "detector_checkpoint": "saved/Simple18_staggerLight_NN/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
-	"use_rel_shape_feats": "corner",
+	"use_shape_feats": "corner",
         "use_detect_layer_feats": 16,
         "use_2nd_detect_layer_feats": 0,
         "use_2nd_detect_scale_feats": 1,

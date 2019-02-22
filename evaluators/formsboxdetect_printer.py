@@ -317,9 +317,10 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
 
             for j in range(targetBBsSizes[b]):
                 plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
-                x=int(targetBBs[b,j,0])
-                y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
-                cv2.putText(image,'{:.2f}'.format(gtNumNeighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
+                if model.predNumNeighbors:
+                    x=int(targetBBs[b,j,0])
+                    y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
+                    cv2.putText(image,'{:.2f}'.format(gtNumNeighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
                 #if alignmentBBs[b] is not None:
                 #    aj=alignmentBBs[b][j]
                 #    xc_gt = targetBBs[b,j,0]

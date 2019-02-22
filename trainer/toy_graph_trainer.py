@@ -80,6 +80,7 @@ class ToyGraphTrainer(BaseTrainer):
 
         features, adj, gt, num = self._to_tensor(thisInstance)
         output,_ = self.model(features,(adj,None),num)
+        #print(output[:,0])
 
         loss = self.loss(output,gt)
         if self.adaptLR:
@@ -101,6 +102,7 @@ class ToyGraphTrainer(BaseTrainer):
 
         log = {
             'loss': loss,
+            'out': output.mean().item(),
         }
 
         #if iteration%10==0:

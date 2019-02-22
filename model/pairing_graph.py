@@ -134,6 +134,9 @@ class PairingGraph(BaseModel):
             else:
                 bbMasks_bb=0
 
+            self.use_fixed_masks = config['use_fixed_masks'] if 'use_fixed_masks' in config else False
+            self.splitFeatureRes = config['split_feature_res'] if 'split_feature_res' in config else False
+
             feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
             feat_norm_fc = detector_config['norm_type_fc'] if 'norm_type_fc' in detector_config else None
             featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
@@ -306,7 +309,7 @@ class PairingGraph(BaseModel):
                     useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>1:
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
-            bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))
+            bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))# ,debug_image=image)
             if bbAndRel_features is None:
                 return bbPredictions, offsetPredictions, None, None, None
 
@@ -362,6 +365,10 @@ class PairingGraph(BaseModel):
         brX = brX.cpu()
         brY = brY.cpu()
 
+        if debug_image is not None:
+            debug_images=[]
+            debug_masks=[]
+
         if self.useShapeFeats!='only':
             #get axis aligned rectangle from corners
             rois = torch.zeros((len(candidates),5)) #(batchIndex,x1,y1,x2,y2) as expected by ROI Align
@@ -384,7 +391,7 @@ class PairingGraph(BaseModel):
 
 
                 ###DEBUG
-                if debug_image is not None and i<10:
+                if debug_image is not None and i<5:
                     assert(self.rotation==False)
                     #print('crop {}: ({},{}), ({},{})'.format(i,minX.item(),maxX.item(),minY.item(),maxY.item()))
                     #print(bbs[index1])
@@ -396,25 +403,30 @@ class PairingGraph(BaseModel):
                     crop[0,int(tlY[index1].item()-minY):int(brY[index1].item()-minY)+1,int(tlX[index1].item()-minX):int(brX[index1].item()-minX)+1]*=0.5
                     crop[1,int(tlY[index2].item()-minY):int(brY[index2].item()-minY)+1,int(tlX[index2].item()-minX):int(brX[index2].item()-minX)+1]*=0.5
                     crop = crop.numpy().transpose([1,2,0])
-                    cv2.imshow('crop {}'.format(i),crop)
+                    #cv2.imshow('crop {}'.format(i),crop)
+                    debug_images.append(crop)
                     #import pdb;pdb.set_trace()
                 ###
-            if debug_image is not None:
-                cv2.waitKey()
+            #if debug_image is not None:
+            #    cv2.waitKey()
 
             #crop from feats, ROI pool
             stackedEdgeFeatWindows = self.roi_align(features,rois.to(features.device))
             if features2 is not None:
-                stackedEdgeFeatWindows = torch.cat( (stackedEdgeFeatWindows,self.roi_align2(features2,rois.to(features.device))), dim=1)
+                stackedEdgeFeatWindows2 = self.roi_align2(features2,rois.to(features.device))
+                if not self.splitFeatureRes:
+                    stackedEdgeFeatWindows = torch.cat( (stackedEdgeFeatWindows,stackedEdgeFeatWindows2), dim=1)
+                    stackedEdgeFeatWindows2=None
 
             #create and add masks
             if self.expandedRelContext is not None:
                 #We're going to add a third mask for all bbs, which we'll precompute here
                 numMasks=3
                 allMasks = torch.zeros(imageHeight,imageWidth)
-                for bbIdx in range(bbs.size(0)):
-                    rr, cc = draw.polygon([tlY[bbIdx],trY[bbIdx],brY[bbIdx],blY[bbIdx]],[tlX[bbIdx],trX[bbIdx],brX[bbIdx],blX[bbIdx]], [self.pool_h,self.pool_w])
-                    allMasks[rr,cc]=1
+                if self.use_fixed_masks:
+                    for bbIdx in range(bbs.size(0)):
+                        rr, cc = draw.polygon([tlY[bbIdx],trY[bbIdx],brY[bbIdx],blY[bbIdx]],[tlX[bbIdx],trX[bbIdx],brX[bbIdx],blX[bbIdx]], [imageHeight,imageWidth])
+                        allMasks[rr,cc]=1
             else:
                 numMasks=2
             masks = torch.zeros(stackedEdgeFeatWindows.size(0),numMasks,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
@@ -428,7 +440,7 @@ class PairingGraph(BaseModel):
         for i,(index1, index2) in enumerate(candidates):
             if self.useShapeFeats!='only':
                 #... or make it so index1 is always to top-left one
-                #TODO not random during validation
+                #TODO, not random for eval
                 if random.random()<0.5 and not self.debug:
                     temp=index1
                     index1=index2
@@ -465,6 +477,8 @@ class PairingGraph(BaseModel):
                     cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
                     masks[i,2] = F.upsample(cropArea[None,None,...], size=(self.pool_h,self.pool_w), mode='bilinear')[0,0]
                     #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
+                    if debug_image is not None:
+                        debug_masks.append(cropArea)
 
             if self.useShapeFeats:
                 if type(self.pairer) is BinaryPairReal and type(self.pairer.shape_layers) is not nn.Sequential:
@@ -515,6 +529,14 @@ class PairingGraph(BaseModel):
             
                 #if self.us
 
+        ###DEBUG
+        if debug_image is not None:
+            for i in range(4):
+                cv2.imshow('crop rel {}'.format(i),debug_images[i])
+                cv2.imshow('masks rel {}'.format(i),masks[i].numpy().transpose([1,2,0]))
+                cv2.imshow('mask all rel {}'.format(i),debug_masks[i].numpy())
+            cv2.waitKey()
+            debug_images=[]
 
 
         if self.useShapeFeats!='only':
@@ -592,6 +614,20 @@ class PairingGraph(BaseModel):
                         cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
                         masks[i,1] = F.upsample(cropArea[None,None,...], size=(self.poolBB_h,self.poolBB_w), mode='bilinear')[0,0]
                         #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
+                ###DEBUG
+                if debug_image is not None and i<5:
+                    assert(self.rotation==False)
+                    crop = debug_image[0,:,int(minY):int(maxY),int(minX):int(maxX)+1].cpu()
+                    crop = (2-crop)/2
+                    if crop.size(0)==1:
+                        crop = crop.expand(3,crop.size(1),crop.size(2))
+                    crop[0,int(tlY[i].item()-minY):int(brY[i].item()-minY)+1,int(tlX[i].item()-minX):int(brX[i].item()-minX)+1]*=0.5
+                    crop = crop.numpy().transpose([1,2,0])
+                    cv2.imshow('crop bb {}'.format(i),crop)
+                    cv2.imshow('masks bb {}'.format(i),torch.cat((masks[i],torch.zeros(1,self.poolBB_h,self.poolBB_w)),dim=0).numpy().transpose([1,2,0]))
+                    #debug_images.append(crop)
+            if debug_image is not None:
+                cv2.waitKey()
             if self.useShapeFeats != "only":
                 #bb_features[i]= F.avg_pool2d(features[0,:,minY:maxY+1,minX:maxX+1], (1+maxY-minY,1+maxX-minX)).view(-1)
                 bb_features = self.roi_alignBB(features,rois.to(features.device))

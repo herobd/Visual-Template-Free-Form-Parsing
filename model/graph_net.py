@@ -138,6 +138,7 @@ class GraphNet(nn.Module):
                     node_featuresX=side
             else:
                 node_featuresX,_,_ = self.transformers((node_featuresX,adjacencyMatrix,numBBs))
+                #import pdb;pdb.set_trace()
         #the graph conv layers are residual, so activation is applied here
         if self.split_normBB is not None:
             bb = self.split_normBB(node_featuresX[:numBBs])

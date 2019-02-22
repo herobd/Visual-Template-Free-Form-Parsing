@@ -10,8 +10,8 @@ def collate(batch):
 class RandomMessagesDataset(torch.utils.data.Dataset):
 
     def __init__(self,config):
-        self.max_pairs = 1
-        self.max_nodes = 4
+        self.max_pairs = 3
+        self.max_nodes = 6
         self.message_len = 10
         self.feature_len = self.message_len + 2*self.max_pairs
 

@@ -46,8 +46,12 @@ class PairingGraph(BaseModel):
         detectorSavedFeatSize = config['use_detect_feats_size'] if 'use_detect_feats_size' in config else self.detector.last_channels
         assert((useFeatsScale==-2) or ('use_detect_feats_size' in config))
         detectorSavedFeatSize2 = config['use_2nd_detect_feats_size'] if 'use_2nd_detect_feats_size' in config else None
+        
+        #splitScaleDiff = config['split_features_scale_diff'] if 'split_features_scale_diff' in config else None
+        self.splitFeatures= config['split_features_scale'] if 'split_features_scale' in config else False
+
         self.use2ndFeatures = useFLayer2 is not None
-        if self.use2ndFeatures:
+        if self.use2ndFeatures and not self.splitFeatures:
             detectorSavedFeatSize += detectorSavedFeatSize2
             
         self.detector.setForGraphPairing(useBeginningOfLast,useFeatsLayer,useFeatsScale,useFLayer2,useFScale2)
@@ -80,6 +84,11 @@ class PairingGraph(BaseModel):
         self.pool_w = config['featurizer_start_w']
         self.poolBB_h = config['featurizer_bb_start_h'] if 'featurizer_bb_start_h' in config else 2
         self.poolBB_w = config['featurizer_bb_start_w'] if 'featurizer_bb_start_w' in config else 3
+
+        self.pool2_h=self.pool_h
+        self.pool2_w=self.pool_w
+        self.poolBB2_h=self.poolBB_h
+        self.poolBB2_w=self.poolBB_w
 
 
         if 'use_rel_shape_feats' in config:
@@ -117,11 +126,6 @@ class PairingGraph(BaseModel):
         config['graph_config']['num_shape_feats']=self.numShapeFeats
         featurizer_fc = config['featurizer_fc'] if 'featurizer_fc' in config else []
         if self.useShapeFeats!='only':
-            self.roi_align = RoIAlign(self.pool_h,self.pool_w,1.0/detect_save_scale)
-            self.roi_alignBB = RoIAlign(self.poolBB_h,self.poolBB_w,1.0/detect_save_scale)
-            if self.use2ndFeatures:
-                self.roi_align2 = RoIAlign(self.pool_h,self.pool_w,1.0/detect_save2_scale)
-                self.roi_alignBB2 = RoIAlign(self.poolBB_h,self.poolBB_w,1.0/detect_save2_scale)
 
             self.expandedRelContext = config['expand_rel_context'] if 'expand_rel_context' in config else None
             if self.expandedRelContext is not None:
@@ -140,7 +144,31 @@ class PairingGraph(BaseModel):
             feat_norm = detector_config['norm_type'] if 'norm_type' in detector_config else None
             feat_norm_fc = detector_config['norm_type_fc'] if 'norm_type_fc' in detector_config else None
             featurizer_conv = config['featurizer_conv'] if 'featurizer_conv' in config else [512,'M',512]
-            featurizer_conv = [detectorSavedFeatSize+bbMasks] + featurizer_conv #bbMasks are appended
+            if self.splitFeatures:
+                featurizer_conv2 = config['featurizer_conv_first'] if 'featurizer_conv_first' in config else None
+                featurizer_conv2 = [detectorSavedFeatSize2+bbMasks] + featurizer_conv2 #bbMasks are appended
+                scaleX=1
+                scaleY=1
+                for a in featurizer_conv2:
+                    if a=='M' or (type(a) is str and a[0]=='D'):
+                        scaleX*=2
+                        scaleY*=2
+                    elif type(a) is str and a[0]=='U':
+                        scaleX/=2
+                        scaleY/=2
+                    elif type(a) is str and a[0:4]=='long': #long pool
+                        scaleX*=3
+                        scaleY*=2
+                assert(scaleX==scaleY)
+                splitScaleDiff=scaleX
+                self.pool_h = self.pool_h//splitScaleDiff
+                self.pool_w = self.pool_w//splitScaleDiff
+                layers, last_ch_relC = make_layers(featurizer_conv2,norm=feat_norm,dropout=True)
+                self.relFeaturizerConv2 = nn.Sequential(*layers)
+
+                featurizer_conv = [detectorSavedFeatSize+last_ch_relC] + featurizer_conv
+            else:
+                featurizer_conv = [detectorSavedFeatSize+bbMasks] + featurizer_conv #bbMasks are appended
             scaleX=1
             scaleY=1
             for a in featurizer_conv:
@@ -165,6 +193,10 @@ class PairingGraph(BaseModel):
                     layers+=new_layer
             layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
             self.relFeaturizerConv = nn.Sequential(*layers)
+
+            self.roi_align = RoIAlign(self.pool_h,self.pool_w,1.0/detect_save_scale)
+            if self.use2ndFeatures:
+                self.roi_align2 = RoIAlign(self.pool2_h,self.pool2_w,1.0/detect_save2_scale)
         else:
             last_ch_relC=0
 
@@ -178,9 +210,6 @@ class PairingGraph(BaseModel):
             self.relFeaturizerFC = None
 
         if self.useBBVisualFeats:
-            #TODO un-hardcode
-            #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
-            #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
             featurizer = config['bb_featurizer_conv'] if 'bb_featurizer_conv' in config else None
             featurizer_fc = config['bb_featurizer_fc'] if 'bb_featurizer_fc' in config else None
             if self.useShapeFeats!='only':
@@ -196,7 +225,31 @@ class PairingGraph(BaseModel):
                                         nn.ReLU(inplace=True)
                                     ]
                 else:
-                    featurizer_conv = [detectorSavedFeatSize+bbMasks_bb] + featurizer
+                    if self.splitFeatures:
+                        featurizer_conv2 = config['bb_featurizer_conv_first'] if 'bb_featurizer_conv_first' in config else None
+                        featurizer_conv2 = [detectorSavedFeatSize2+bbMasks_bb] + featurizer_conv2 #bbMasks are appended
+                        scaleX=1
+                        scaleY=1
+                        for a in featurizer_conv2:
+                            if a=='M' or (type(a) is str and a[0]=='D'):
+                                scaleX*=2
+                                scaleY*=2
+                            elif type(a) is str and a[0]=='U':
+                                scaleX/=2
+                                scaleY/=2
+                            elif type(a) is str and a[0:4]=='long': #long pool
+                                scaleX*=3
+                                scaleY*=2
+                        assert(scaleX==scaleY)
+                        splitScaleDiff=scaleX
+                        self.poolBB_h = self.poolBB_h//splitScaleDiff
+                        self.poolBB_w = self.poolBB_w//splitScaleDiff
+                        layers, last_ch_relC = make_layers(featurizer_conv2,norm=feat_norm,dropout=True)
+                        self.bbFeaturizerConv2 = nn.Sequential(*layers)
+
+                        featurizer_conv = [detectorSavedFeatSize+last_ch_relC] + featurizer_conv
+                    else:
+                        featurizer_conv = [detectorSavedFeatSize+bbMasks_bb] + featurizer
                     if featurizer_fc is None:
                          featurizer_conv += ['C3-{}'.format(convOut)]
                     else:
@@ -219,6 +272,10 @@ class PairingGraph(BaseModel):
                     fsizeY = self.poolBB_h//scaleY
                     convlayers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
                 self.bbFeaturizerConv = nn.Sequential(*convlayers)
+
+                self.roi_alignBB = RoIAlign(self.poolBB_h,self.poolBB_w,1.0/detect_save_scale)
+                if self.use2ndFeatures:
+                    self.roi_alignBB2 = RoIAlign(self.poolBB2_h,self.poolBB2_w,1.0/detect_save2_scale)
             else:
                 featurizer_fc = [self.numShapeFeatsBB]+featurizer_fc
             if featurizer_fc is not None:
@@ -309,13 +366,30 @@ class PairingGraph(BaseModel):
                     useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>1:
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
-            bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))# ,debug_image=image)
-            if bbAndRel_features is None:
-                return bbPredictions, offsetPredictions, None, None, None
+            if self.training: #0.3987808480 0.398469038200 not a big difference, but it's "the right" thing to do
+                bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))# ,debug_image=image)
+                if bbAndRel_features is None:
+                    return bbPredictions, offsetPredictions, None, None, None
 
-            ##tic=timeit.default_timer()
-            #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
-            bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+                ##tic=timeit.default_timer()
+                #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
+                bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+            else:
+                #If evaluating, force the masks of relationships to be the two ways and average
+                bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),flip=False)
+                if bbAndRel_features is None:
+                    return bbPredictions, offsetPredictions, None, None, None
+
+                bbAndRel_features_B, adjacencyMatrix_B, numBBs_B, numRel_B, relIndexes_B = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),flip=True)
+
+                assert(numBBs==numBBs_B and numRel==numRel_B)
+                for i,(n1,n2) in enumerate(relIndexes):
+                    assert(relIndexes_B[i][0]==n1 and relIndexes_B[i][1]==n2)
+                bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+                bbOuts_B, relOuts_B = self.pairer(bbAndRel_features_B, adjacencyMatrix, numBBs)
+                #Average results together
+                bbOuts = (bbOuts+bbOuts_B)/2
+                relOuts = (relOuts+relOuts_B)/2
             #bbOuts = graphOut[:numBBs]
             #relOuts = graphOut[numBBs:]
             ##print('pairer: {}'.format(timeit.default_timer()-tic))
@@ -329,7 +403,7 @@ class PairingGraph(BaseModel):
         else:
             return bbPredictions, offsetPredictions, None, None, None
 
-    def createGraph(self,bbs,features,features2,imageHeight,imageWidth,debug_image=None):
+    def createGraph(self,bbs,features,features2,imageHeight,imageWidth,flip=None,debug_image=None):
         ##tic=timeit.default_timer()
         candidates = self.selectCandidateEdges(bbs,imageHeight,imageWidth)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
@@ -414,7 +488,7 @@ class PairingGraph(BaseModel):
             stackedEdgeFeatWindows = self.roi_align(features,rois.to(features.device))
             if features2 is not None:
                 stackedEdgeFeatWindows2 = self.roi_align2(features2,rois.to(features.device))
-                if not self.splitFeatureRes:
+                if not self.splitFeatures:
                     stackedEdgeFeatWindows = torch.cat( (stackedEdgeFeatWindows,stackedEdgeFeatWindows2), dim=1)
                     stackedEdgeFeatWindows2=None
 
@@ -429,7 +503,7 @@ class PairingGraph(BaseModel):
                         allMasks[rr,cc]=1
             else:
                 numMasks=2
-            masks = torch.zeros(stackedEdgeFeatWindows.size(0),numMasks,stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3))
+            masks = torch.zeros(stackedEdgeFeatWindows.size(0),numMasks,self.pool2_h,self.pool2_w)
         if self.useShapeFeats:
             shapeFeats = torch.FloatTensor(len(candidates),self.numShapeFeats)
         if self.detector.predNumNeighbors:
@@ -441,7 +515,7 @@ class PairingGraph(BaseModel):
             if self.useShapeFeats!='only':
                 #... or make it so index1 is always to top-left one
                 #TODO, not random for eval
-                if random.random()<0.5 and not self.debug:
+                if (random.random()<0.5 and flip is None and  not self.debug) or flip:
                     temp=index1
                     index1=index2
                     index2=temp
@@ -449,8 +523,8 @@ class PairingGraph(BaseModel):
                 #warp to roi space
                 feature_w = rois[i,3]-rois[i,1] +1
                 feature_h = rois[i,4]-rois[i,2] +1
-                w_m = self.pool_w/feature_w
-                h_m = self.pool_h/feature_h
+                w_m = self.pool2_w/feature_w
+                h_m = self.pool2_h/feature_h
 
                 tlX1 = round(((tlX[index1]-rois[i,1])*w_m).item())
                 trX1 = round(((trX[index1]-rois[i,1])*w_m).item())
@@ -469,13 +543,13 @@ class PairingGraph(BaseModel):
                 brY2 = round(((brY[index2]-rois[i,2])*h_m).item())
                 blY2 = round(((blY[index2]-rois[i,2])*h_m).item())
 
-                rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], [self.pool_h,self.pool_w])
+                rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], [self.pool2_h,self.pool2_w])
                 masks[i,0,rr,cc]=1
-                rr, cc = draw.polygon([tlY2,trY2,brY2,blY2],[tlX2,trX2,brX2,blX2], [self.pool_h,self.pool_w])
+                rr, cc = draw.polygon([tlY2,trY2,brY2,blY2],[tlX2,trX2,brX2,blX2], [self.pool2_h,self.pool2_w])
                 masks[i,1,rr,cc]=1
                 if self.expandedRelContext is not None:
                     cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
-                    masks[i,2] = F.upsample(cropArea[None,None,...], size=(self.pool_h,self.pool_w), mode='bilinear')[0,0]
+                    masks[i,2] = F.upsample(cropArea[None,None,...], size=(self.pool2_h,self.pool2_w), mode='bilinear')[0,0]
                     #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
                     if debug_image is not None:
                         debug_masks.append(cropArea)
@@ -540,8 +614,13 @@ class PairingGraph(BaseModel):
 
 
         if self.useShapeFeats!='only':
-            stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,masks.to(stackedEdgeFeatWindows.device)),dim=1)
-            #import pdb; pdb.set_trace()
+            if self.splitFeatures:
+                stackedEdgeFeatWindows2 = torch.cat((stackedEdgeFeatWindows2,masks.to(stackedEdgeFeatWindows2.device)),dim=1)
+                relFeats = self.relFeaturizerConv2(stackedEdgeFeatWindows2)
+                stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,relFeats),dim=1)
+            else:
+                stackedEdgeFeatWindows = torch.cat((stackedEdgeFeatWindows,masks.to(stackedEdgeFeatWindows.device)),dim=1)
+                #import pdb; pdb.set_trace()
             relFeats = self.relFeaturizerConv(stackedEdgeFeatWindows) #preparing for graph feature size
             relFeats = relFeats.view(relFeats.size(0),relFeats.size(1))
         if self.useShapeFeats:
@@ -560,7 +639,7 @@ class PairingGraph(BaseModel):
             if self.useShapeFeats:
                 bb_shapeFeats=torch.FloatTensor(bbs.size(0),self.numShapeFeatsBB)
             if self.useShapeFeats != "only" and self.expandedBBContext:
-                masks = torch.zeros(bbs.size(0),2,self.poolBB_h,self.poolBB_w)
+                masks = torch.zeros(bbs.size(0),2,self.poolBB2_h,self.poolBB2_w)
             
             rois = torch.zeros((bbs.size(0),5))
             for i in range(bbs.size(0)):
@@ -596,8 +675,8 @@ class PairingGraph(BaseModel):
                     #warp to roi space
                     feature_w = rois[i,3]-rois[i,1] +1
                     feature_h = rois[i,4]-rois[i,2] +1
-                    w_m = self.poolBB_w/feature_w
-                    h_m = self.poolBB_h/feature_h
+                    w_m = self.poolBB2_w/feature_w
+                    h_m = self.poolBB2_h/feature_h
 
                     tlX1 = round(((tlX[i]-rois[i,1])*w_m).item())
                     trX1 = round(((trX[i]-rois[i,1])*w_m).item())
@@ -608,11 +687,11 @@ class PairingGraph(BaseModel):
                     brY1 = round(((brY[i]-rois[i,2])*h_m).item())
                     blY1 = round(((blY[i]-rois[i,2])*h_m).item())
 
-                    rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], (self.poolBB_h,self.poolBB_w))
+                    rr, cc = draw.polygon([tlY1,trY1,brY1,blY1],[tlX1,trX1,brX1,blX1], (self.poolBB2_h,self.poolBB2_w))
                     masks[i,0,rr,cc]=1
                     if self.expandedBBContext is not None:
                         cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
-                        masks[i,1] = F.upsample(cropArea[None,None,...], size=(self.poolBB_h,self.poolBB_w), mode='bilinear')[0,0]
+                        masks[i,1] = F.upsample(cropArea[None,None,...], size=(self.poolBB2_h,self.poolBB2_w), mode='bilinear')[0,0]
                         #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
                 ###DEBUG
                 if debug_image is not None and i<5:
@@ -624,7 +703,7 @@ class PairingGraph(BaseModel):
                     crop[0,int(tlY[i].item()-minY):int(brY[i].item()-minY)+1,int(tlX[i].item()-minX):int(brX[i].item()-minX)+1]*=0.5
                     crop = crop.numpy().transpose([1,2,0])
                     cv2.imshow('crop bb {}'.format(i),crop)
-                    cv2.imshow('masks bb {}'.format(i),torch.cat((masks[i],torch.zeros(1,self.poolBB_h,self.poolBB_w)),dim=0).numpy().transpose([1,2,0]))
+                    cv2.imshow('masks bb {}'.format(i),torch.cat((masks[i],torch.zeros(1,self.poolBB2_h,self.poolBB2_w)),dim=0).numpy().transpose([1,2,0]))
                     #debug_images.append(crop)
             if debug_image is not None:
                 cv2.waitKey()
@@ -632,9 +711,16 @@ class PairingGraph(BaseModel):
                 #bb_features[i]= F.avg_pool2d(features[0,:,minY:maxY+1,minX:maxX+1], (1+maxY-minY,1+maxX-minX)).view(-1)
                 bb_features = self.roi_alignBB(features,rois.to(features.device))
                 if features2 is not None:
-                    bb_features = torch.cat( (bb_features,self.roi_alignBB2(features2,rois.to(features.device))), dim=1)
+                    bb_features2 = self.roi_alignBB2(features2,rois.to(features.device))
+                    if not self.splitFeatures:
+                        bb_features = torch.cat( (bb_features,bb_features2), dim=1)
                 if self.expandedBBContext:
-                    bb_features = torch.cat( (bb_features,masks.to(bb_features.device)) ,dim=1)
+                    if self.splitFeatures:
+                        bb_features2 = torch.cat( (bb_features2,masks.to(bb_features2.device)) ,dim=1)
+                        bb_features2 = self.bbFeaturizerConv2(bb_features2)
+                        bb_features = torch.cat( (bb_features,bb_features2), dim=1)
+                    else:
+                        bb_features = torch.cat( (bb_features,masks.to(bb_features.device)) ,dim=1)
                 bb_features = self.bbFeaturizerConv(bb_features)
                 bb_features = bb_features.view(bb_features.size(0),bb_features.size(1))
                 if self.useShapeFeats:

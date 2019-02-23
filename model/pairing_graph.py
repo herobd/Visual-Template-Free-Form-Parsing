@@ -209,9 +209,6 @@ class PairingGraph(BaseModel):
             self.relFeaturizerFC = None
 
         if self.useBBVisualFeats:
-            #TODO un-hardcode
-            #self.bbFeaturizerConv = nn.MaxPool2d((2,3))
-            #self.bbFeaturizerConv = nn.Sequential( nn.Conv2d(self.detector.last_channels,self.detector.last_channels,kernel_size=(2,3)), nn.ReLU(inplace=True) )
             featurizer = config['bb_featurizer_conv'] if 'bb_featurizer_conv' in config else None
             featurizer_fc = config['bb_featurizer_fc'] if 'bb_featurizer_fc' in config else None
             if self.useShapeFeats!='only':
@@ -368,13 +365,30 @@ class PairingGraph(BaseModel):
                     useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>1:
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
-            bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))# ,debug_image=image)
-            if bbAndRel_features is None:
-                return bbPredictions, offsetPredictions, None, None, None
+            if self.training: #0.3987808480 0.398469038200 not a big difference, but it's "the right" thing to do
+                bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))# ,debug_image=image)
+                if bbAndRel_features is None:
+                    return bbPredictions, offsetPredictions, None, None, None
 
-            ##tic=timeit.default_timer()
-            #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
-            bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+                ##tic=timeit.default_timer()
+                #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
+                bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+            else:
+                #If evaluating, force the masks of relationships to be the two ways and average
+                bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),flip=False)
+                if bbAndRel_features is None:
+                    return bbPredictions, offsetPredictions, None, None, None
+
+                bbAndRel_features_B, adjacencyMatrix_B, numBBs_B, numRel_B, relIndexes_B = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),flip=True)
+
+                assert(numBBs==numBBs_B and numRel==numRel_B)
+                for i,(n1,n2) in enumerate(relIndexes):
+                    assert(relIndexes_B[i][0]==n1 and relIndexes_B[i][1]==n2)
+                bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+                bbOuts_B, relOuts_B = self.pairer(bbAndRel_features_B, adjacencyMatrix, numBBs)
+                #Average results together
+                bbOuts = (bbOuts+bbOuts_B)/2
+                relOuts = (relOuts+relOuts_B)/2
             #bbOuts = graphOut[:numBBs]
             #relOuts = graphOut[numBBs:]
             ##print('pairer: {}'.format(timeit.default_timer()-tic))
@@ -388,7 +402,7 @@ class PairingGraph(BaseModel):
         else:
             return bbPredictions, offsetPredictions, None, None, None
 
-    def createGraph(self,bbs,features,features2,imageHeight,imageWidth,debug_image=None):
+    def createGraph(self,bbs,features,features2,imageHeight,imageWidth,flip=None,debug_image=None):
         ##tic=timeit.default_timer()
         candidates = self.selectCandidateEdges(bbs,imageHeight,imageWidth)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
@@ -500,7 +514,7 @@ class PairingGraph(BaseModel):
             if self.useShapeFeats!='only':
                 #... or make it so index1 is always to top-left one
                 #TODO, not random for eval
-                if random.random()<0.5 and not self.debug:
+                if (random.random()<0.5 and flip is None and  not self.debug) or flip:
                     temp=index1
                     index1=index2
                     index2=temp

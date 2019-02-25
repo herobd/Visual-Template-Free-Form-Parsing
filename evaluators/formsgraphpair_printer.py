@@ -306,6 +306,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         if t0 not in bbAlignment or t1 not in bbAlignment:
             numMissedByHeur-=1
             numMissedByDetect+=1
+    heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)
+    detectRecall = (len(adjacency)-numMissedByDetect)/len(adjacency)
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
     else:
@@ -409,11 +411,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     y=int(bbs[j,2])#-bbs[j,4])
                     targ_j = bbAlignment[j].item()
                     if targ_j>=0:
-                        gtNN = target_num_neighbors[0,targ_j]
+                        gtNN = target_num_neighbors[0,targ_j].item()
                     else:
                         gtNN = 0
                     pred_nn = predNN[j].item()
-                    color = min(abs(pred_nn-gtNN),2)*0.5
+                    color = min(abs(pred_nn-gtNN),1)#*0.5
                     cv2.putText(image,'{:.2}/{}'.format(pred_nn,gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
@@ -489,6 +491,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_fullFm':(relRecall+fullPrec)/2,
                'relMissedByHeur':numMissedByHeur,
                'relMissedByDetect':numMissedByDetect,
+               'heurRecall': heurRecall,
+               'detectRecall': detectRecall
 
              }
     if rel_ap is not None: #none ap if no relationships

@@ -55,6 +55,9 @@ class PairingGraph(BaseModel):
             
         self.detector.setForGraphPairing(useBeginningOfLast,useFeatsLayer,useFeatsScale,useFLayer2,useFScale2)
 
+
+        self.no_grad_feats = config['no_grad_feats'] if 'no_grad_feats' in config else False
+
         if (config['start_frozen'] if 'start_frozen' in config else False):
             for param in self.detector.parameters(): 
                 param.will_use_grad=param.requires_grad 
@@ -345,6 +348,8 @@ class PairingGraph(BaseModel):
             if bbPredictions.size(0)==0:
                 return bbPredictions, offsetPredictions, None, None, None
             useBBs = bbPredictions[:,1:] #remove confidence score
+            if self.no_grad_feats:
+                useBBs = useBBs.detach()
         else:
             if gtBBs is None:
                 return bbPredictions, offsetPredictions, None, None, None

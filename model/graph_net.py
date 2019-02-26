@@ -76,6 +76,7 @@ class GraphNet(nn.Module):
                     self.encoder_fc = None
             else:
                 self.encoder = None
+                self.encoder_fc = None
         if 'random_reps' in config:
             self.randomReps=True
             if type(config['random_reps']) is int:

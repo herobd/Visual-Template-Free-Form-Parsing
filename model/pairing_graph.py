@@ -387,8 +387,9 @@ class PairingGraph(BaseModel):
                 bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
                 bbOuts_B, relOuts_B = self.pairer(bbAndRel_features_B, adjacencyMatrix, numBBs)
                 #Average results together
-                bbOuts = (bbOuts+bbOuts_B)/2
-                relOuts = (relOuts+relOuts_B)/2
+                if bbOuts is not None:
+                    bbOuts = (bbOuts+bbOuts_B)/2
+                    relOuts = (relOuts+relOuts_B)/2
             #bbOuts = graphOut[:numBBs]
             #relOuts = graphOut[numBBs:]
             ##print('pairer: {}'.format(timeit.default_timer()-tic))

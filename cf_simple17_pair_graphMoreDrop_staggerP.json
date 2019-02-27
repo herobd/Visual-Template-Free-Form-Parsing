@@ -88,6 +88,11 @@
         "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
+	"use_shape_feats": "corner",
+        "use_detect_layer_feats": 16,
+        "use_2nd_detect_layer_feats": 0,
+        "use_2nd_detect_scale_feats": 1,
+        "use_2nd_detect_feats_size": 32,
         "graph_config": {
             "arch": "GraphNet",
             "in_channels": 512,

@@ -69,12 +69,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     assert(batchSize==1)
     targetBBs = instance['bb_gt']
     adjacency = instance['adj']
+    adjacency = list(adjacency)
     imageName = instance['imgName']
     scale = instance['scale']
     target_num_neighbors = instance['num_neighbors']
     if not model.detector.predNumNeighbors:
         instance['num_neighbors']=None
     dataT, targetBBsT, adjT, target_num_neighborsT = __to_tensor(instance,gpu)
+
+
+    pretty = config['pretty'] if 'pretty' in config else False
 
 
     resultsDirName='results'
@@ -186,6 +190,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             penalty = config['penalty']
         else:
             penalty = 0.5
+        print('optimizing with penalty {}'.format(penalty))
         thresh=0.3
         while thresh<0.9:
             keep = relPred>thresh
@@ -306,6 +311,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         if t0 not in bbAlignment or t1 not in bbAlignment:
             numMissedByHeur-=1
             numMissedByDetect+=1
+    heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)
+    detectRecall = (len(adjacency)-numMissedByDetect)/len(adjacency)
     if len(adjacency)>0:
         relRecall = truePred/len(adjacency)
     else:
@@ -350,8 +357,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #if name=='text_start_gt':
 
         #Draw GT bbs
-        for j in range(targetSize):
-            plotRect(image,(1,0.5,0),targetBBs[0,j,0:5])
+        if not pretty:
+            for j in range(targetSize):
+                plotRect(image,(1,0.5,0),targetBBs[0,j,0:5])
             #x=int(targetBBs[b,j,0])
             #y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
             #cv2.putText(image,'{:.2f}'.format(target_num_neighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
@@ -404,16 +412,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     color=(shade,0,0) #field
                 plotRect(image,color,bbs[j,1:6])
 
-                if predNN is not None: #model.detector.predNumNeighbors:
+                if predNN is not None and not pretty: #model.detector.predNumNeighbors:
                     x=int(bbs[j,1])
                     y=int(bbs[j,2])#-bbs[j,4])
                     targ_j = bbAlignment[j].item()
                     if targ_j>=0:
-                        gtNN = target_num_neighbors[0,targ_j]
+                        gtNN = target_num_neighbors[0,targ_j].item()
                     else:
                         gtNN = 0
                     pred_nn = predNN[j].item()
-                    color = min(abs(pred_nn-gtNN),2)*0.5
+                    color = min(abs(pred_nn-gtNN),1)#*0.5
                     cv2.putText(image,'{:.2}/{}'.format(pred_nn,gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
@@ -425,16 +433,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-        #Draw GT pairings
-        for i,j in adjacency:
-            x1 = round(targetBBs[0,i,0].item())
-            y1 = round(targetBBs[0,i,1].item())
-            x2 = round(targetBBs[0,j,0].item())
-            y2 = round(targetBBs[0,j,1].item())
-            cv2.line(image,(x1,y1),(x2,y2),(0.25,0,0.25),3)
 
         #Draw pred pairings
         numrelpred=0
+        hits = [False]*len(adjacency)
         for i in range(len(relCand)):
             #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
             if relPred[i]>EDGE_THRESH:
@@ -445,27 +447,57 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 x2 = round(bbs[ind2,1])
                 y2 = round(bbs[ind2,2])
 
-                shade = (relPred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
+                if pretty:
+                    targ1 = bbAlignment[ind1].item()
+                    targ2 = bbAlignment[ind2].item()
+                    if (targ1,targ2) in adjacency:
+                        aId = adjacency.index((targ1,targ2))
+                    elif (targ2,targ1) in adjacency:
+                        aId = adjacency.index((targ2,targ1))
+                    else:
+                        aId = None
+                    if aId is None:
+                        cv2.line(image,(x1,y1),(x2,y2),(1,0,0),2)
+                    else:
+                        cv2.line(image,(x1,y1),(x2,y2),(0.3,1,0),2)
+                        hits[aId]=True
+                else:
+                    shade = (relPred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
 
-                #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
-                cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
+                    #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
+                    cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
                 numrelpred+=1
         #print('number of pred rels: {}'.format(numrelpred))
+        #Draw GT pairings
+        if not pretty:
+            gtcolor=(0.25,0,0.25)
+            wth=3
+        else:
+            gtcolor=(1,0,0.6)
+            wth=2
+        for aId,(i,j) in enumerate(adjacency):
+            if not pretty or not hits[aId]:
+                x1 = round(targetBBs[0,i,0].item())
+                y1 = round(targetBBs[0,i,1].item())
+                x2 = round(targetBBs[0,j,0].item())
+                y2 = round(targetBBs[0,j,1].item())
+                cv2.line(image,(x1,y1),(x2,y2),gtcolor,wth)
 
         #Draw alginment between gt and pred bbs
-        for predI in range(bbs.shape[0]):
-            targI=bbAlignment[predI].item()
-            x1 = int(round(bbs[predI,1]))
-            y1 = int(round(bbs[predI,2]))
-            if targI>0:
+        if not pretty:
+            for predI in range(bbs.shape[0]):
+                targI=bbAlignment[predI].item()
+                x1 = int(round(bbs[predI,1]))
+                y1 = int(round(bbs[predI,2]))
+                if targI>0:
 
-                x2 = round(targetBBs[0,targI,0].item())
-                y2 = round(targetBBs[0,targI,1].item())
-                cv2.line(image,(x1,y1),(x2,y2),(1,0,1),1)
-            else:
-                #draw 'x', indicating not match
-                cv2.line(image,(x1-5,y1-5),(x1+5,y1+5),(.1,0,.1),1)
-                cv2.line(image,(x1+5,y1-5),(x1-5,y1+5),(.1,0,.1),1)
+                    x2 = round(targetBBs[0,targI,0].item())
+                    y2 = round(targetBBs[0,targI,1].item())
+                    cv2.line(image,(x1,y1),(x2,y2),(1,0,1),1)
+                else:
+                    #draw 'x', indicating not match
+                    cv2.line(image,(x1-5,y1-5),(x1+5,y1+5),(.1,0,.1),1)
+                    cv2.line(image,(x1+5,y1-5),(x1-5,y1+5),(.1,0,.1),1)
 
 
 
@@ -489,6 +521,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                'rel_fullFm':(relRecall+fullPrec)/2,
                'relMissedByHeur':numMissedByHeur,
                'relMissedByDetect':numMissedByDetect,
+               'heurRecall': heurRecall,
+               'detectRecall': detectRecall
 
              }
     if rel_ap is not None: #none ap if no relationships

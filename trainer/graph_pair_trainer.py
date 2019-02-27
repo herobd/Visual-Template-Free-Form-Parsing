@@ -274,7 +274,7 @@ class GraphPairTrainer(BaseTrainer):
             loss = relLoss
 
 
-        if self.model.predNN and bbPred_use is not None:
+        if self.model.predNN and bbPred_use is not None and bbPred_use.size(0)>0:
             nn_loss_final = self.loss['nn'](bbPred_use[:,0],alignedNN_use)
             nn_loss_final *= self.lossWeights['nn']
 

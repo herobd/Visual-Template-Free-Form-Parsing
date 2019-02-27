@@ -1,6 +1,6 @@
 import os
 import math
-import json
+import json, copy
 import timeit
 import logging
 import torch
@@ -8,7 +8,8 @@ import torch.optim as optim
 import time
 from utils.util import ensure_dir
 from collections import defaultdict
-
+from model import *
+#from ..model import PairingGraph
 
 class BaseTrainer:
     """
@@ -58,6 +59,13 @@ class BaseTrainer:
         ensure_dir(self.checkpoint_dir)
         json.dump(config, open(os.path.join(self.checkpoint_dir, 'config.json'), 'w'),
                   indent=4, sort_keys=False)
+        self.swa = config['trainer']['swa'] if 'swa' in config['trainer'] else (config['trainer']['weight_averaging'] if 'weight_averaging' in config['trainer'] else False)
+        if self.swa:
+            self.swa_model = type(self.model)(config['model'])
+            if config['cuda']:
+                self.swa_model = self.swa_model.to(self.gpu)
+            self.swa_start = config['trainer']['swa_start'] if 'swa_start' in config['trainer'] else config['trainer']['weight_averaging_start']
+            self.swa_c_iters = config['trainer']['swa_c_iters'] if 'swa_c_iters' in config['trainer'] else config['trainer']['weight_averaging_c_iters']
         if resume:
             self._resume_checkpoint(resume)
 
@@ -92,6 +100,12 @@ class BaseTrainer:
             elapsed_time = timeit.default_timer() - t
             sumLog['sec_per_iter'] += elapsed_time
             #print('iter: '+str(elapsed_time))
+
+            #Stochastic Weight Averaging    https://github.com/timgaripov/swa/blob/master/train.py
+            if self.swa and self.iteration>=self.swa_start and (self.iterations-self.swa_start)%self.self.swa_c_iters==0:
+                swa_n = (self.iterations-self.swa_start)//self.self.swa_c_iters
+                utils.moving_average(self.swa_model, self.model, 1.0 / (swa_n + 1))
+                #swa_n += 1
 
 
             for key, value in result.items():
@@ -141,6 +155,17 @@ class BaseTrainer:
                     else:
                         log[key] = value
                         #sumLog['avg_'+key] += value
+                if self.swa and self.iteration>=self.swa_start:
+                    temp_model = self.model
+                    self.model = self.swa_model
+                    val_result = self._valid_epoch()
+                    self.model = temp_model
+                    for key, value in val_result.items():
+                        if 'metrics' in key:
+                            for i, metric in enumerate(self.metrics):
+                                log['swa_val_' + metric.__name__] = val_result[key][i]
+                        else:
+                            log['swa_'+key] = value
 
                 if self.train_logger is not None:
                     if self.iteration%self.log_step!=0:
@@ -213,8 +238,17 @@ class BaseTrainer:
             for k,v in state_dict.items():
                 state_dict[k]=v.cpu()
             state['state_dict']= state_dict
+            if self.swa:
+                swa_state_dict = self.swa_model.state_dict()
+                for k,v in swa_state_dict.items():
+                    swa_state_dict[k]=v.cpu()
+                state['swa_state_dict']= swa_state_dict
         else:
             state['model'] = self.model.cpu()
+            if self.swa:
+                state['swa_model'] = self.swa_model.cpu()
+        #if self.swa:
+        #    state['swa_n']=self.swa_n
         torch.cuda.empty_cache() #weird gpu memory issue when calling torch.save()
         if not minor:
             filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
@@ -273,8 +307,14 @@ class BaseTrainer:
             ##DEBUG
 
             self.model.load_state_dict(checkpoint['state_dict'])
+            if self.swa:
+                self.swa_model.load_state_dict(checkpoint['swa_state_dict'])
         else:
             self.model = checkpoint['model']
+            if self.swa:
+                self.swa_model = checkpoint['swa_model']
+        #if self.swa:
+        #    self.swa_n = checkpoint['swa_n']
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         if self.with_cuda:
             for state in self.optimizer.state.values():
@@ -283,3 +323,8 @@ class BaseTrainer:
                         state[k] = v.cuda(self.gpu)
         self.train_logger = checkpoint['logger']
         self.logger.info("Checkpoint '{}' (iteration {}) loaded".format(resume_path, self.start_iteration))
+
+def moving_average(net1, net2, alpha=1):
+    for param1, param2 in zip(net1.parameters(), net2.parameters()):
+        param1.data *= (1.0 - alpha)
+        param1.data += param2.data * alpha

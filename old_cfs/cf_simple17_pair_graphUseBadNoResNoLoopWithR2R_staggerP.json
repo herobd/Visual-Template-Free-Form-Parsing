@@ -1,13 +1,13 @@
 {
-    "name": "Simple18_pair_binaryALR_F1A_staggerLight_NNP",
-    "cuda": false,
+    "name": "Simple17_pair_graphUseBadNoResNoLoopWithR2R_staggerP",
+    "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":true,
+    "super_computer":false,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
-        "special_dataset": "simple",
+        "simple_dataset": true,
         "data_dir": "../data/forms",
         "batch_size": 1,
         "shuffle": true,
@@ -29,10 +29,17 @@
 
     },
     "validation": {
+        "simple_dataset": true,
         "shuffle": false,
+        "crop_to_page":false,
+        "color":false,
         "rescale_range": [0.52,0.52],
-        "crop_params": null,
-        "batch_size": 1
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "batch_size": 1,
+        "rotation": false,
+        "only_opposite_pairs": true
     },
 
     
@@ -40,7 +47,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.001,
+        "lr": 0.008,
         "weight_decay": 0
     },
     "loss": {
@@ -48,22 +55,21 @@
         "edge": "sigmoid_BCE_loss"
     },
     "loss_weights": {
-        "box": 1,
+        "box": 1.1,
         "edge": 1
     },
     "loss_params": 
         {
             "box": {"ignore_thresh": 0.5,
-                    "bad_conf_weight": 20.0,
-                    "multiclass":true}
+                    "bad_conf_weight": 20.0}
         },
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
         "iterations": 300000,
         "save_dir": "saved/",
-        "val_step": 10000,
-        "save_step": 50000,
+        "val_step": 2500,
+        "save_step": 5000,
         "save_step_minor": 250,
         "log_step": 250,
         "verbosity": 1,
@@ -72,36 +78,35 @@
         "warmup_steps": 1000,
         "conf_thresh_init": 0.9,
         "conf_thresh_change_iters": 5000,
-        "retry_count":3,
+        "retry_count":10,
 
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,
-        "stop_from_gt": 200000,
-        "use_bad_bb_pred_for_rel_loss": true,
+        "stop_from_gt": 250000,
 
-        "use_learning_schedule": true,
-        "adapt_lr": true
+        "use_bad_bb_pred_for_rel_loss": true
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Simple18_staggerLight_NN/checkpoint-iteration100000.pth.tar",
+        "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
-	"use_rel_shape_feats": "corner",
-        "expand_rel_context": 200,
-        "use_detect_layer_feats": 0,
-        "use_detect_scale_feats": 1,
-        "use_detect_feats_size": 32,
         "graph_config": {
-            "arch": "BinaryPairReal",
-            "in_channels": 256,
-            "node_channels": 0,
-            "edge_channels": 1,
-            "layers": ["FC256","FC256"]
+            "arch": "GraphNet",
+            "use_res": false,
+            "in_channels": 512,
+            "layers": [512,512,512,512],
+            "repetitions": 1,
+	    "bb_out": 0,
+            "rel_out": 1,
+            "norm": "split_norm",
+            "dropout": 0.1
         },
-        "featurizer_start_h": 32,
-        "featurizer_start_w": 32,
-        "featurizer_conv": [64,"M",128,128,"M",256,256,"M",238],
-        "featurizer_fc": null
+        "use_rel_rel_edges": true,
+	"use_shape_feats": true,
+        "featurizer_start_h": 8,
+        "featurizer_start_w": 8,
+        "featurizer_conv": [512,"M",512],
+        "featurizer_fc": []
     }
 }

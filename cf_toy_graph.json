@@ -1,7 +1,7 @@
 {
     "name": "toy_graph",
     "cuda": true,
-    "gpu": 0,
+    "gpu": 1,
     "override": true,
     "data_loader": {
         "data_set_name": "RandomMessagesDataset",
@@ -37,13 +37,13 @@
     },
     "arch": "GraphNet", 
     "model": {
-        "in_channels": 500,
+        "in_channels": 100,
         "bb_out": 10,
         "rel_out": 0,
         "num_trans": 3,
         "num_heads": 1,
-        "num_ffnn_feats": 550,
-        "encoder": [12,"FC256"],
-        "random_reps": [1,1]
+        "num_ffnn_feats": 120,
+        "encoder": [12,"FC100"],
+        "random_reps": [1,20]
     }
 }

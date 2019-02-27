@@ -7,20 +7,20 @@ def collate(batch):
     assert(len(batch)==1)
     return batch[0]
 
-class RandomMessagesDataset(torch.utils.data.Dataset):
+class RandomDiffusionDataset(torch.utils.data.Dataset):
 
     def __init__(self,config):
-        self.max_pairs = 3
-        self.max_nodes = 6
-        self.message_len = 10
-        self.feature_len = self.message_len + 2*self.max_pairs
+        self.max_on = 4
+        self.chs=6
+        self.max_nodes = 30
+        self.with_sum=False
 
     def __len__(self):
         return 25
 
     def __getitem__(self,index):
-        num_pairs = np.random.randint(1,self.max_pairs+1)
-        num_nodes = np.random.randint(num_pairs*2,self.max_nodes+1)
+        num_on = np.random.randint(2,self.max_on+1)
+        num_nodes = np.random.randint(num_on+1,self.max_nodes+1)
 
         edges=set()
         visited=set()
@@ -48,23 +48,32 @@ class RandomMessagesDataset(torch.utils.data.Dataset):
             else:
                 curNode=nextNode
 
-        features = torch.zeros(num_nodes,self.feature_len).byte()
-        gt = torch.zeros(num_pairs*2,self.message_len).byte()
+        features = torch.zeros(num_nodes,self.chs).float()
+        gt = torch.zeros(num_nodes,1).byte()
 
-        for p in range(num_pairs):
-            rand = bin(np.random.randint(1,2**self.message_len))
-            message = torch.FloatTensor(self.message_len)
-            for i in range(self.message_len):
-                if rand[-(i+1)]=='b':
-                    break
-                message[i] = float(rand[-(i+1)])
-            features[2*p+0,p]=1
-            features[2*p+0,2*self.max_pairs:]=message
-            features[2*p+1,self.max_pairs+p]=1
-            gt[2*p+1]=message
+        for p in range(num_on):
+            num_ch = np.random.randint(1,self.chs-1)
+            chs = np.random.choice(list(range(self.chs)),num_ch,False)
+            self.diffuse(features,edges,p,4,chs)
+            gt[p]=1
 
         edgeLocs = torch.LongTensor(list(edges)).t()
         ones = torch.ones(len(edges))
         adjacencyMatrix = torch.sparse.FloatTensor(edgeLocs,ones,torch.Size([num_nodes,num_nodes]))
 
-        return features, adjacencyMatrix, gt, num_pairs*2
+        return features, adjacencyMatrix, gt, num_nodes
+
+    def diffuse(self,features,edges,node,depth,chs,visited=set()):
+        rmax = 1 - (4-depth)*0.2
+        rmin = max(.4 - (4-depth)*0.2,0)
+        for ch in chs:
+            if self.with_sum:
+                features[node,ch]+=np.random.uniform(rmin,rmax)
+            else:
+                features[node,ch] = max(features[node,ch],np.random.uniform(rmin,rmax))
+        visited.add(node)
+        if depth>1:
+            for n1,n2 in edges:
+                if n1==node and n2 not in visited:
+                    self.diffuse(features,edges,n2,depth-1,chs,set(visited))
+

@@ -155,6 +155,17 @@ class BaseTrainer:
                     else:
                         log[key] = value
                         #sumLog['avg_'+key] += value
+                if self.swa and self.iteration>=self.swa_start:
+                    temp_model = self.model
+                    self.model = self.swa_model
+                    val_result = self._valid_epoch()
+                    self.model = temp_model
+                    for key, value in val_result.items():
+                        if 'metrics' in key:
+                            for i, metric in enumerate(self.metrics):
+                                log['swa_val_' + metric.__name__] = val_result[key][i]
+                        else:
+                            log['swa_'+key] = value
 
                 if self.train_logger is not None:
                     if self.iteration%self.log_step!=0:

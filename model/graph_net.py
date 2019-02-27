@@ -76,6 +76,7 @@ class GraphNet(nn.Module):
                     self.encoder_fc = None
             else:
                 self.encoder = None
+                self.encoder_fc = None
         if 'random_reps' in config:
             self.randomReps=True
             if type(config['random_reps']) is int:
@@ -138,6 +139,7 @@ class GraphNet(nn.Module):
                     node_featuresX=side
             else:
                 node_featuresX,_,_ = self.transformers((node_featuresX,adjacencyMatrix,numBBs))
+                #import pdb;pdb.set_trace()
         #the graph conv layers are residual, so activation is applied here
         if self.split_normBB is not None:
             bb = self.split_normBB(node_featuresX[:numBBs])

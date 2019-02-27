@@ -1,5 +1,5 @@
 {
-    "name": "test_pair_binarySplitWP_staggerLight_NNP",
+    "name": "Simple17_pair_binary_staggerP_shapeNotLast",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -7,7 +7,7 @@
     "super_computer":false,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
-        "special_dataset": "simple",
+        "simple_dataset": true,
         "data_dir": "../data/forms",
         "batch_size": 1,
         "shuffle": true,
@@ -29,10 +29,17 @@
 
     },
     "validation": {
+        "simple_dataset": true,
         "shuffle": false,
+        "crop_to_page":false,
+        "color":false,
         "rescale_range": [0.52,0.52],
-        "crop_params": null,
-        "batch_size": 1
+        "no_blanks": true,
+        "swap_circle":true,
+        "no_graphics":true,
+        "batch_size": 1,
+        "rotation": false,
+        "only_opposite_pairs": true
     },
 
     
@@ -54,8 +61,7 @@
     "loss_params": 
         {
             "box": {"ignore_thresh": 0.5,
-                    "bad_conf_weight": 20.0,
-                    "multiclass":true}
+                    "bad_conf_weight": 20.0}
         },
     "metrics": [],
     "trainer": {
@@ -65,42 +71,33 @@
         "val_step": 10000,
         "save_step": 50000,
         "save_step_minor": 250,
-        "log_step": 250,
+        "log_step": 500,
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
         "warmup_steps": 1000,
         "conf_thresh_init": 0.9,
         "conf_thresh_change_iters": 5000,
-        "retry_count":3,
 
         "unfreeze_detector": 4000,
         "partial_from_gt": 8000,
-        "stop_from_gt": 200000,
-
-        "use_bad_bb_pred_for_rel_loss": true
+        "stop_from_gt": 200000
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Simple18_staggerLight_NN/checkpoint-iteration100000.pth.tar",
-        "conf_thresh": 0.92,
+        "detector_checkpoint": "saved/Forms17_stagger_neg20_new25/checkpoint-iteration100000.pth.tar",
+        "conf_thresh": 0.5,
         "start_frozen": true,
-	"use_rel_shape_feats": "corner",
-        "expand_rel_context": 100,
-        "use_detect_layer_feats": 16,
+	"use_shape_feats": true,
+        "use_beg_det_feats": true,
         "graph_config": {
-            "arch": "BinaryPairReal",
-            "in_channels": 256,
+            "arch": "BinaryPairNet",
             "node_channels": 0,
-            "edge_channels": 1,
-            "layers": ["FC256","FC256"],
-            "shape_layers": "saved/Simple19_pairNotGT_feat_wH/checkpoint-latest.pth.tar",
-            "old_shape_layers": "saved/Simple18_pairNotGT_feat_wH/checkpoint-iteration8000.pth.tar",
-            "weight_split": 0.0
+            "edge_channels": 1
         },
-        "featurizer_start_h": 10,
-        "featurizer_start_w": 10,
-        "featurizer_conv": [128,128,"M",256,240],
-        "featurizer_fc": null
+        "featurizer_start_h": 8,
+        "featurizer_start_w": 8,
+        "featurizer_conv": [512,"M",496],
+        "featurizer_fc": []
     }
 }

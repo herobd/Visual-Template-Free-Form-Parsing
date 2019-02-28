@@ -73,14 +73,14 @@ class GraphPairTrainer(BaseTrainer):
         self.conf_thresh_init = config['trainer']['conf_thresh_init'] if 'conf_thresh_init' in config['trainer'] else 0.9
         self.conf_thresh_change_iters = config['trainer']['conf_thresh_change_iters'] if 'conf_thresh_change_iters' in config['trainer'] else 5000
 
-        self.train_hard_detect_limit = config['trainer']['train_hard_detect_limit'] if 'train_hard_detect_limit' in config else 100
-        self.val_hard_detect_limit = config['trainer']['val_hard_detect_limit'] if 'val_hard_detect_limit' in config else 300
+        self.train_hard_detect_limit = config['trainer']['train_hard_detect_limit'] if 'train_hard_detect_limit' in config['trainer'] else 100
+        self.val_hard_detect_limit = config['trainer']['val_hard_detect_limit'] if 'val_hard_detect_limit' in config['trainer'] else 300
 
-        self.useBadBBPredForRelLoss = config['trainer']['use_bad_bb_pred_for_rel_loss'] if 'use_bad_bb_pred_for_rel_loss' in config else False
+        self.useBadBBPredForRelLoss = config['trainer']['use_all_bb_pred_for_rel_loss'] if 'use_all_bb_pred_for_rel_loss' in config['trainer'] else False
 
-        self.adaptLR = config['trainer']['adapt_lr'] if 'adapt_lr' in config else False
-        self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config else 165 #roughly average number of rels
-        self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config else 15
+        self.adaptLR = config['trainer']['adapt_lr'] if 'adapt_lr' in config['trainer'] else False
+        self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
+        self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config['trainer'] else 15
 
         #Name change
         if 'edge' in self.lossWeights:
@@ -194,27 +194,50 @@ class GraphPairTrainer(BaseTrainer):
             if self.model.predNN or self.model.predClass:
                 if target_num_neighbors is not None:
                     alignedNN_use = target_num_neighbors[0]
-                bbPred_use = bbPred
+                bbPredNN_use = bbPred[:,0]
+                start=1
+            else:
+                start=0
+            if self.model.predClass:
+                if targetBoxes is not None:
+                    alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
+                bbPredClass_use = bbPred[:,start:start+self.model.numBBTypes]
         else:
             outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred)
-            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap, bbAlignment, bbNoIntersections = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
-            if (self.model.predNN or self.model.predClass) and bbPred is not None:
+            predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap, bbAlignment, bbFullHit = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
+            if bbPred is not None:
                 #create aligned GT
-                #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
-                toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
-                bbPred_use = bbPred[toKeep]
-                #alignedNN_use = alignedNN[toKeep]
-                bbAlignment_use = bbAlignment[toKeep]
-                #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-                if target_num_neighbors is not None:
-                    target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                #this was wrong...
+                    #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+                    #toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
+                #remove predictions that overlapped with GT, but not enough
+                if self.model.predNN:
+                    start=1
+                    toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
+                    bbPredNN_use = bbPred[toKeep][:,0]
+                    bbAlignment_use = bbAlignment[toKeep]
+                    #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                    if target_num_neighbors is not None:
+                        target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                    else:
+                        target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+                    alignedNN_use = target_num_neighbors_use[bbAlignment_use]
                 else:
-                    target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-                alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+                    start=0
+                if self.model.predClass:
+                    #We really don't care about the class of non-overlapping instances
+                    if targetBoxes is not None:
+                        toKeep = bbFullHit==1
+                        bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
+                        bbAlignment_use = bbAlignment[toKeep]
+                        alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                    else:
+                        alignedClass_use = None
             else:
-                bbPred_use = None
+                bbPredNN_use = None
+                bbPredClass_use = None
         if relPred is not None:
             numEdgePred = relPred.size(0)
             if predPairingShouldBeTrue is not None:
@@ -273,8 +296,8 @@ class GraphPairTrainer(BaseTrainer):
             loss = relLoss
 
 
-        if self.model.predNN and bbPred_use is not None and bbPred_use.size(0)>0:
-            nn_loss_final = self.loss['nn'](bbPred_use[:,0],alignedNN_use)
+        if self.model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
+            nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
             nn_loss_final *= self.lossWeights['nn']
 
             loss += nn_loss_final
@@ -282,8 +305,13 @@ class GraphPairTrainer(BaseTrainer):
         else:
             nn_loss_final=0
 
-        if self.model.predClass and bbPred_use is not None:
-            raise NotImplemented('havent implemented loss for graph pred of classes')
+        if self.model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
+            class_loss_final = self.loss['class'](bbPredClass_use,alignedClass_use)
+            class_loss_final *= self.lossWeights['class']
+            loss += class_loss_final
+            class_loss_final = class_loss_final.item()
+        else:
+            class_loss_final = 0
             
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
@@ -335,7 +363,6 @@ class GraphPairTrainer(BaseTrainer):
             'loss': loss,
             'boxLoss': boxLoss,
             'relLoss': relLoss,
-            'nn_loss_final': nn_loss_final,
             'edgePredLens':np.array([numEdgePred,numBoxPred,numEdgePred+numBoxPred,-1],dtype=np.float),
             'rel_recall':eRecall,
             #'rel_prec': ePrec,
@@ -346,6 +373,14 @@ class GraphPairTrainer(BaseTrainer):
 
             **metrics,
         }
+        if self.model.predNN:
+            log['nn_loss_final'] = nn_loss_final
+            if not self.model.detector_frozen:
+                log['nn_loss_diff'] = nn_loss_final-nn_loss
+        if self.model.predClass:
+            log['class_loss_final'] = class_loss_final
+            if not self.model.detector_frozen:
+                log['class_loss_diff'] = class_loss_final-class_loss
         if ap is not None:
             log['rel_AP']=ap
 
@@ -390,6 +425,9 @@ class GraphPairTrainer(BaseTrainer):
         AP_count=0
         total_val_metrics = np.zeros(len(self.metrics))
         nn_loss_final_total=0
+        nn_loss_diff_total=0
+        class_loss_final_total=0
+        class_loss_diff_total=0
 
         numClasses = self.model.numBBTypes
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
@@ -409,12 +447,12 @@ class GraphPairTrainer(BaseTrainer):
 
                 image, targetBoxes, adjM, target_num_neighbors = self._to_tensor(instance)
 
-                outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
+                outputBoxes, outputOffsets, relPred, relIndexes, bbPred, = self.model(image, hard_detect_limit=self.val_hard_detect_limit)
                 #loss = self.loss(output, target)
                 loss = 0
                 index=0
                 
-                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec, ap, bbAlignment, bbNoIntersections = self.alignEdgePred(targetBoxes,adjM,outputBoxes,relPred,relIndexes)
+                predPairingShouldBeTrue,predPairingShouldBeFalse, recall,prec,fullPrec, ap, bbAlignment, bbFullHit = self.alignEdgePred(targetBoxes,adjM,outputBoxes,relPred,relIndexes)
                 total_rel_recall+=recall
                 total_rel_prec+=prec
                 total_rel_fullPrec+=fullPrec
@@ -443,27 +481,61 @@ class GraphPairTrainer(BaseTrainer):
                     loss = relLoss*self.lossWeights['rel']
                 total_box_loss+=boxLoss.item()
                 total_rel_loss+=relLoss.item()
-                if self.model.predNN and bbPred is not None:
+
+                if bbPred is not None:
                     #create aligned GT
-                    #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
-                    toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
-                    bbPred_use = bbPred[toKeep]
-                    bbAlignment_use = bbAlignment[toKeep]
-                    #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-                    if target_num_neighbors is not None:
-                        target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                    #this was wrong...
+                        #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+                        #toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
+                    #remove predictions that overlapped with GT, but not enough
+                    if self.model.predNN:
+                        start=1
+                        toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
+                        bbPredNN_use = bbPred[toKeep][:,0]
+                        bbAlignment_use = bbAlignment[toKeep]
+                        #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                        if target_num_neighbors is not None:
+                            target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                        else:
+                            target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+                        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
                     else:
-                        target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-                    alignedNN_use = target_num_neighbors_use[bbAlignment_use]
-                    
-                    nn_loss_final = self.loss['nn'](bbPred_use[:,0],alignedNN_use)
+                        start=0
+                    if self.model.predClass:
+                        #We really don't care about the class of non-overlapping instances
+                        if targetBoxes is not None:
+                            toKeep = bbFullHit==1
+                            bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
+                            bbAlignment_use = bbAlignment[toKeep]
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                        else:
+                            alignedClass_use = None
+                else:
+                    bbPredNN_use = None
+                    bbPredClass_use = None
+
+                if self.model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
+                    nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
 
-                    loss += nn_loss_final.to(loss.device)
+                    loss += nn_loss_final
                     nn_loss_final = nn_loss_final.item()
-                    nn_loss_final_total += nn_loss_final
                 else:
                     nn_loss_final=0
+                nn_loss_final_total += nn_loss_final
+
+                if self.model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
+                    class_loss_final = self.loss['class'](bbPredClass_use,alignedClass_use)
+                    class_loss_final *= self.lossWeights['class']
+                    loss += class_loss_final
+                    class_loss_final = class_loss_final.item()
+                else:
+                    class_loss_final = 0
+                class_loss_final_total += class_loss_final
+
+                if not self.model.detector_frozen:
+                    nn_loss_diff_total += nn_loss_final-nn_loss
+                    class_loss_diff_total += class_loss_final-class_loss
                 
                 if self.model.detector.predNumNeighbors:
                     outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
@@ -510,6 +582,10 @@ class GraphPairTrainer(BaseTrainer):
         }
         if self.model.predNN:
             toRet['val_nn_loss_final']=nn_loss_final_total/len(self.valid_data_loader)
+            toRet['val_nn_loss_diff']=nn_loss_diff_total/len(self.valid_data_loader)
+        if self.model.predClass:
+            toRet['val_class_loss_final']=class_loss_final_total/len(self.valid_data_loader)
+            toRet['val_class_loss_diff']=class_loss_diff_total/len(self.valid_data_loader)
         return toRet
 
 
@@ -540,40 +616,33 @@ class GraphPairTrainer(BaseTrainer):
         #should this be the same as AP_?
         numClasses = 2
 
-        if self.useBadBBPredForRelLoss == 'fixed':
-            #fullHit = predsWithNoIntersection
-            if self.model.rotation:
-                targIndex, fullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,hard_thresh=False)
-            else:
-                targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False)
+        if self.model.rotation:
+            targIndex, fullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,hard_thresh=False)
         else:
-            if self.model.rotation:
-                targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
-            else:
-                targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
+            targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False)
+        #else:
+        #    if self.model.rotation:
+        #        targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
+        #    else:
+        #        targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)
 
         #Create gt vector to match relPred.values()
 
         rels = relIndexes #relPred._indices().cpu()
         predsAll = relPred #relPred._values()
         sigPredsAll = torch.sigmoid(predsAll)
-        #newGT = []#torch.tensor((rels.size(0)))
         predsPos = []
         predsNeg = []
         scores = []
         matches=0
-        #for i in range(rels.size(0)):
         truePred=falsePred=badPred=0
         for i,(n0,n1) in enumerate(rels):
-            #n0 = rels[i,0]
-            #n1 = rels[i,1]
             t0 = targIndex[n0].item()
             t1 = targIndex[n1].item()
             if t0>=0 and t1>=0:
-                #newGT.append( int((t0,t1) in adj) )#adjM[ min(t0,t1), max(t0,t1) ])
-                #preds.append(predsAll[i])
                 if (min(t0,t1),max(t0,t1)) in adj:
-                    if self.useBadBBPredForRelLoss!='fixed' or (fullHit[n0] and fullHit[n1]):
+                    #if self.useBadBBPredForRelLoss!='fixed' or (fullHit[n0] and fullHit[n1]):
+                    if fullHit[n0] and fullHit[n1]:
                         matches+=1
                         predsPos.append(predsAll[i])
                         scores.append( (sigPredsAll[i],True) )
@@ -587,7 +656,8 @@ class GraphPairTrainer(BaseTrainer):
                     if sigPredsAll[i]>self.thresh_rel:
                         falsePred+=1
             else:
-                if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
+                #if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
+                if self.useBadBBPredForRelLoss:
                     predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
@@ -595,12 +665,7 @@ class GraphPairTrainer(BaseTrainer):
         #Add score 0 for instances we didn't predict
         for i in range(len(adj)-matches):
             scores.append( (float('nan'),True) )
-        #if len(preds)==0:
-        #    return torch.tensor([]),torch.tensor([])
-        #newGT = torch.tensor(newGT).float().to(relPred[1].device)
-        #preds = torch.cat(preds).to(relPred[1].device)
     
-        #return newGT, preds
         if len(predsPos)>0:
             predsPos = torch.cat(predsPos).to(relPred.device)
         else:
@@ -622,7 +687,7 @@ class GraphPairTrainer(BaseTrainer):
             fullPrec = truePred/(truePred+falsePred+badPred)
         else:
             fullPrec = 1
-        return predsPos,predsNeg, recall, prec ,fullPrec, computeAP(scores), targIndex, predsWithNoIntersection
+        return predsPos,predsNeg, recall, prec ,fullPrec, computeAP(scores), targIndex, fullHit
 
 
     def prealignedEdgePred(self,adj,relPred,relIndexes):

@@ -404,6 +404,12 @@ class PairingGraph(BaseModel):
             #    i,j,a=graphToDetectionsMap(
             if self.predNN:
                 bbOuts[:,0]+=1 #make pred range -1 (to pred o nieghbors)
+                if self.detector.predNumNeighbors and not useGTBBs:
+                    bbPredictions[:,6]=bbOuts[:,0]
+            if self.predClass:
+                startIndex = 6+self.detector.predNumNeighbors
+                if not useGTBBs:
+                    bbPredictions[:,startIndex:startIndex+self.numBBTypes] = torch.sigmoid(bbOuts[:,self.predNN:self.predNN+self.numBBTypes])
             return bbPredictions, offsetPredictions, relOuts, relIndexes, bbOuts
         else:
             return bbPredictions, offsetPredictions, None, None, None

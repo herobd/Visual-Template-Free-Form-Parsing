@@ -359,7 +359,7 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, har
     recalls=[]
 
     if len(target.size())<=1:
-        return None
+        return None, None
 
     #by class
     #import pdb; pdb.set_trace()
@@ -399,6 +399,7 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, har
     if hard_thresh:
         return targIndex, predsWithNoIntersection
     else:
+        hits,_ = hits.max(dim=0) #since we always take max pred
         return targIndex, hits
 
 def computeAP(scores):

@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binary_F1A+16_predNNDS_staggerLight_NNP",
+    "name": "Simple18_pair_binary_F1A+16_predNNDS_notFixed_staggerLight_NNP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -102,6 +102,8 @@
             "layers": ["FC256","FC256"],
             "layers_bb": ["FC256"]
         },
+        "use_fixed_masks": false,
+
         "expand_rel_context": 150,
         "featurizer_start_h": 32,
         "featurizer_start_w": 32,

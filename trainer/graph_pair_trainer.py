@@ -191,17 +191,21 @@ class GraphPairTrainer(BaseTrainer):
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.prealignedEdgePred(adj,relPred,relIndexes)
-            if self.model.predNN or self.model.predClass:
-                if target_num_neighbors is not None:
-                    alignedNN_use = target_num_neighbors[0]
-                bbPredNN_use = bbPred[:,0]
-                start=1
+            if bbPred is not None:
+                if self.model.predNN or self.model.predClass:
+                    if target_num_neighbors is not None:
+                        alignedNN_use = target_num_neighbors[0]
+                    bbPredNN_use = bbPred[:,0]
+                    start=1
+                else:
+                    start=0
+                if self.model.predClass:
+                    if targetBoxes is not None:
+                        alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
+                    bbPredClass_use = bbPred[:,start:start+self.model.numBBTypes]
             else:
-                start=0
-            if self.model.predClass:
-                if targetBoxes is not None:
-                    alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
-                bbPredClass_use = bbPred[:,start:start+self.model.numBBTypes]
+                bbPredNN_use=None
+                bbPredClass_use=None
         else:
             outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)

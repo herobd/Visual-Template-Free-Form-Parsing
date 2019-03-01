@@ -77,6 +77,8 @@ class GraphPairTrainer(BaseTrainer):
         self.val_hard_detect_limit = config['trainer']['val_hard_detect_limit'] if 'val_hard_detect_limit' in config['trainer'] else 300
 
         self.useBadBBPredForRelLoss = config['trainer']['use_all_bb_pred_for_rel_loss'] if 'use_all_bb_pred_for_rel_loss' in config['trainer'] else False
+        if self.useBadBBPredForRelLoss is True:
+            self.useBadBBPredForRelLoss=1
 
         self.adaptLR = config['trainer']['adapt_lr'] if 'adapt_lr' in config['trainer'] else False
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
@@ -665,7 +667,7 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 #if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
                 if self.useBadBBPredForRelLoss:
-                    if self.useBadBBPredForRelLoss=='full' else np.random.rand()<0.5:
+                    if self.useBadBBPredForRelLoss=='full' else np.random.rand()<self.useBadBBPredForRelLoss:
                         predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:

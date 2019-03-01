@@ -1,5 +1,5 @@
 {
-    "name": "Simple18_pair_binaryALR_F1A+16_predNNClassDS_fixedMasksNNUse_staggerLight_NNP",
+    "name": "Simple18_pair_binaryALR_F1A+16_predNNClassDS_fixedMasksBBUse_staggerLight_NNP",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",

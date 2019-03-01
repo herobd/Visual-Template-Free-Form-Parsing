@@ -477,12 +477,12 @@ class GraphPairTrainer(BaseTrainer):
                     else:
                         relLoss = relFalseLoss
                 if relLoss is None:
-                    relLoss = torch.tensor(0.0)
-                else:
-                    relLoss = relLoss.cpu()
+                    relLoss = torch.tensor(0.0).to(image.device)
+                #else:
+                #    relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
                     boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)],target_num_neighbors)
-                    loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
+                    loss = relLoss*self.lossWeights['rel'] + boxLoss*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
                     loss = relLoss*self.lossWeights['rel']
@@ -525,7 +525,7 @@ class GraphPairTrainer(BaseTrainer):
                     nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
 
-                    loss += nn_loss_final
+                    loss += nn_loss_final#.to(loss.device)
                     nn_loss_final = nn_loss_final.item()
                 else:
                     nn_loss_final=0

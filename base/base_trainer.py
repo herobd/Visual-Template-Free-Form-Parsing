@@ -102,9 +102,9 @@ class BaseTrainer:
             #print('iter: '+str(elapsed_time))
 
             #Stochastic Weight Averaging    https://github.com/timgaripov/swa/blob/master/train.py
-            if self.swa and self.iteration>=self.swa_start and (self.iterations-self.swa_start)%self.self.swa_c_iters==0:
-                swa_n = (self.iterations-self.swa_start)//self.self.swa_c_iters
-                utils.moving_average(self.swa_model, self.model, 1.0 / (swa_n + 1))
+            if self.swa and self.iteration>=self.swa_start and (self.iterations-self.swa_start)%self.swa_c_iters==0:
+                swa_n = (self.iterations-self.swa_start)//self.swa_c_iters
+                moving_average(self.swa_model, self.model, 1.0 / (swa_n + 1))
                 #swa_n += 1
 
 

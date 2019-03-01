@@ -77,6 +77,8 @@ class GraphPairTrainer(BaseTrainer):
         self.val_hard_detect_limit = config['trainer']['val_hard_detect_limit'] if 'val_hard_detect_limit' in config['trainer'] else 300
 
         self.useBadBBPredForRelLoss = config['trainer']['use_all_bb_pred_for_rel_loss'] if 'use_all_bb_pred_for_rel_loss' in config['trainer'] else False
+        if self.useBadBBPredForRelLoss is True:
+            self.useBadBBPredForRelLoss=1
 
         self.adaptLR = config['trainer']['adapt_lr'] if 'adapt_lr' in config['trainer'] else False
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
@@ -475,12 +477,12 @@ class GraphPairTrainer(BaseTrainer):
                     else:
                         relLoss = relFalseLoss
                 if relLoss is None:
-                    relLoss = torch.tensor(0.0)
-                else:
-                    relLoss = relLoss.cpu()
+                    relLoss = torch.tensor(0.0).to(image.device)
+                #else:
+                #    relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
                     boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)],target_num_neighbors)
-                    loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
+                    loss = relLoss*self.lossWeights['rel'] + boxLoss*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
                     loss = relLoss*self.lossWeights['rel']
@@ -523,7 +525,7 @@ class GraphPairTrainer(BaseTrainer):
                     nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
 
-                    loss += nn_loss_final.to(loss.device)
+                    loss += nn_loss_final
                     nn_loss_final = nn_loss_final.item()
                 else:
                     nn_loss_final=0
@@ -665,7 +667,8 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 #if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
                 if self.useBadBBPredForRelLoss:
-                    predsNeg.append(predsAll[i])
+                    if self.useBadBBPredForRelLoss=='full' or np.random.rand()<self.useBadBBPredForRelLoss:
+                        predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     badPred+=1

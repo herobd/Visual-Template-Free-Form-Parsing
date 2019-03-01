@@ -403,7 +403,11 @@ class PairingGraph(BaseModel):
             #for rel in relOuts:
             #    i,j,a=graphToDetectionsMap(
             if self.predNN:
-                bbOuts[:,0]+=1 #make pred range -1 (to pred o nieghbors)
+                if bbOuts.size(1)>1:
+                    #bbOuts[:,0]+=1 #make pred range -1 (to pred o nieghbors)
+                    bbOuts = torch.cat((bbOuts[:,0:1]+1,bbOuts[:,1:]),dim=1) #remove inplace operation?
+                else:
+                    bbOuts=bbOuts+1
                 if self.detector.predNumNeighbors and not useGTBBs:
                     bbPredictions[:,6]=bbOuts[:,0]
             if self.predClass:

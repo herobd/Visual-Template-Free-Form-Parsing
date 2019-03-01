@@ -265,7 +265,8 @@ class BaseTrainer:
                 os.remove(filename_late)
             except FileNotFoundError:
                 pass
-            os.link(filename,filename_late) #this way checkpoint-latest always does have the latest
+            #os.link(filename,filename_late) #this way checkpoint-latest always does have the latest
+            torch.save(state, filename_late) #something is wrong with thel inkgin
 
         if save_best:
             os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))

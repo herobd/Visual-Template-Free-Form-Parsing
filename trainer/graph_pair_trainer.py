@@ -191,17 +191,21 @@ class GraphPairTrainer(BaseTrainer):
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.prealignedEdgePred(adj,relPred,relIndexes)
-            if self.model.predNN or self.model.predClass:
-                if target_num_neighbors is not None:
-                    alignedNN_use = target_num_neighbors[0]
-                bbPredNN_use = bbPred[:,0]
-                start=1
+            if bbPred is not None:
+                if self.model.predNN or self.model.predClass:
+                    if target_num_neighbors is not None:
+                        alignedNN_use = target_num_neighbors[0]
+                    bbPredNN_use = bbPred[:,0]
+                    start=1
+                else:
+                    start=0
+                if self.model.predClass:
+                    if targetBoxes is not None:
+                        alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
+                    bbPredClass_use = bbPred[:,start:start+self.model.numBBTypes]
             else:
-                start=0
-            if self.model.predClass:
-                if targetBoxes is not None:
-                    alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
-                bbPredClass_use = bbPred[:,start:start+self.model.numBBTypes]
+                bbPredNN_use=None
+                bbPredClass_use=None
         else:
             outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
@@ -259,6 +263,7 @@ class GraphPairTrainer(BaseTrainer):
         #    relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
         #relLoss = torch.tensor(0.0).to(image.device)
         relLoss = None
+        #seperating the loss into true and false portions is not only convienint, it balances the loss between true/false examples
         if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
             ones = torch.ones_like(predPairingShouldBeTrue).to(image.device)
             relLoss = self.loss['rel'](predPairingShouldBeTrue,ones)
@@ -561,6 +566,8 @@ class GraphPairTrainer(BaseTrainer):
                 loss=relFalseLoss=relLoss=boxLoss=None
                 instance=predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
+        if mAP_count==0:
+            mAP_count=1
         toRet= {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_box_loss': total_box_loss / len(self.valid_data_loader),

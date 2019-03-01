@@ -665,7 +665,8 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 #if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
                 if self.useBadBBPredForRelLoss:
-                    predsNeg.append(predsAll[i])
+                    if self.useBadBBPredForRelLoss=='full' else np.random.rand()<0.5:
+                        predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     badPred+=1

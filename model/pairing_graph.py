@@ -1091,7 +1091,7 @@ class PairingGraph(BaseModel):
             if len(candidates)+numBoxes<MAX_GRAPH_SIZE and len(candidates)<MAX_CANDIDATES:
                 return list(candidates)
             else:
-                distMul=distMul*0.9 - 0.1
+                distMul=distMul*0.8 - 0.05
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
         return list(candidates)[:MAX_GRAPH_SIZE-numBoxes]

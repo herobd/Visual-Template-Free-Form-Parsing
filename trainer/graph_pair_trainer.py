@@ -236,9 +236,13 @@ class GraphPairTrainer(BaseTrainer):
                     #We really don't care about the class of non-overlapping instances
                     if targetBoxes is not None:
                         toKeep = bbFullHit==1
-                        bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
-                        bbAlignment_use = bbAlignment[toKeep]
-                        alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                        if toKeep.any():
+                            bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
+                            bbAlignment_use = bbAlignment[toKeep]
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                        else:
+                            alignedClass_use = None
+                            bbPredClass_use = None
                     else:
                         alignedClass_use = None
             else:

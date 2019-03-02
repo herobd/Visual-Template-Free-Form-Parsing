@@ -84,6 +84,8 @@ class GraphPairTrainer(BaseTrainer):
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
         self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config['trainer'] else 15
 
+        self.debug = 'DEBUG' in  config['trainer']
+
         #Name change
         if 'edge' in self.lossWeights:
             self.lossWeights['rel'] = self.lossWeights['edge']
@@ -323,7 +325,8 @@ class GraphPairTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
-        predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
+        if not self.debug:
+            predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
         if relLoss is not None:
             relLoss = relLoss.item()
         else:

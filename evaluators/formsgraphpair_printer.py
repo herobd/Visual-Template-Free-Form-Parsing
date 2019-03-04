@@ -2,6 +2,7 @@ from skimage import color, io
 import os
 import numpy as np
 import torch
+import torch.nn.functional as F
 import cv2
 from utils import util
 from model.alignment_loss import alignment_loss
@@ -67,7 +68,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     data = instance['img']
     batchSize = data.shape[0]
     assert(batchSize==1)
-    targetBBs = instance['bb_gt']
+    targetBoxes = instance['bb_gt']
     adjacency = instance['adj']
     adjacency = list(adjacency)
     imageName = instance['imgName']
@@ -75,10 +76,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     target_num_neighbors = instance['num_neighbors']
     if not model.detector.predNumNeighbors:
         instance['num_neighbors']=None
-    dataT, targetBBsT, adjT, target_num_neighborsT = __to_tensor(instance,gpu)
+    dataT, targetBoxesT, adjT, target_num_neighborsT = __to_tensor(instance,gpu)
 
 
     pretty = config['pretty'] if 'pretty' in config else False
+    useGT = config['useGT'] if 'useGT' in config else False
 
 
     resultsDirName='results'
@@ -86,14 +88,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #rPath = os.path.join(outDir,resultsDirName)
         #if not os.path.exists(rPath):
         #    os.mkdir(rPath)
-        #for name in targetBBs:
+        #for name in targetBoxes:
         #    nPath = os.path.join(rPath,name)
         #    if not os.path.exists(nPath):
         #        os.mkdir(nPath)
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBBs, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
+    outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
 
     numClasses=2 #TODO no
     if model.predNN and bbPred is not None:
@@ -101,29 +103,29 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         predNN=None
     if  model.detector.predNumNeighbors:
-        #useOutputBBs=torch.cat((outputBBs[:,0:6],outputBBs[:,7:]),dim=1) #throw away NN pred
+        #useOutputBBs=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
         extraPreds=1
         if not model.predNN:
-            predNN = outputBBs[:,6]
+            predNN = outputBoxes[:,6]
     else:
         extraPreds=0
         if not model.predNN:
             predNN = None
-        #useOutputBBs=outputBBs
+        #useOutputBBs=outputBoxes
 
-    if targetBBsT is not None:
-        targetSize=targetBBsT.size(1)
+    if targetBoxesT is not None:
+        targetSize=targetBoxesT.size(1)
     else:
         targetSize=0
-    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,[targetSize], target_num_neighborsT)
+    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBoxesT,[targetSize], target_num_neighborsT)
 
     if 'rule' in config:
         if config['rule']=='closest':
             dists = torch.FloatTensor(relPred.size())
             differentClass = torch.FloatTensor(relPred.size())
-            predClasses = torch.argmax(outputBBs[:,extraPreds+6:extraPreds+6+numClasses],dim=1)
+            predClasses = torch.argmax(outputBoxes[:,extraPreds+6:extraPreds+6+numClasses],dim=1)
             for i,(bb1,bb2) in enumerate(relIndexes):
-                dists[i] = math.sqrt((outputBBs[bb1,1]-outputBBs[bb2,1])**2 + (outputBBs[bb1,2]-outputBBs[bb2,2])**2)
+                dists[i] = math.sqrt((outputBoxes[bb1,1]-outputBoxes[bb2,1])**2 + (outputBoxes[bb1,2]-outputBoxes[bb2,2])**2)
                 differentClass[i] = predClasses[bb1]!=predClasses[bb2]
             maxDist = torch.max(dists)
             minDist = torch.min(dists)
@@ -134,22 +136,22 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             dists = torch.FloatTensor(relPred.size())
             right = torch.FloatTensor(relPred.size())
             sameClass = torch.FloatTensor(relPred.size())
-            predClasses = torch.argmax(outputBBs[:,extraPreds+6:extraPreds+6+numClasses],dim=1)
+            predClasses = torch.argmax(outputBoxes[:,extraPreds+6:extraPreds+6+numClasses],dim=1)
             for i,(bb1,bb2) in enumerate(relIndexes):
                 sameClass[i] = predClasses[bb1]==predClasses[bb2]
                 
                 #g4 of the paper
-                height[i] = max(outputBBs[bb1,4],outputBBs[bb2,4])/min(outputBBs[bb1,4],outputBBs[bb2,4])
+                height[i] = max(outputBoxes[bb1,4],outputBoxes[bb2,4])/min(outputBoxes[bb1,4],outputBoxes[bb2,4])
 
                 #g5 of the paper
                 if predClasses[bb1]==0:
-                    widthLabel = outputBBs[bb1,5]*2 #we predict half width
-                    widthValue = outputBBs[bb2,5]*2
-                    dists[i] = math.sqrt(((outputBBs[bb1,1]+widthLabel)-(outputBBs[bb2,1]-widthValue))**2 + (outputBBs[bb1,2]-outputBBs[bb2,2])**2)
+                    widthLabel = outputBoxes[bb1,5]*2 #we predict half width
+                    widthValue = outputBoxes[bb2,5]*2
+                    dists[i] = math.sqrt(((outputBoxes[bb1,1]+widthLabel)-(outputBoxes[bb2,1]-widthValue))**2 + (outputBoxes[bb1,2]-outputBoxes[bb2,2])**2)
                 else:
-                    widthLabel = outputBBs[bb2,5]*2 #we predict half width
-                    widthValue = outputBBs[bb1,5]*2
-                    dists[i] = math.sqrt(((outputBBs[bb1,1]-widthValue)-(outputBBs[bb2,1]+widthLabel))**2 + (outputBBs[bb1,2]-outputBBs[bb2,2])**2)
+                    widthLabel = outputBoxes[bb2,5]*2 #we predict half width
+                    widthValue = outputBoxes[bb1,5]*2
+                    dists[i] = math.sqrt(((outputBoxes[bb1,1]-widthValue)-(outputBoxes[bb2,1]+widthLabel))**2 + (outputBoxes[bb1,2]-outputBoxes[bb2,2])**2)
                 if dists[i]>2*widthLabel:
                     dists[i]/=widthLabel
                 else: #undefined
@@ -157,11 +159,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             
                 #g6 of the paper
                 if predClasses[bb1]==0:
-                    widthValue = outputBBs[bb2,5]*2
-                    hDist = outputBBs[bb1,1]-outputBBs[bb2,1]
+                    widthValue = outputBoxes[bb2,5]*2
+                    hDist = outputBoxes[bb1,1]-outputBoxes[bb2,1]
                 else:
-                    widthValue = outputBBs[bb1,5]*2
-                    hDist = outputBBs[bb2,1]-outputBBs[bb1,1]
+                    widthValue = outputBoxes[bb1,5]*2
+                    hDist = outputBoxes[bb2,1]-outputBoxes[bb1,1]
                 right[i] = hDist/widthValue
 
             relPred = 1-(height+dists+right + 10000*sameClass)
@@ -178,11 +180,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
     if model.rotation:
-        bbAlignment, bbNoIntersections = getTargIndexForPreds_dist(targetBBs[0],outputBBs,1.1,numClasses,extraPreds)
+        bbAlignment, bbFullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,extraPreds,hard_thresh=False)
     else:
-        bbAlignment, bbNoIntersections = getTargIndexForPreds_iou(targetBBs[0],outputBBs,0.4,numClasses,extraPreds)
-    if targetBBs is not None:
-        target_for_b = targetBBs[0,:,:]
+        bbAlignment, bbFullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,extraPreds,hard_thresh=False)
+    if targetBoxes is not None:
+        target_for_b = targetBoxes[0,:,:]
     else:
         target_for_b = torch.empty(0)
     if 'optimize' in config and config['optimize']:
@@ -209,14 +211,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if id1 not in idMap:
                         idMap[id1]=newId
                         if not usePredNN:
-                            numNeighbors.append(target_num_neighbors[0,bbAlignment[index]])
+                            numNeighbors.append(target_num_neighbors[0,bbAlignment[id1]])
                         else:
                             numNeighbors.append(predNN[id1])
                         newId+=1
                     if id2 not in idMap:
                         idMap[id2]=newId
                         if not usePredNN:
-                            numNeighbors.append(target_num_neighbors[0,bbAlignment[index]])
+                            numNeighbors.append(target_num_neighbors[0,bbAlignment[id2]])
                         else:
                             numNeighbors.append(predNN[id2])
                         newId+=1
@@ -235,48 +237,78 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     data = data.numpy()
     #threshed in model
-    if outputBBs.size(0)>0:
-        maxConf = outputBBs[:,0].max().item()
-        minConf = outputBBs[:,0].min().item()
+    if outputBoxes.size(0)>0:
+        maxConf = outputBoxes[:,0].max().item()
+        minConf = outputBoxes[:,0].min().item()
     #threshConf = max(maxConf*THRESH,0.5)
     #if model.rotation:
-    #    outputBBs = non_max_sup_dist(outputBBs.cpu(),threshConf,3)
+    #    outputBoxes = non_max_sup_dist(outputBoxes.cpu(),threshConf,3)
     #else:
-    #    outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
+    #    outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,0.4)
 
     if model.rotation:
-        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs,0.9,model.numBBTypes,beforeCls=extraPreds)
+        ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,model.numBBTypes,beforeCls=extraPreds)
     else:
-        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs,0.5,model.numBBTypes,beforeCls=extraPreds)
+        ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,model.numBBTypes,beforeCls=extraPreds)
     #align bb predictions (final) with GT
-    if (model.predNN or model.predClass) and bbPred is not None:
+    if bbPred is not None:
         #create aligned GT
-        #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
-        toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
-        bbPred_use = bbPred[toKeep]
-        #alignedNN_use = alignedNN[toKeep]
-        bbAlignment_use = bbAlignment[toKeep]
-        #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-        if target_num_neighbors is not None:
-            target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+        #this was wrong...
+            #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+            #toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
+        #remove predictions that overlapped with GT, but not enough
+        if model.predNN:
+            start=1
+            toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
+            bbPredNN_use = bbPred[toKeep][:,0]
+            bbAlignment_use = bbAlignment[toKeep]
+            #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+            if target_num_neighborsT is not None:
+                target_num_neighbors_use = torch.cat((target_num_neighborsT[0].float(),torch.zeros(1).to(target_num_neighborsT.device)),dim=0)
+            else:
+                target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+            alignedNN_use = target_num_neighbors_use[bbAlignment_use]
         else:
-            target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
-        
-
+            start=0
+        if model.predClass:
+            #We really don't care about the class of non-overlapping instances
+            if targetBoxes is not None:
+                toKeep = bbFullHit==1
+                bbPredClass_use = bbPred[toKeep][:,start:start+model.numBBTypes]
+                bbAlignment_use = bbAlignment[toKeep]
+                alignedClass_use =  targetBoxesT[0][bbAlignment_use][:,13:13+model.numBBTypes] #There should be no -1 indexes in hereS
+            else:
+                alignedClass_use = None
     else:
-        bbPred_use = None
-    if model.predNN and bbPred_use is not None:
-        nn_loss_final = F.mse_loss(bbPred_use[:,0],alignedNN_use.to(bbPred_use.device))
+        bbPredNN_use = None
+        bbPredClass_use = None
+    if model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
+        nn_loss_final = F.mse_loss(bbPredNN_use,alignedNN_use)
         #nn_loss_final *= self.lossWeights['nn']
 
         #loss += nn_loss_final
         nn_loss_final = nn_loss_final.item()
     else:
-        nn_loss_final=None
+        nn_loss_final=0
+    if model.predNN and predNN is not None:
+        predNN_p=bbPred[:,0]
+        diffs=torch.abs(predNN_p-target_num_neighborsT[0][bbAlignment].float())
+        nn_acc = (diffs<0.5).sum().item()
+        nn_acc /= predNN.size(0)
+    if model.detector.predNumNeighbors:
+        predNN_d = outputBoxes[:,6]
+        diffs=torch.abs(predNN_d-target_num_neighbors[0][bbAlignment].float())
+        nn_acc_d = (diffs<0.5).sum().item()
+        nn_acc_d /= predNN.size(0)
 
-    if model.predClass and bbPred_use is not None:
-        raise NotImplemented('havent implemented loss for graph pred of classes')
+    if model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
+        class_loss_final = F.binary_cross_entropy_with_logits(bbPredClass_use,alignedClass_use)
+        #class_loss_final *= self.lossWeights['class']
+        #loss += class_loss_final
+        class_loss_final = class_loss_final.item()
+    else:
+        class_loss_final = 0
+    #class_acc=0
     useOutputBBs=None
 
     truePred=falsePred=badPred=0
@@ -328,8 +360,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #import pdb;pdb.set_trace()
 
-    #for b in range(len(outputBBs)):
-    outputBBs = outputBBs.data.numpy()
+    #for b in range(len(outputBoxes)):
+    outputBoxes = outputBoxes.data.numpy()
     
     
     dists=defaultdict(list)
@@ -338,19 +370,19 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     scaleDiffs=defaultdict(list)
     rotDiffs=defaultdict(list)
     b=0
-    #print('image {} has {} {}'.format(startIndex+b,targetBBsSizes[name][b],name))
+    #print('image {} has {} {}'.format(startIndex+b,targetBoxesSizes[name][b],name))
     #bbImage = np.ones_like(image):w
 
     if outDir is not None:
         #Write the results so we can train LF with them
         #saveFile = os.path.join(outDir,resultsDirName,name,'{}'.format(imageName[b]))
         #we must rescale the output to be according to the original image
-        #rescaled_outputBBs_xyrs = outputBBs_xyrs[name][b]
-        #rescaled_outputBBs_xyrs[:,1] /= scale[b]
-        #rescaled_outputBBs_xyrs[:,2] /= scale[b]
-        #rescaled_outputBBs_xyrs[:,4] /= scale[b]
+        #rescaled_outputBoxes_xyrs = outputBoxes_xyrs[name][b]
+        #rescaled_outputBoxes_xyrs[:,1] /= scale[b]
+        #rescaled_outputBoxes_xyrs[:,2] /= scale[b]
+        #rescaled_outputBoxes_xyrs[:,4] /= scale[b]
 
-        #np.save(saveFile,rescaled_outputBBs_xyrs)
+        #np.save(saveFile,rescaled_outputBoxes_xyrs)
         image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()
         if image.shape[2]==1:
             image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
@@ -359,33 +391,33 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #Draw GT bbs
         if not pretty:
             for j in range(targetSize):
-                plotRect(image,(1,0.5,0),targetBBs[0,j,0:5])
-            #x=int(targetBBs[b,j,0])
-            #y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
+                plotRect(image,(1,0.5,0),targetBoxes[0,j,0:5])
+            #x=int(targetBoxes[b,j,0])
+            #y=int(targetBoxes[b,j,1]+targetBoxes[b,j,3])
             #cv2.putText(image,'{:.2f}'.format(target_num_neighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
             #if alignmentBBs[b] is not None:
             #    aj=alignmentBBs[b][j]
-            #    xc_gt = targetBBs[b,j,0]
-            #    yc_gt = targetBBs[b,j,1]
-            #    xc=outputBBs[b,aj,1]
-            #    yc=outputBBs[b,aj,2]
+            #    xc_gt = targetBoxes[b,j,0]
+            #    yc_gt = targetBoxes[b,j,1]
+            #    xc=outputBoxes[b,aj,1]
+            #    yc=outputBoxes[b,aj,2]
             #    cv2.line(image,(xc,yc),(xc_gt,yc_gt),(0,1,0),1)
-            #    shade = 0.0+(outputBBs[b,aj,0]-threshConf)/(maxConf-threshConf)
+            #    shade = 0.0+(outputBoxes[b,aj,0]-threshConf)/(maxConf-threshConf)
             #    shade = max(0,shade)
-            #    if outputBBs[b,aj,6] > outputBBs[b,aj,7]:
+            #    if outputBoxes[b,aj,6] > outputBoxes[b,aj,7]:
             #        color=(0,shade,shade) #text
             #    else:
             #        color=(shade,shade,0) #field
-            #    plotRect(image,color,outputBBs[b,aj,1:6])
+            #    plotRect(image,color,outputBoxes[b,aj,1:6])
 
         #bbs=[]
         #pred_points=[]
-        #maxConf = outputBBs[b,:,0].max()
+        #maxConf = outputBoxes[b,:,0].max()
         #threshConf = 0.5 
         #threshConf = max(maxConf*0.9,0.5)
         #print("threshConf:{}".format(threshConf))
-        #for j in range(outputBBs.shape[1]):
-        #    conf = outputBBs[b,j,0]
+        #for j in range(outputBoxes.shape[1]):
+        #    conf = outputBoxes[b,j,0]
         #    if conf>threshConf:
         #        bbs.append((conf,j))
         #    #pred_points.append(
@@ -393,7 +425,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #import pdb; pdb.set_trace()
 
         #Draw pred bbs
-        bbs = outputBBs
+        bbs = outputBoxes
         for j in range(bbs.shape[0]):
             #circle aligned predictions
             conf = bbs[j,0]
@@ -425,8 +457,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     cv2.putText(image,'{:.2}/{}'.format(pred_nn,gtNN),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(color,0,0),2,cv2.LINE_AA)
 
         #for j in alignmentBBsTarg[name][b]:
-        #    p1 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
-        #    p2 = (targetBBs[name][b,j,0], targetBBs[name][b,j,1])
+        #    p1 = (targetBoxes[name][b,j,0], targetBoxes[name][b,j,1])
+        #    p2 = (targetBoxes[name][b,j,0], targetBoxes[name][b,j,1])
         #    mid = ( int(round((p1[0]+p2[0])/2.0)), int(round((p1[1]+p2[1])/2.0)) )
         #    rad = round(math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)/2.0)
         #    #print(mid)
@@ -477,10 +509,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             wth=2
         for aId,(i,j) in enumerate(adjacency):
             if not pretty or not hits[aId]:
-                x1 = round(targetBBs[0,i,0].item())
-                y1 = round(targetBBs[0,i,1].item())
-                x2 = round(targetBBs[0,j,0].item())
-                y2 = round(targetBBs[0,j,1].item())
+                x1 = round(targetBoxes[0,i,0].item())
+                y1 = round(targetBoxes[0,i,1].item())
+                x2 = round(targetBoxes[0,j,0].item())
+                y2 = round(targetBoxes[0,j,1].item())
                 cv2.line(image,(x1,y1),(x2,y2),gtcolor,wth)
 
         #Draw alginment between gt and pred bbs
@@ -491,8 +523,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 y1 = int(round(bbs[predI,2]))
                 if targI>0:
 
-                    x2 = round(targetBBs[0,targI,0].item())
-                    y2 = round(targetBBs[0,targI,1].item())
+                    x2 = round(targetBoxes[0,targI,0].item())
+                    y2 = round(targetBoxes[0,targI,1].item())
                     cv2.line(image,(x1,y1),(x2,y2),(1,0,1),1)
                 else:
                     #draw 'x', indicating not match
@@ -530,8 +562,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         retData['no_targs']=0
     else:
         retData['no_targs']=1
-    if nn_loss_final is not None:
+    if model.predNN:
         retData['nn_loss_final']=nn_loss_final
+        retData['nn_loss_diff']=nn_loss_final-nn_loss
+        retData['nn_acc_final'] = nn_acc
+    #if model.detector.predNumNeighbors:
+    #    retData['nn_acc_detector'] = nn_acc_d
+    if model.predClass:
+        retData['class_loss_final']=class_loss_final
+        retData['class_loss_diff']=class_loss_final-class_loss
     return (
              retData,
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)

@@ -293,6 +293,8 @@ class PairingGraph(BaseModel):
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
 
 
+        self.useOldDecay = config['use_old_len_decay'] if 'use_old_len_decay' in config else False
+
         if 'DEBUG' in config:
             self.detector.setDEBUG()
             self.setDEBUG()
@@ -1097,7 +1099,10 @@ class PairingGraph(BaseModel):
             if len(candidates)+numBoxes<MAX_GRAPH_SIZE and len(candidates)<MAX_CANDIDATES:
                 return list(candidates)
             else:
-                distMul=distMul*0.8 - 0.05
+                if self.useOldDecay:
+                    distMul*=0.75
+                else:
+                    distMul=distMul*0.8 - 0.05
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
         return list(candidates)[:MAX_GRAPH_SIZE-numBoxes]

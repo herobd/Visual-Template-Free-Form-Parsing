@@ -387,7 +387,8 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, har
         notClsTargInd = target[:,cls+13]!=1
         if len(pred.size())>1 and pred.size(0)>0:
             #print(pred.size())
-            clsPredInd = torch.argmax(pred[:,beforeCls+6:],dim=1)==cls
+            #clsPredInd = torch.argmax(pred[:,beforeCls+6:],dim=1)==cls
+            clsPredInd = torch.argmax(pred[:,-numClasses:],dim=1)==cls
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if  clsPredInd.any():

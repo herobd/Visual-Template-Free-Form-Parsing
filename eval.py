@@ -304,8 +304,8 @@ if __name__ == '__main__':
                         help='path to directory to save result images (default: None)')
     parser.add_argument('-i', '--index', default=None, type=int,
                         help='index on instance to process (default: None)')
-    parser.add_argument('-n', '--number', default=100, type=int,
-                        help='number of images to save out (from each train and valid) (default: 100)')
+    parser.add_argument('-n', '--number', default=0, type=int,
+                        help='number of images to save out (from each train and valid) (default: 0)')
     parser.add_argument('-g', '--gpu', default=None, type=int,
                         help='gpu number (default: cpu only)')
     parser.add_argument('-b', '--batchsize', default=None, type=int,

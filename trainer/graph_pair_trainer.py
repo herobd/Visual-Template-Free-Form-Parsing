@@ -77,6 +77,8 @@ class GraphPairTrainer(BaseTrainer):
         self.val_hard_detect_limit = config['trainer']['val_hard_detect_limit'] if 'val_hard_detect_limit' in config['trainer'] else 300
 
         self.useBadBBPredForRelLoss = config['trainer']['use_all_bb_pred_for_rel_loss'] if 'use_all_bb_pred_for_rel_loss' in config['trainer'] else False
+        if self.useBadBBPredForRelLoss is True:
+            self.useBadBBPredForRelLoss=1
 
         self.adaptLR = config['trainer']['adapt_lr'] if 'adapt_lr' in config['trainer'] else False
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
@@ -191,17 +193,21 @@ class GraphPairTrainer(BaseTrainer):
             #_=None
             #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.prealignedEdgePred(adj,relPred,relIndexes)
-            if self.model.predNN or self.model.predClass:
-                if target_num_neighbors is not None:
-                    alignedNN_use = target_num_neighbors[0]
-                bbPredNN_use = bbPred[:,0]
-                start=1
+            if bbPred is not None:
+                if self.model.predNN or self.model.predClass:
+                    if target_num_neighbors is not None:
+                        alignedNN_use = target_num_neighbors[0]
+                    bbPredNN_use = bbPred[:,0]
+                    start=1
+                else:
+                    start=0
+                if self.model.predClass:
+                    if targetBoxes is not None:
+                        alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
+                    bbPredClass_use = bbPred[:,start:start+self.model.numBBTypes]
             else:
-                start=0
-            if self.model.predClass:
-                if targetBoxes is not None:
-                    alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
-                bbPredClass_use = bbPred[:,start:start+self.model.numBBTypes]
+                bbPredNN_use=None
+                bbPredClass_use=None
         else:
             outputBoxes, outputOffsets, relPred, relIndexes, bbPred = self.model(image,
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
@@ -230,9 +236,13 @@ class GraphPairTrainer(BaseTrainer):
                     #We really don't care about the class of non-overlapping instances
                     if targetBoxes is not None:
                         toKeep = bbFullHit==1
-                        bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
-                        bbAlignment_use = bbAlignment[toKeep]
-                        alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                        if toKeep.any():
+                            bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
+                            bbAlignment_use = bbAlignment[toKeep]
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                        else:
+                            alignedClass_use = None
+                            bbPredClass_use = None
                     else:
                         alignedClass_use = None
             else:
@@ -259,6 +269,7 @@ class GraphPairTrainer(BaseTrainer):
         #    relLoss = torch.tensor(0.0,requires_grad=True).to(image.device)
         #relLoss = torch.tensor(0.0).to(image.device)
         relLoss = None
+        #seperating the loss into true and false portions is not only convienint, it balances the loss between true/false examples
         if predPairingShouldBeTrue is not None and predPairingShouldBeTrue.size(0)>0:
             ones = torch.ones_like(predPairingShouldBeTrue).to(image.device)
             relLoss = self.loss['rel'](predPairingShouldBeTrue,ones)
@@ -470,12 +481,12 @@ class GraphPairTrainer(BaseTrainer):
                     else:
                         relLoss = relFalseLoss
                 if relLoss is None:
-                    relLoss = torch.tensor(0.0)
-                else:
-                    relLoss = relLoss.cpu()
+                    relLoss = torch.tensor(0.0).to(image.device)
+                #else:
+                #    relLoss = relLoss.cpu()
                 if not self.model.detector_frozen:
                     boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)],target_num_neighbors)
-                    loss = relLoss*self.lossWeights['rel'] + boxLoss.cpu()*self.lossWeights['box']
+                    loss = relLoss*self.lossWeights['rel'] + boxLoss*self.lossWeights['box']
                 else:
                     boxLoss=torch.tensor(0.0)
                     loss = relLoss*self.lossWeights['rel']
@@ -561,6 +572,8 @@ class GraphPairTrainer(BaseTrainer):
                 loss=relFalseLoss=relLoss=boxLoss=None
                 instance=predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
                 #total_val_metrics += self._eval_metrics(output, target)
+        if mAP_count==0:
+            mAP_count=1
         toRet= {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_box_loss': total_box_loss / len(self.valid_data_loader),
@@ -658,7 +671,8 @@ class GraphPairTrainer(BaseTrainer):
             else:
                 #if self.useBadBBPredForRelLoss=='fixed' or (self.useBadBBPredForRelLoss and (predsWithNoIntersection[n0] or predsWithNoIntersection[n1])):
                 if self.useBadBBPredForRelLoss:
-                    predsNeg.append(predsAll[i])
+                    if self.useBadBBPredForRelLoss=='full' or np.random.rand()<self.useBadBBPredForRelLoss:
+                        predsNeg.append(predsAll[i])
                 scores.append( (sigPredsAll[i],False) )
                 if sigPredsAll[i]>self.thresh_rel:
                     badPred+=1

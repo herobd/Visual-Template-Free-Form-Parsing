@@ -532,6 +532,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         retData['no_targs']=1
     if nn_loss_final is not None:
         retData['nn_loss_final']=nn_loss_final
+    if class_loss_final is not None:
+        retData['class_loss_final']=class_loss_final
     return (
              retData,
              (lossThis, position_loss, conf_loss, class_loss, recall, precision)

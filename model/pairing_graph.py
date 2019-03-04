@@ -341,6 +341,8 @@ class PairingGraph(BaseModel):
         #I'm assuming batch size of one
         assert(len(bbPredictions)==1)
         bbPredictions=bbPredictions[0]
+        if self.no_grad_feats:
+            bbPredictions=bbPredictions.detach()
         ##print('process boxes: {}'.format(timeit.default_timer()-tic))
         #bbPredictions should be switched for GT for training? Then we can easily use BCE loss. 
         #Otherwise we have to to alignment first
@@ -348,8 +350,6 @@ class PairingGraph(BaseModel):
             if bbPredictions.size(0)==0:
                 return bbPredictions, offsetPredictions, None, None, None
             useBBs = bbPredictions[:,1:] #remove confidence score
-            if self.no_grad_feats:
-                useBBs = useBBs.detach()
         else:
             if gtBBs is None:
                 return bbPredictions, offsetPredictions, None, None, None

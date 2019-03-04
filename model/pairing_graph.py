@@ -343,7 +343,9 @@ class PairingGraph(BaseModel):
             bbPredictions = non_max_sup_iou(bbPredictions.cpu(),threshConf,0.4,hard_detect_limit)
         #I'm assuming batch size of one
         assert(len(bbPredictions)==1)
-        bbPredictions=bbPredictions[0].detach()
+        bbPredictions=bbPredictions[0]
+        if self.no_grad_feats:
+            bbPredictions=bbPredictions.detach()
         ##print('process boxes: {}'.format(timeit.default_timer()-tic))
         #bbPredictions should be switched for GT for training? Then we can easily use BCE loss. 
         #Otherwise we have to to alignment first

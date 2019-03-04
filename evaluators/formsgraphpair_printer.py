@@ -80,6 +80,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
     pretty = config['pretty'] if 'pretty' in config else False
+    useGT = config['useGT'] if 'useGT' in config else False
 
 
     resultsDirName='results'
@@ -210,14 +211,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if id1 not in idMap:
                         idMap[id1]=newId
                         if not usePredNN:
-                            numNeighbors.append(target_num_neighbors[0,bbAlignment[index]])
+                            numNeighbors.append(target_num_neighbors[0,bbAlignment[id1]])
                         else:
                             numNeighbors.append(predNN[id1])
                         newId+=1
                     if id2 not in idMap:
                         idMap[id2]=newId
                         if not usePredNN:
-                            numNeighbors.append(target_num_neighbors[0,bbAlignment[index]])
+                            numNeighbors.append(target_num_neighbors[0,bbAlignment[id2]])
                         else:
                             numNeighbors.append(predNN[id2])
                         newId+=1
@@ -289,6 +290,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         nn_loss_final = nn_loss_final.item()
     else:
         nn_loss_final=0
+    if model.predNN and predNN is not None:
+        predNN_p=bbPred[:,0]
+        diffs=torch.abs(predNN_p-target_num_neighborsT[0][bbAlignment].float())
+        nn_acc = (diffs<0.5).sum().item()
+        nn_acc /= predNN.size(0)
+    if model.detector.predNumNeighbors:
+        predNN_d = outputBoxes[:,6]
+        diffs=torch.abs(predNN_d-target_num_neighbors[0][bbAlignment].float())
+        nn_acc_d = (diffs<0.5).sum().item()
+        nn_acc_d /= predNN.size(0)
 
     if model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
         class_loss_final = F.binary_cross_entropy_with_logits(bbPredClass_use,alignedClass_use)
@@ -297,6 +308,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         class_loss_final = class_loss_final.item()
     else:
         class_loss_final = 0
+    #class_acc=0
     useOutputBBs=None
 
     truePred=falsePred=badPred=0
@@ -553,6 +565,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if model.predNN:
         retData['nn_loss_final']=nn_loss_final
         retData['nn_loss_diff']=nn_loss_final-nn_loss
+        retData['nn_acc_final'] = nn_acc
+    #if model.detector.predNumNeighbors:
+    #    retData['nn_acc_detector'] = nn_acc_d
     if model.predClass:
         retData['class_loss_final']=class_loss_final
         retData['class_loss_diff']=class_loss_final-class_loss

@@ -528,7 +528,7 @@ class GraphPairTrainer(BaseTrainer):
                     nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
 
-                    loss += nn_loss_final
+                    loss += nn_loss_final.to(loss.device)
                     nn_loss_final = nn_loss_final.item()
                 else:
                     nn_loss_final=0

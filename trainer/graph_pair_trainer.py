@@ -61,7 +61,23 @@ class GraphPairTrainer(BaseTrainer):
                     return ((1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + min_lr_mul
                 else: #odd
                     return (1-(1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
-                self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,trueCycle)
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,trueCycle)
+        elif self.useLearningSchedule=='1cycle':
+            low_lr_mul = config['trainer']['low_lr_mul'] if 'low_lr_mul' in config['trainer'] else 0.25
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.0001
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 1000
+            iters_in_trailoff = self.iterations-(2*cycle_size)
+            def oneCycle (step_num):
+                cycle_num = step_num//cycle_size
+                if step_num<cycle_size: #rising
+                    return ((1-low_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + low_lr_mul
+                elif step_num<cycle_size*2: #falling
+                    return (1-(1-low_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
+                else: #trail off
+                    t_step_num = step_num-(2*cycle_size)
+                    return low_lr_mul*(iters_in_trailoff-t_step_num)/iters_in_trailoff + min_lr_mul*t_step_num/iters_in_trailoff
+                    
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,oneCycle)
         elif self.useLearningSchedule is True:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)

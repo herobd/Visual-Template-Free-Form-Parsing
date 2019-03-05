@@ -293,6 +293,8 @@ class PairingGraph(BaseModel):
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
 
 
+        self.useOldDecay = config['use_old_len_decay'] if 'use_old_len_decay' in config else False
+
         if 'DEBUG' in config:
             self.detector.setDEBUG()
             self.setDEBUG()
@@ -311,7 +313,7 @@ class PairingGraph(BaseModel):
             print('Unfroze detector')
         
 
-    def forward(self, image, gtBBs=None, gtNNs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300):
+    def forward(self, image, gtBBs=None, gtNNs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300, debug=False):
         ##tic=timeit.default_timer()
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
@@ -351,6 +353,7 @@ class PairingGraph(BaseModel):
             if bbPredictions.size(0)==0:
                 return bbPredictions, offsetPredictions, None, None, None
             useBBs = bbPredictions[:,1:] #remove confidence score
+
         else:
             if gtBBs is None:
                 return bbPredictions, offsetPredictions, None, None, None
@@ -372,6 +375,8 @@ class PairingGraph(BaseModel):
         if useBBs.size(0)>1:
             #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
             if self.training: #0.3987808480 0.398469038200 not a big difference, but it's "the right" thing to do
+                if debug:
+                    import pdb;pdb.set_trace()
                 bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))# ,debug_image=image)
                 if bbAndRel_features is None:
                     return bbPredictions, offsetPredictions, None, None, None
@@ -410,11 +415,11 @@ class PairingGraph(BaseModel):
                 else:
                     bbOuts=bbOuts+1
                 if self.detector.predNumNeighbors and not useGTBBs:
-                    bbPredictions[:,6]=bbOuts[:,0]
+                    bbPredictions[:,6]=bbOuts[:,0].detach()
             if self.predClass:
                 startIndex = 6+self.detector.predNumNeighbors
                 if not useGTBBs:
-                    bbPredictions[:,startIndex:startIndex+self.numBBTypes] = torch.sigmoid(bbOuts[:,self.predNN:self.predNN+self.numBBTypes])
+                    bbPredictions[:,startIndex:startIndex+self.numBBTypes] = torch.sigmoid(bbOuts[:,self.predNN:self.predNN+self.numBBTypes].detach())
             return bbPredictions, offsetPredictions, relOuts, relIndexes, bbOuts
         else:
             return bbPredictions, offsetPredictions, None, None, None
@@ -1096,7 +1101,10 @@ class PairingGraph(BaseModel):
             if len(candidates)+numBoxes<MAX_GRAPH_SIZE and len(candidates)<MAX_CANDIDATES:
                 return list(candidates)
             else:
-                distMul=distMul*0.8 - 0.05
+                if self.useOldDecay:
+                    distMul*=0.75
+                else:
+                    distMul=distMul*0.8 - 0.05
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
         return list(candidates)[:MAX_GRAPH_SIZE-numBoxes]

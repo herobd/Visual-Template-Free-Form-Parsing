@@ -47,6 +47,16 @@ class GraphPairTrainer(BaseTrainer):
             cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
             lr_lambda = lambda step_num: (1-(1-min_lr_mul)*((step_num-1)%cycle_size)/(cycle_size-1))
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        if self.useLearningSchedule=='cyclic-full':
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.25
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
+            def trueCycle (step_num):
+                cycle_num = step_num//cycle_size
+                if cycle_num%2==0: #even, rising
+                    return ((1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + min_lr_mul
+                else: #odd
+                    return (1-(1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
+                self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,trueCycle)
         elif self.useLearningSchedule is True:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)

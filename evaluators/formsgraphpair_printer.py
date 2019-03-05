@@ -95,7 +95,12 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
+    if useGT:
+        outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,targetBoxesT,target_num_neighborsT,True,
+                hard_detect_limit=600)
+        outputBoxes=torch.cat((torch.ones(targetBoxesT.size(1),1),targetBoxesT[0]),dim=1)
+    else:
+        outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
 
     numClasses=2 #TODO no
     if model.predNN and bbPred is not None:

@@ -42,11 +42,42 @@ class GraphPairTrainer(BaseTrainer):
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
         self.useLearningSchedule = config['trainer']['use_learning_schedule'] if 'use_learning_schedule' in config['trainer'] else False
-        if self.useLearningSchedule=='cyclic':
+        if self.useLearningSchedule=='LR_test':
+            start_lr=0.000001
+            slope = (1-start_lr)/self.iterations
+            lr_lambda = lambda step_num: start_lr + slope*step_num
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule=='cyclic':
             min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.001
             cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
             lr_lambda = lambda step_num: (1-(1-min_lr_mul)*((step_num-1)%cycle_size)/(cycle_size-1))
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule=='cyclic-full':
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.25
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
+            def trueCycle (step_num):
+                cycle_num = step_num//cycle_size
+                if cycle_num%2==0: #even, rising
+                    return ((1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + min_lr_mul
+                else: #odd
+                    return (1-(1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,trueCycle)
+        elif self.useLearningSchedule=='1cycle':
+            low_lr_mul = config['trainer']['low_lr_mul'] if 'low_lr_mul' in config['trainer'] else 0.25
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.0001
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 1000
+            iters_in_trailoff = self.iterations-(2*cycle_size)
+            def oneCycle (step_num):
+                cycle_num = step_num//cycle_size
+                if step_num<cycle_size: #rising
+                    return ((1-low_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + low_lr_mul
+                elif step_num<cycle_size*2: #falling
+                    return (1-(1-low_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
+                else: #trail off
+                    t_step_num = step_num-(2*cycle_size)
+                    return low_lr_mul*(iters_in_trailoff-t_step_num)/iters_in_trailoff + min_lr_mul*t_step_num/iters_in_trailoff
+                    
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,oneCycle)
         elif self.useLearningSchedule is True:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
@@ -83,6 +114,8 @@ class GraphPairTrainer(BaseTrainer):
         self.adaptLR = config['trainer']['adapt_lr'] if 'adapt_lr' in config['trainer'] else False
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
         self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config['trainer'] else 15
+
+        self.debug = 'DEBUG' in  config['trainer']
 
         #Name change
         if 'edge' in self.lossWeights:
@@ -327,7 +360,8 @@ class GraphPairTrainer(BaseTrainer):
         ##toc=timeit.default_timer()
         ##print('loss: '+str(toc-tic))
         ##tic=timeit.default_timer()
-        predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
+        if not self.debug:
+            predPairingShouldBeTrue= predPairingShouldBeFalse=outputBoxes=outputOffsets=relPred=image=targetBoxes=relLossFalse=None
         if relLoss is not None:
             relLoss = relLoss.item()
         else:
@@ -529,7 +563,7 @@ class GraphPairTrainer(BaseTrainer):
                     nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
 
-                    loss += nn_loss_final
+                    loss += nn_loss_final.to(loss.device)
                     nn_loss_final = nn_loss_final.item()
                 else:
                     nn_loss_final=0

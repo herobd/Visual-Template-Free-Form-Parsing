@@ -322,9 +322,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     matches=0
     i=0
     numMissedByHeur=0
+    targGotHit=set()
     for i,(n0,n1) in enumerate(relCand):
         t0 = bbAlignment[n0].item()
         t1 = bbAlignment[n1].item()
+        if t0>=0 and bbFullHit[n0]:
+            targGotHit.add(t0)
+        if t1>=0 and bbFullHit[n1]:
+            targGotHit.add(t1)
         if t0>=0 and t1>=0 and bbFullHit[n0] and bbFullHit[n1]:
             if (min(t0,t1),max(t0,t1)) in adjacency:
                 matches+=1
@@ -346,7 +351,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     numMissedByDetect=0
     for t0,t1 in adjacency:
-        if t0 not in bbAlignment or t1 not in bbAlignment:
+        if t0 not in targGotHit or t1 not in targGotHit:
             numMissedByHeur-=1
             numMissedByDetect+=1
     heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)

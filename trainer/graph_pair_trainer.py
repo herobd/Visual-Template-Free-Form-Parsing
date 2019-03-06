@@ -246,7 +246,7 @@ class GraphPairTrainer(BaseTrainer):
                     otherThresh=self.conf_thresh_init, otherThreshIntur=threshIntur, hard_detect_limit=self.train_hard_detect_limit)
             #gtPairing,predPairing = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap, bbAlignment, bbFullHit = self.alignEdgePred(targetBoxes,adj,outputBoxes,relPred,relIndexes)
-            if bbPred is not None:
+            if bbPred is not None and bbPred.size(0)>0:
                 #create aligned GT
                 #this was wrong...
                     #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets

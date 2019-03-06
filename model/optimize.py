@@ -34,7 +34,9 @@ def optimizeRelationships(relPred,relNodes,gtNodeNeighbors,penalty=490):
     for i in range(len(gtNodeNeighbors)):
         cs.append(constraint[i]<=1)
     problem = cvxpy.Problem(cvxpy.Maximize(obj),cs)
-    problem.solve(solver=cvxpy.GLPK_MI)
+    #problem.solve(solver=cvxpy.GLPK_MI)
+    problem.solve(solver=cvxpy.ECOS_BB)
+    assert(useRel.value is not None)
     return useRel.value
 def optimizeRelationshipsSoft(relPred,relNodes,predNodeNeighbors,penalty=1.2):
     #if 'cvxpy' not in sys.modules:

@@ -83,6 +83,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     useGT = config['useGT'] if 'useGT' in config else False
 
 
+    numClasses=2 #TODO no hard code
+
     resultsDirName='results'
     #if outDir is not None and resultsDirName is not None:
         #rPath = os.path.join(outDir,resultsDirName)
@@ -98,16 +100,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if useGT:
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,targetBoxesT,target_num_neighborsT,True,
                 hard_detect_limit=600)
-        outputBoxes=torch.cat((torch.ones(targetBoxesT.size(1),1),targetBoxesT[0]),dim=1)
+        outputBoxes=torch.cat((torch.ones(targetBoxesT.size(1),1),targetBoxesT[0,:,0:5],targetBoxesT[0,:,-numClasses:]),dim=1) #add score
     else:
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
 
-    numClasses=2 #TODO no
     if model.predNN and bbPred is not None:
         predNN = bbPred[:,0]
     else:
         predNN=None
-    if  model.detector.predNumNeighbors:
+    if  model.detector.predNumNeighbors and not useGT:
         #useOutputBBs=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
         extraPreds=1
         if not model.predNN:
@@ -185,9 +186,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
     if model.rotation:
-        bbAlignment, bbFullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,extraPreds,hard_thresh=False)
+        bbAlignment, bbFullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,0.9,numClasses,extraPreds,hard_thresh=False)
     else:
-        bbAlignment, bbFullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,extraPreds,hard_thresh=False)
+        bbAlignment, bbFullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.5,numClasses,extraPreds,hard_thresh=False)
     if targetBoxes is not None:
         target_for_b = targetBoxes[0,:,:]
     else:
@@ -230,10 +231,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     newRelCand.append( [idMap[id1],idMap[id2]] )            
 
 
-            if not usePredNN:
-                decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
-            else:
-                decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
+            #if not usePredNN:
+                #    decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
+            #else:
+            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
             decision= torch.from_numpy( np.round_(decision).astype(int) )
             decision=decision.to(relPred.device)
             relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
@@ -300,7 +301,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         diffs=torch.abs(predNN_p-target_num_neighborsT[0][bbAlignment].float())
         nn_acc = (diffs<0.5).sum().item()
         nn_acc /= predNN.size(0)
-    if model.detector.predNumNeighbors:
+    if model.detector.predNumNeighbors and not useGT:
         predNN_d = outputBoxes[:,6]
         diffs=torch.abs(predNN_d-target_num_neighbors[0][bbAlignment].float())
         nn_acc_d = (diffs<0.5).sum().item()
@@ -324,7 +325,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     for i,(n0,n1) in enumerate(relCand):
         t0 = bbAlignment[n0].item()
         t1 = bbAlignment[n1].item()
-        if t0>=0 and t1>=0:
+        if t0>=0 and t1>=0 and bbFullHit[n0] and bbFullHit[n1]:
             if (min(t0,t1),max(t0,t1)) in adjacency:
                 matches+=1
                 scores.append( (relPred[i],True) )

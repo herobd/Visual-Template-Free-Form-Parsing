@@ -74,7 +74,7 @@
         "conf_thresh_change_iters": 5000,
         "retry_count":3,
 
-        "unfreeze_detector": 4000,
+        "unfreeze_detector": 99999000,
         "partial_from_gt": 8000,
         "stop_from_gt": 200000,
 
@@ -82,7 +82,7 @@
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Simple18_staggerLight_NN/checkpoint-iteration100000.pth.tar",
+        "detector_checkpoint": "saved/Forms18_augRFh_staggerLight_NN/checkpoint-iteration200000.pth.tar",
         "conf_thresh": 0.92,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",
@@ -94,8 +94,8 @@
             "node_channels": 0,
             "edge_channels": 1,
             "layers": ["FC256","FC256"],
-            "shape_layers": "saved/Simple19_pairNotGT_feat_wH/checkpoint-latest.pth.tar",
-            "old_shape_layers": "saved/Simple18_pairNotGT_feat_wH/checkpoint-iteration8000.pth.tar",
+            "xxshape_layers": "saved/Simple19_pairNotGT_feat_wH/checkpoint-iteration6000.pth.tar",
+            "shape_layers": "saved/Simple18_pairNotGT_feat_wH/checkpoint-iteration6000.pth.tar",
             "weight_split": 0.0
         },
         "featurizer_start_h": 10,

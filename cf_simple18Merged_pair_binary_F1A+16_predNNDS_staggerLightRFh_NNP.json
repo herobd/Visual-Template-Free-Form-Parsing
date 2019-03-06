@@ -4,7 +4,7 @@
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":true,
+    "super_computer":false,
     "split": "merged",
     "data_loader": {
         "data_set_name": "FormsGraphPair",
@@ -66,7 +66,7 @@
         "class": "GraphPairTrainer",
         "iterations": 150000,
         "save_dir": "saved/",
-        "val_step": 5000,
+        "val_step": 50000,
         "save_step": 50000,
         "save_step_minor": 250,
         "log_step": 250,

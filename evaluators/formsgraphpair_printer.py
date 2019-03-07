@@ -105,7 +105,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if useDetections=='gt':
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,targetBoxesT,target_num_neighborsT,True,
                 otherThresh=confThresh,
-                otherThreshIntur=1 if confThresh is not None else 0,
+                otherThreshIntur=1 if confThresh is not None else None,
                 hard_detect_limit=600)
         outputBoxes=torch.cat((torch.ones(targetBoxesT.size(1),1),targetBoxesT[0,:,0:5],targetBoxesT[0,:,-numClasses:]),dim=1) #add score
     elif type(useDetections) is str:
@@ -136,7 +136,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             savedNN=savedNN.to(gpu)
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,savedBoxes,None,"saved",
                 otherThresh=confThresh,
-                otherThreshIntur=1 if confThresh is not None else 0,
+                otherThreshIntur=1 if confThresh is not None else None,
                 hard_detect_limit=600)
         outputBoxes=savedBoxes
     elif useDetections:
@@ -145,7 +145,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,
                 otherThresh=confThresh,
-                otherThreshIntur=1 if confThresh is not None else 0,
+                otherThreshIntur=1 if confThresh is not None else None,
                 hard_detect_limit=600)
 
     if model.predNN and bbPred is not None:

@@ -350,6 +350,8 @@ class PairingGraph(BaseModel):
             if bbPredictions.size(0)==0:
                 return bbPredictions, offsetPredictions, None, None, None
             useBBs = bbPredictions[:,1:] #remove confidence score
+        elif useGTBBs=='saved':
+            useBBs = gtBBs[:,1:]
         else:
             if gtBBs is None:
                 return bbPredictions, offsetPredictions, None, None, None

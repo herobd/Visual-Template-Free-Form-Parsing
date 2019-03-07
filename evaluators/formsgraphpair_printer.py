@@ -11,6 +11,8 @@ from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist, computeAP
 from model.optimize import optimizeRelationships, optimizeRelationshipsSoft
+import json
+from utils.forms_annotations import fixAnnotations, getBBInfo
 
 
 def plotRect(img,color,xyrhw):
@@ -80,7 +82,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
 
     pretty = config['pretty'] if 'pretty' in config else False
-    useGT = config['useGT'] if 'useGT' in config else False
+    useDetections = config['useDetections'] if 'useDetections' in config else False
+    if 'useDetect' in config:
+        useDetections = config['useDetect']
+    confThresh = config['conf_thresh'] if 'conf_thresh' in config else None
 
 
     numClasses=2 #TODO no hard code
@@ -97,18 +102,57 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     #dataT = __to_tensor(data,gpu)
     #print('{}: {} x {}'.format(imageName,data.shape[2],data.shape[3]))
-    if useGT:
+    if useDetections=='gt':
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,targetBoxesT,target_num_neighborsT,True,
+                otherThresh=confThresh,
+                otherThreshIntur=1 if confThresh is not None else 0,
                 hard_detect_limit=600)
         outputBoxes=torch.cat((torch.ones(targetBoxesT.size(1),1),targetBoxesT[0,:,0:5],targetBoxesT[0,:,-numClasses:]),dim=1) #add score
+    elif type(useDetections) is str:
+        dataset=config['DATASET']
+        jsonPath = os.path.join(useDetections,imageName+'.json')
+        with open(os.path.join(jsonPath)) as f:
+            annotations = json.loads(f.read())
+        fixAnnotations(dataset,annotations)
+        savedBoxes = torch.FloatTensor(len(annotations['byId']),6+model.detector.predNumNeighbors+numClasses)
+        for i,(id,bb) in enumerate(annotations['byId'].items()):
+            qX, qY, qH, qW, qR, qIsText, qIsField, qIsBlank, qNN = getBBInfo(bb,dataset.rotate,useBlankClass=not dataset.no_blanks)
+            savedBoxes[i,0]=1 #conf
+            savedBoxes[i,1]=qX*scale #x-center, already scaled
+            savedBoxes[i,2]=qY*scale #y-center
+            savedBoxes[i,3]=qR #rotation
+            savedBoxes[i,4]=qH*scale
+            savedBoxes[i,5]=qW*scale
+            if model.detector.predNumNeighbors:
+                extra=1
+                savedBoxes[i,6]=qNN
+            else:
+                extra=0
+            savedBoxes[i,6+extra]=qIsText
+            savedBoxes[i,7+extra]=qIsField
+            
+        if gpu is not None:
+            savedBoxes=savedBoxes.to(gpu)
+            savedNN=savedNN.to(gpu)
+        outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,savedBoxes,None,"saved",
+                otherThresh=confThresh,
+                otherThreshIntur=1 if confThresh is not None else 0,
+                hard_detect_limit=600)
+        outputBoxes=savedBoxes
+    elif useDetections:
+        print('Unknown detection flag: '+useDetections)
+        exit()
     else:
-        outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,hard_detect_limit=600)
+        outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,
+                otherThresh=confThresh,
+                otherThreshIntur=1 if confThresh is not None else 0,
+                hard_detect_limit=600)
 
     if model.predNN and bbPred is not None:
         predNN = bbPred[:,0]
     else:
         predNN=None
-    if  model.detector.predNumNeighbors and not useGT:
+    if  model.detector.predNumNeighbors and not useDetections:
         #useOutputBBs=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
         extraPreds=1
         if not model.predNN:
@@ -176,7 +220,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         else:
             print('ERROR, unknown rule {}'.format(config['rule']))
             exit()
-    else:
+    elif relPred is not None:
         relPred = 2*torch.sigmoid(relPred)[:,0] -1
 
 
@@ -280,9 +324,13 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #We really don't care about the class of non-overlapping instances
             if targetBoxes is not None:
                 toKeep = bbFullHit==1
-                bbPredClass_use = bbPred[toKeep][:,start:start+model.numBBTypes]
-                bbAlignment_use = bbAlignment[toKeep]
-                alignedClass_use =  targetBoxesT[0][bbAlignment_use][:,13:13+model.numBBTypes] #There should be no -1 indexes in hereS
+                if toKeep.any():
+                    bbPredClass_use = bbPred[toKeep][:,start:start+model.numBBTypes]
+                    bbAlignment_use = bbAlignment[toKeep]
+                    alignedClass_use =  targetBoxesT[0][bbAlignment_use][:,13:13+model.numBBTypes] #There should be no -1 indexes in hereS
+                else:
+                    bbPredClass_use=None
+                    alignedClass_use=None
             else:
                 alignedClass_use = None
     else:
@@ -301,7 +349,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         diffs=torch.abs(predNN_p-target_num_neighborsT[0][bbAlignment].float())
         nn_acc = (diffs<0.5).sum().item()
         nn_acc /= predNN.size(0)
-    if model.detector.predNumNeighbors and not useGT:
+    elif model.predNN:
+        nn_acc = 0 
+    if model.detector.predNumNeighbors and not useDetections:
         predNN_d = outputBoxes[:,6]
         diffs=torch.abs(predNN_d-target_num_neighbors[0][bbAlignment].float())
         nn_acc_d = (diffs<0.5).sum().item()

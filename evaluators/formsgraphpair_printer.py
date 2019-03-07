@@ -322,6 +322,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     matches=0
     i=0
     numMissedByHeur=0
+    #hitRels=set()
     for i,(n0,n1) in enumerate(relCand):
         t0 = bbAlignment[n0].item()
         t1 = bbAlignment[n1].item()

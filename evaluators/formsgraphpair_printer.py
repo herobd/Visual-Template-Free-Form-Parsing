@@ -257,7 +257,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,model.numBBTypes,beforeCls=extraPreds)
     #align bb predictions (final) with GT
-    if bbPred is not None:
+    if bbPred is not None and bbPred.size(0)>0:
         #create aligned GT
         #this was wrong...
             #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
@@ -322,10 +322,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     matches=0
     i=0
     numMissedByHeur=0
-    #hitRels=set()
+    targGotHit=set()
     for i,(n0,n1) in enumerate(relCand):
         t0 = bbAlignment[n0].item()
         t1 = bbAlignment[n1].item()
+        if t0>=0 and bbFullHit[n0]:
+            targGotHit.add(t0)
+        if t1>=0 and bbFullHit[n1]:
+            targGotHit.add(t1)
         if t0>=0 and t1>=0 and bbFullHit[n0] and bbFullHit[n1]:
             if (min(t0,t1),max(t0,t1)) in adjacency:
                 matches+=1
@@ -347,7 +351,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     numMissedByDetect=0
     for t0,t1 in adjacency:
-        if t0 not in bbAlignment or t1 not in bbAlignment:
+        if t0 not in targGotHit or t1 not in targGotHit:
             numMissedByHeur-=1
             numMissedByDetect+=1
     heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)

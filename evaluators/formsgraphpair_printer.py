@@ -121,8 +121,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             savedBoxes[i,1]=qX*scale #x-center, already scaled
             savedBoxes[i,2]=qY*scale #y-center
             savedBoxes[i,3]=qR #rotation
-            savedBoxes[i,4]=qH*scale
-            savedBoxes[i,5]=qW*scale
+            savedBoxes[i,4]=qH*scale/2
+            savedBoxes[i,5]=qW*scale/2
             if model.detector.predNumNeighbors:
                 extra=1
                 savedBoxes[i,6]=qNN
@@ -133,12 +133,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             
         if gpu is not None:
             savedBoxes=savedBoxes.to(gpu)
-            savedNN=savedNN.to(gpu)
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,savedBoxes,None,"saved",
                 otherThresh=confThresh,
                 otherThreshIntur=1 if confThresh is not None else None,
                 hard_detect_limit=600)
-        outputBoxes=savedBoxes
+        outputBoxes=savedBoxes.cpu()
     elif useDetections:
         print('Unknown detection flag: '+useDetections)
         exit()
@@ -290,6 +289,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if outputBoxes.size(0)>0:
         maxConf = outputBoxes[:,0].max().item()
         minConf = outputBoxes[:,0].min().item()
+        if useDetections:
+            minConf=0
     #threshConf = max(maxConf*THRESH,0.5)
     #if model.rotation:
     #    outputBoxes = non_max_sup_dist(outputBoxes.cpu(),threshConf,3)
@@ -310,14 +311,18 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         if model.predNN:
             start=1
             toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
-            bbPredNN_use = bbPred[toKeep][:,0]
-            bbAlignment_use = bbAlignment[toKeep]
-            #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-            if target_num_neighborsT is not None:
-                target_num_neighbors_use = torch.cat((target_num_neighborsT[0].float(),torch.zeros(1).to(target_num_neighborsT.device)),dim=0)
+            if toKeep.any():
+                bbPredNN_use = bbPred[toKeep][:,0]
+                bbAlignment_use = bbAlignment[toKeep]
+                #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                if target_num_neighborsT is not None:
+                    target_num_neighbors_use = torch.cat((target_num_neighborsT[0].float(),torch.zeros(1).to(target_num_neighborsT.device)),dim=0)
+                else:
+                    target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+                alignedNN_use = target_num_neighbors_use[bbAlignment_use]
             else:
-                target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-            alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+                bbPredNN_use=None
+                alignedNN_use=None
         else:
             start=0
         if model.predClass:

@@ -566,6 +566,8 @@ class PairingGraph(BaseModel):
                 masks[i,1,rr,cc]=1
                 if self.expandedRelContext is not None:
                     cropArea = allMasks[round(rois[i,2].item()):round(rois[i,4].item())+1,round(rois[i,1].item()):round(rois[i,3].item())+1]
+                    if len(cropArea.shape)==0:
+                        raise ValueError("RoI is bad: {}:{},{}:{} for size {}".format(round(rois[i,2].item()),round(rois[i,4].item())+1,round(rois[i,1].item()),round(rois[i,3].item())+1,allMasks.shape))
                     masks[i,2] = F.upsample(cropArea[None,None,...], size=(self.pool2_h,self.pool2_w), mode='bilinear')[0,0]
                     #masks[i,2] = cv2.resize(cropArea,(stackedEdgeFeatWindows.size(2),stackedEdgeFeatWindows.size(3)))
                     if debug_image is not None:

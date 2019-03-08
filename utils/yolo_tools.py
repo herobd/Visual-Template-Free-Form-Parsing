@@ -199,11 +199,11 @@ def allBoxDistNeg(boxes1,boxes2):
     return dist*-1
  
 #input is tensors of shape [instance,(conf,x,y,rot,h,w)]
-def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False,beforeCls=0):
-    return AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,allIOU)
-def AP_dist(target,pred,dist_thresh,numClasses=2,ignoreClasses=False,beforeCls=0):
-    return AP_(target,pred,-dist_thresh,numClasses,ignoreClasses,beforeCls,allBoxDistNeg)
-def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
+def AP_iou(target,pred,iou_thresh,numClasses=2,ignoreClasses=False,beforeCls=0,getClassAP=False):
+    return AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,allIOU,getClassAP)
+def AP_dist(target,pred,dist_thresh,numClasses=2,ignoreClasses=False,beforeCls=0,getClassAP=False):
+    return AP_(target,pred,-dist_thresh,numClasses,ignoreClasses,beforeCls,allBoxDistNeg,getClassAP)
+def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc,getClassAP):
     #mAP=0.0
     #aps=[]
     precisions=[]
@@ -225,21 +225,25 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
         else:
             #numClasses=pred.size(1)-6
             ap=0
+            class_ap=[]
             for cls in range(numClasses):
                 if (torch.argmax(pred[:,beforeCls+6:],dim=1)==cls).any():
                     #aps.append(0) #but we did for this class :(
                     ap+=0
                     precisions.append(0)
+                    class_ap.append(0)
                 else:
                     #aps.append(1) #we didn't for this class :)
                     ap+=1
                     precisions.append(1)
+                    class_ap.append(1)
                 recalls.append(1)
-        return ap/numClasses, precisions, recalls
+        return ap/numClasses, precisions, recalls, class_ap
     else:
-        return 1, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
+        return 1, [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
     allScores=[]
+    classScores=[[]]*numClasses
     if len(pred.size())>1 and pred.size(0)>0:
         #This is an alternate metric that computes AP of all classes together
         #Your only a hit if you have the same class
@@ -259,8 +263,11 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
         #add all the preds that didn't have a hit
         hasHit,_ = validHits.max(dim=0) #which preds have hits
         notHitScores = pred[1-hasHit,0]
+        notHitClass = predClasses_index[1-hasHit]
         for i in range(notHitScores.shape[0]):
             allScores.append( (notHitScores[i].item(), False) )
+            cls = notHitClass[i]
+            classScores[cls].append( (notHitScores[i].item(), False) )
 
         # if something has multiple hits, it gets paired to the closest (with matching class)
         allIOUs[1-validHits] -= 9999999 #Force these to be smaller
@@ -270,17 +277,18 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
                 allScores.append( (pred[i,0].item(),True) )
                 #but now we've consumed this pred, so we'll zero its hit
                 validHits[maxValidHitIndexes[i],i]=0
+                cls = predClasses_index[i]
+                classScores[cls].append( (pred[i,0].item(),True) )
 
         #add nan scores for missed targets
         gotHit,gotHitIndex = torch.max(validHits,dim=1)
         for i in range((gotHit==0).sum()):
             allScores.append( (float('nan'),True) )
-        
-        ap=computeAP(allScores)
-    elif target.size(0)>0:
-        ap=0
+            cls = targetClasses_index[i]
+            classScores[cls].append( (float('nan'),True) )
     else:
-        ap=1
+        allScores.append( (float('nan'),True) )
+        classScores=[(float('nan'),True)]*numClasses
 
 
     if ignoreClasses:
@@ -347,8 +355,11 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc):
             #aps.append(1)
             precisions.append(1)
             recalls.append(1)
-
-    return ap, precisions, recalls
+    
+    if getClassAP:
+        return computeAP(allScores), precisions, recalls, [computeAP(scores) for scores in classScores]
+    else:
+        return computeAP(allScores), precisions, recalls
 
 
 def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0,hard_thresh=True):

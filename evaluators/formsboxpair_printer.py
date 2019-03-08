@@ -139,6 +139,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
     #aps_3=[]
     aps_5=[]
+    class_aps=[]
     apsDiff=[]
     apsSame=[]
     #aps_7=[]
@@ -156,15 +157,16 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
         else:
             target_for_b = torch.empty(0)
         if model.rotation:
-            ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBBs[b],0.9,ignoreClasses=False)
-            apCls_5, precCls_5, recallCls_5 =AP_dist(target_for_b,outputBBs[b],0.9,ignoreClasses=False)
+            ap_5, prec_5, recall_5, class_ap =AP_dist(target_for_b,outputBBs[b],0.9,ignoreClasses=False, getClassAP=True)
+            #apCls_5, precCls_5, recallCls_5 =AP_dist(target_for_b,outputBBs[b],0.9,ignoreClasses=False)
         else:
-            ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
-            apCls_5, precCls_5, recallCls_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
+            ap_5, prec_5, recall_5, class_ap =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=False, getClassAP=True)
+            #apCls_5, precCls_5, recallCls_5 =AP_iou(target_for_b,outputBBs[b],0.5,ignoreClasses=False)
         #ap_3, prec_3, recall_3 =AP_iou(target_for_b,outputBBs[b],0.3,model.numBBTypes)
         #ap_7, prec_7, recall_7 =AP_iou(target_for_b,outputBBs[b],0.7,model.numBBTypes)
 
         aps_5.append(ap_5 )
+        class_aps.append(class_ap)
         #aps_3.append(ap_3 )
         #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
@@ -309,6 +311,7 @@ def FormsBoxPair_printer(config,instance, model, gpu, metrics, outDir=None, star
              #  'prec':np.array(precs_5).sum(axis=0),
              #}, 
              { 'ap_5':aps_5,
+               'class_aps':class_aps,
                #'ap_3':aps_3,
                #'ap_7':aps_7,
                'recall':recalls_5,

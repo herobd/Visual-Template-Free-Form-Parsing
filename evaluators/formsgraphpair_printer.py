@@ -544,9 +544,12 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if relPred[i]>-1:
                     score = (relPred[i]+1)/2
                     pruned=False
-                else:
+                elif pretty!="light":
                     score = (relPred[i]+2+1)/2
                     pruned=True
+                else:
+                    score = (relPred[i]+1)/2
+                    pruned=False
             if relPred[i]>EDGE_THRESH or (pretty and score>EDGE_THRESH):
                 ind1 = relCand[i][0]
                 ind2 = relCand[i][1]
@@ -585,7 +588,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
                     cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
                 numrelpred+=1
-        if pretty:
+        if pretty and pretty!="light":
             for i in range(len(relCand)):
                 #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
                 if relPred[i]>-1:

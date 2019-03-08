@@ -39,6 +39,8 @@ class GraphPairDataset(torch.utils.data.Dataset):
         else:
             self.transform = None
         self.rescale_range = config['rescale_range']
+        if type(self.rescale_range) is float:
+            self.rescale_range = [self.rescale_range,self.rescale_range]
         if self.rescale_range[0]==450:
             self.rescale_range[0]=0.2
         elif self.rescale_range[0]>1.0:

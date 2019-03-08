@@ -393,15 +393,24 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, har
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if  clsPredInd.any():
             if notClsTargInd.any():
-                allIOUs[notClsTargInd][:,clsPredInd]=0 #set IOU for instances that are from different class than predicted to 0 (different class so no intersection)
-            #targIndexes = targIndex[clsPredInd]
+                notClsTargIndX = notClsTargInd[:,None].expand(allIOUs.size())
+                clsPredIndX = clsPredInd[None,:].expand(allIOUs.size())
+                allIOUs[notClsTargIndX*clsPredIndX]=0 #set IOU for instances that are from different class than predicted to 0 (different class so no intersection)
+                #allIOUs[notClsTargInd][:,clsPredInd]=0 this doesn't work for some reason
             val,targIndexes = torch.max(allIOUs[:,clsPredInd],dim=0)
             #targIndexes has the target indexes for the predictions of cls
 
             #assign -1 index to places that don't really have a match
             #targIndexes[:] = torch.where(val==0,-torch.ones_like(targIndexes),targIndexes)
             targIndexes[val==0] = -1
+            #targIndexes[notClsTargInd] = -1
+            #assert(notClsTargInd[targIndexes].sum()==0)
             targIndex[clsPredInd] =  targIndexes
+
+    #debug
+    #for i in range(targIndex.size(0)):
+        #if targIndex[i]>=0:
+    #         assert(torch.argmax(pred[i,-numClasses:],dim=0) == torch.argmax(target[targIndex[i],-numClasses:],dim=0))
             
     #import pdb;pdb.set_trace()
     if hard_thresh:

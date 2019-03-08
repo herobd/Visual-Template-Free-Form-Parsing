@@ -198,6 +198,12 @@ def fixAnnotations(this,annotations):
             pairsToRemove.append(i)
         elif pair[0] in idsToRemove or pair[1] in idsToRemove:
             pairsToRemove.append(i)
+        elif (this.only_opposite_pairs and 
+                ( (annotations['byId'][pair[0]]['type'][:4]=='text' and 
+                   annotations['byId'][pair[1]]['type'][:4]=='text') or
+                  (annotations['byId'][pair[0]]['type'][:4]=='field' and 
+                    annotations['byId'][pair[1]]['type'][:4]=='field') )):
+            pairsToRemove.append(i)
 
     pairsToRemove.sort(reverse=True)
     last=None

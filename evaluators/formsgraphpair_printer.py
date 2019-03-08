@@ -107,7 +107,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 otherThresh=confThresh,
                 otherThreshIntur=1 if confThresh is not None else None,
                 hard_detect_limit=600)
-        outputBoxes=torch.cat((torch.ones(targetBoxesT.size(1),1),targetBoxesT[0,:,0:5],targetBoxesT[0,:,-numClasses:]),dim=1) #add score
+        outputBoxes=torch.cat((torch.ones(targetBoxes.size(1),1),targetBoxes[0,:,0:5],targetBoxes[0,:,-numClasses:]),dim=1) #add score
     elif type(useDetections) is str:
         dataset=config['DATASET']
         jsonPath = os.path.join(useDetections,imageName+'.json')

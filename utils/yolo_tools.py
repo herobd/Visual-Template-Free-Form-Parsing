@@ -362,13 +362,13 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc,getClas
         return computeAP(allScores), precisions, recalls
 
 
-def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0,hard_thresh=True):
-    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allIOU,hard_thresh)
-def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses,beforeCls=0,hard_thresh=True):
+def getTargIndexForPreds_iou(target,pred,iou_thresh,numClasses,beforeCls=0,hard_thresh=True,fixed=True):
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allIOU,hard_thresh,fixed)
+def getTargIndexForPreds_dist(target,pred,iou_thresh,numClasses,beforeCls=0,hard_thresh=True,fixed=True):
     raise NotImplemented('Checking if preds with no intersection not implemented for dist')
-    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allBoxDistNeg,hard_thresh)
+    return getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,allBoxDistNeg,hard_thresh,fixed)
 
-def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, hard_thresh):
+def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, hard_thresh,fixed):
     targIndex = torch.LongTensor((pred.size(0)))
     targIndex[:] = -1
     #mAP=0.0
@@ -403,7 +403,7 @@ def getTargIndexForPreds(target,pred,iou_thresh,numClasses,beforeCls,getLoc, har
         else:
             clsPredInd = torch.empty(0,dtype=torch.uint8)
         if  clsPredInd.any():
-            if notClsTargInd.any():
+            if notClsTargInd.any() and fixed:
                 notClsTargIndX = notClsTargInd[:,None].expand(allIOUs.size())
                 clsPredIndX = clsPredInd[None,:].expand(allIOUs.size())
                 allIOUs[notClsTargIndX*clsPredIndX]=0 #set IOU for instances that are from different class than predicted to 0 (different class so no intersection)

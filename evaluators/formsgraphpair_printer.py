@@ -56,7 +56,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
         return image, bbs, adjaceny, num_neighbors
 
-    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else 0.0
+    EDGE_THRESH = 0#config['THRESH'] if 'THRESH' in config else 0.0
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -283,6 +283,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
             relPred[1-keep] -=2
             EDGE_THRESH=-1
+    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else EDGE_THRESH
 
     data = data.numpy()
     #threshed in model
@@ -504,10 +505,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 #    cv2.bb(bbImage[:,:,2],p1,p2,shade,2)
                 #elif name=='field_end_gt' or name=='field_start_gt':
                 #    cv2.bb(bbImage[:,:,0],p1,p2,shade,2)
-                if bbs[j,6] > bbs[j,7]:
+                if bbs[j,6+extraPreds] > bbs[j,7+extraPreds]:
                     color=(0,0,shade) #text
                 else:
-                    color=(shade,0,0) #field
+                    color=(0,shade,shade) #field
                 plotRect(image,color,bbs[j,1:6])
 
                 if predNN is not None and not pretty: #model.detector.predNumNeighbors:
@@ -531,13 +532,22 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
 
+        EDGE_THRESH = relPred.max() * EDGE_THRESH
+
 
         #Draw pred pairings
         numrelpred=0
         hits = [False]*len(adjacency)
         for i in range(len(relCand)):
             #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
-            if relPred[i]>EDGE_THRESH:
+            if pretty:
+                if relPred[i]>-1:
+                    score = (relPred[i]+1)/2
+                    pruned=False
+                else:
+                    score = (relPred[i]+2+1)/2
+                    pruned=True
+            if relPred[i]>EDGE_THRESH or (pretty and score>EDGE_THRESH):
                 ind1 = relCand[i][0]
                 ind2 = relCand[i][1]
                 x1 = round(bbs[ind1,1])
@@ -548,30 +558,77 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if pretty:
                     targ1 = bbAlignment[ind1].item()
                     targ2 = bbAlignment[ind2].item()
-                    if (targ1,targ2) in adjacency:
-                        aId = adjacency.index((targ1,targ2))
-                    elif (targ2,targ1) in adjacency:
-                        aId = adjacency.index((targ2,targ1))
-                    else:
-                        aId = None
+                    aId=None
+                    if bbFullHit[ind1] and bbFullHit[ind2]:
+                        if (targ1,targ2) in adjacency:
+                            aId = adjacency.index((targ1,targ2))
+                        elif (targ2,targ1) in adjacency:
+                            aId = adjacency.index((targ2,targ1))
                     if aId is None:
-                        cv2.line(image,(x1,y1),(x2,y2),(1,0,0),2)
+                        color=np.array([1,0,0])
                     else:
-                        cv2.line(image,(x1,y1),(x2,y2),(0.3,1,0),2)
+                        color=np.array([0,1,0])
                         hits[aId]=True
+                    #if pruned:
+                    #    color = color*0.7
+                    cv2.line(image,(x1,y1),(x2,y2),color.tolist(),1 if pruned else 2)
+                    #color=color/3
+                    #x = int((x1+x2)/2)
+                    #y = int((y1+y2)/2)
+                    #if pruned:
+                    #    cv2.putText(image,'[{:.2}]'.format(score),(x,y), cv2.FONT_HERSHEY_PLAIN, 0.6,color.tolist(),1)
+                    #else:
+                    #    cv2.putText(image,'{:.2}'.format(score),(x,y), cv2.FONT_HERSHEY_PLAIN,1.1,color.tolist(),1)
                 else:
                     shade = (relPred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
 
                     #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
                     cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
                 numrelpred+=1
+        if pretty:
+            for i in range(len(relCand)):
+                #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
+                if relPred[i]>-1:
+                    score = (relPred[i]+1)/2
+                    pruned=False
+                else:
+                    score = (relPred[i]+2+1)/2
+                    pruned=True
+                if relPred[i]>EDGE_THRESH or (pretty and score>EDGE_THRESH):
+                    ind1 = relCand[i][0]
+                    ind2 = relCand[i][1]
+                    x1 = round(bbs[ind1,1])
+                    y1 = round(bbs[ind1,2])
+                    x2 = round(bbs[ind2,1])
+                    y2 = round(bbs[ind2,2])
+
+                    targ1 = bbAlignment[ind1].item()
+                    targ2 = bbAlignment[ind2].item()
+                    aId=None
+                    if bbFullHit[ind1] and bbFullHit[ind2]:
+                        if (targ1,targ2) in adjacency:
+                            aId = adjacency.index((targ1,targ2))
+                        elif (targ2,targ1) in adjacency:
+                            aId = adjacency.index((targ2,targ1))
+                    if aId is None:
+                        color=np.array([1,0,0])
+                    else:
+                        color=np.array([0,1,0])
+                    color=color/2
+                    x = int((x1+x2)/2)
+                    y = int((y1+y2)/2)
+                    if pruned:
+                        cv2.putText(image,'[{:.2}]'.format(score),(x,y), cv2.FONT_HERSHEY_PLAIN, 0.6,color.tolist(),1)
+                    else:
+                        cv2.putText(image,'{:.2}'.format(score),(x,y), cv2.FONT_HERSHEY_PLAIN,1.1,color.tolist(),1)
         #print('number of pred rels: {}'.format(numrelpred))
         #Draw GT pairings
         if not pretty:
             gtcolor=(0.25,0,0.25)
             wth=3
         else:
-            gtcolor=(1,0,0.6)
+            #gtcolor=(1,0,0.6)
+            gtcolor=(1,0.6,0)
             wth=2
         for aId,(i,j) in enumerate(adjacency):
             if not pretty or not hits[aId]:
@@ -632,8 +689,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         retData['nn_loss_final']=nn_loss_final
         retData['nn_loss_diff']=nn_loss_final-nn_loss
         retData['nn_acc_final'] = nn_acc
-    #if model.detector.predNumNeighbors:
-    #    retData['nn_acc_detector'] = nn_acc_d
+    if model.detector.predNumNeighbors:
+        retData['nn_acc_detector'] = nn_acc_d
     if model.predClass:
         retData['class_loss_final']=class_loss_final
         retData['class_loss_diff']=class_loss_final-class_loss

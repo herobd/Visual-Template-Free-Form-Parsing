@@ -115,7 +115,7 @@ class GraphPairTrainer(BaseTrainer):
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
         self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config['trainer'] else 15
 
-        self.fixedAlign = config['fixed_align'] if 'fixed_align' in config else False
+        self.fixedAlign = config['trainer']['fixed_align'] if 'fixed_align' in config['trainer'] else False
 
         self.debug = 'DEBUG' in  config['trainer']
 

@@ -112,10 +112,10 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     targetPixels = instance['pixel_gt']
     imageName = instance['imgName']
     scale = instance['scale']
-    gtNumNeighbors = instance['num_neighbors']
+    target_num_neighbors = instance['num_neighbors']
     if not model.predNumNeighbors:
         del instance['num_neighbors']
-    dataT, targetBBsT, targetBBsSizes, targetPointsT, targetPointsSizes, targetPixelsT, gtNumNeighborsT = __to_tensor(instance,gpu)
+    dataT, targetBBsT, targetBBsSizes, targetPointsT, targetPointsSizes, targetPixelsT, target_num_neighborsT = __to_tensor(instance,gpu)
 
     resultsDirName='results'
     #if outDir is not None and resultsDirName is not None:
@@ -140,7 +140,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    ttt_hit=22-startIndex
     #else:
     #    return 0
-    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes,gtNumNeighborsT)
+    lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision = yolo_loss(outputOffsets,targetBBsT,targetBBsSizes,target_num_neighborsT)
     alignmentPointsPred={}
     alignmentPointsTarg={}
     index=0
@@ -173,6 +173,10 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         numClasses-=1
     if model.predNumNeighbors:
         extraPreds=1
+        predNN=outputBBs[:,-(numClasses+1)]
+        diffs=torch.abs(predNN-target_num_neighborsT[:,bbAlignment].float())
+        nn_acc = (diffs<0.5).sum().item()
+        nn_acc /= predNN.size(0)
     else:
         extraPreds=0
     
@@ -320,7 +324,7 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if model.predNumNeighbors:
                     x=int(targetBBs[b,j,0])
                     y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
-                    cv2.putText(image,'{:.2f}'.format(gtNumNeighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
+                    cv2.putText(image,'{:.2f}'.format(target_num_neighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
                 #if alignmentBBs[b] is not None:
                 #    aj=alignmentBBs[b][j]
                 #    xc_gt = targetBBs[b,j,0]
@@ -371,8 +375,8 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if model.predNumNeighbors:
                         x=int(bbs[j,1])
                         y=int(bbs[j,2]-bbs[j,4])
-                        #color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
-                        #cv2.putText(image,'{}/{}'.format(predNN[j],gtNumNeighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
+                        #color = int(min(abs(predNN[j]-target_num_neighbors[j]),2)*127)
+                        #cv2.putText(image,'{}/{}'.format(predNN[j],target_num_neighbors[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 3,(color,0,0),2,cv2.LINE_AA)
                         cv2.putText(image,'{:.2f}'.format(predNN[j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,color,2,cv2.LINE_AA)
 
 

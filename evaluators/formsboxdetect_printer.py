@@ -162,14 +162,14 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
+    numClasses = model.numBBTypes
     #aps_3=[]
     aps_5=[]
-    class_aps=[]
+    class_aps=[[] for i in range(numClasses)]
     aps_5all=[]
     #aps_7=[]
     recalls_5=[]
     precs_5=[]
-    numClasses = model.numBBTypes
     if 'no_blanks' in config['data_loader'] and not config['data_loader']['no_blanks']:
         numClasses-=1
     if model.predNumNeighbors:
@@ -199,7 +199,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             aps_5all.append(ap_5)
         else:
             aps_5all.append(-1)
-        class_aps.append(class_ap)
+        for i in range(numClasses):
+            if class_ap[i] is not None:
+                class_aps[i].append(class_ap[i])
         #aps_3.append(ap_3 )
         #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
@@ -446,21 +448,19 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #print('finished writing {}'.format(startIndex+b))
         
     #return metricsOut
-    return (
-             #{ 'ap_5':np.array(aps_5).sum(axis=0),
-             #  'ap_3':np.array(aps_3).sum(axis=0),
-             #  'ap_7':np.array(aps_7).sum(axis=0),
-             #  'recall':np.array(recalls_5).sum(axis=0),
-             #  'prec':np.array(precs_5).sum(axis=0),
-             #}, 
-             { 'ap_5':aps_5,
-               'class_aps': class_aps,
+    toRet=   { 'ap_5':aps_5,
+                 #'class_aps': class_aps,
                  #'ap_3':aps_3,
                  #'ap_7':aps_7,
                'recall':recalls_5,
                'prec':precs_5,
                'nn_loss': nn_loss,
-             }, 
+             }
+    for i in range(numClasses):
+        toRet['class{}_ap'.format(i)]=class_aps[i]
+
+    return (
+             toRet,
              (lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision,allPredNNs)
             )
 

@@ -257,7 +257,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,model.numBBTypes,beforeCls=extraPreds)
     #align bb predictions (final) with GT
-    if bbPred is not None:
+    if bbPred is not None and bbPred.size(0)>0:
         #create aligned GT
         #this was wrong...
             #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets

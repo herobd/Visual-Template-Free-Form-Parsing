@@ -115,6 +115,8 @@ class GraphPairTrainer(BaseTrainer):
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
         self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config['trainer'] else 15
 
+        self.fixedAlign = config['fixed_align'] if 'fixed_align' in config else False
+
         self.debug = 'DEBUG' in  config['trainer']
 
         #Name change
@@ -666,7 +668,7 @@ class GraphPairTrainer(BaseTrainer):
         if self.model.rotation:
             targIndex, fullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,hard_thresh=False)
         else:
-            targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False)
+            targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False,fixed=self.fixedAlign)
         #else:
         #    if self.model.rotation:
         #        targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)

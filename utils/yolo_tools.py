@@ -243,7 +243,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc,getClas
         return 1, [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
 
     allScores=[]
-    classScores=[[]]*numClasses
+    classScores=[[] for i in range(numClasses)]
     if len(pred.size())>1 and pred.size(0)>0:
         #This is an alternate metric that computes AP of all classes together
         #Your only a hit if you have the same class
@@ -285,7 +285,7 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc,getClas
             classScores[cls].append( (float('nan'),True) )
     else:
         allScores.append( (float('nan'),True) )
-        classScores=[(float('nan'),True)]*numClasses
+        classScores=[[(float('nan'),True)]]*numClasses
 
 
     if ignoreClasses:
@@ -354,7 +354,11 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc,getClas
             recalls.append(1)
     
     if getClassAP:
-        return computeAP(allScores), precisions, recalls, [computeAP(scores) for scores in classScores]
+        classAPs=[computeAP(scores) for scores in classScores]
+        #for i in range(len(classAPs)):
+        #    if classAPs[i] is None:
+        #        classAPs[i]=1
+        return computeAP(allScores), precisions, recalls, classAPs
     else:
         return computeAP(allScores), precisions, recalls
 

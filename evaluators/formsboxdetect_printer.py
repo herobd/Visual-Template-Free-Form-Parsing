@@ -26,13 +26,13 @@ def getCorners(xyrhw):
     br = ( int(w*math.cos(rot)+h*math.sin(rot) + xc),  int(w*math.sin(rot)-h*math.cos(rot) + yc) )
     bl = ( int(-w*math.cos(rot)+h*math.sin(rot) + xc), int(-w*math.sin(rot)-h*math.cos(rot) + yc) )
     return tl,tr,br,bl
-def plotRect(img,color,xyrhw):
+def plotRect(img,color,xyrhw,lineW=1):
     tl,tr,br,bl = getCorners(xyrhw)
 
-    cv2.line(img,tl,tr,color,1)
-    cv2.line(img,tr,br,color,1)
-    cv2.line(img,br,bl,color,1)
-    cv2.line(img,bl,tl,color,1)
+    cv2.line(img,tl,tr,color,lineW)
+    cv2.line(img,tr,br,color,lineW)
+    cv2.line(img,br,bl,color,lineW)
+    cv2.line(img,bl,tl,color,lineW)
 
 def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
     def __eval_metrics(data,target):
@@ -117,6 +117,8 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
         del instance['num_neighbors']
     dataT, targetBBsT, targetBBsSizes, targetPointsT, targetPointsSizes, targetPixelsT, gtNumNeighborsT = __to_tensor(instance,gpu)
 
+    pretty = config['pretty'] if 'pretty' in config else False
+
     resultsDirName='results'
     #if outDir is not None and resultsDirName is not None:
         #rPath = os.path.join(outDir,resultsDirName)
@@ -162,14 +164,14 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     else:
         outputBBs = non_max_sup_iou(outputBBs.cpu(),threshConf,0.4)
 
+    numClasses = model.numBBTypes
     #aps_3=[]
     aps_5=[]
-    class_aps=[]
+    class_aps=[[] for i in range(numClasses)]
     aps_5all=[]
     #aps_7=[]
     recalls_5=[]
     precs_5=[]
-    numClasses = model.numBBTypes
     if 'no_blanks' in config['data_loader'] and not config['data_loader']['no_blanks']:
         numClasses-=1
     if model.predNumNeighbors:
@@ -199,7 +201,9 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             aps_5all.append(ap_5)
         else:
             aps_5all.append(-1)
-        class_aps.append(class_ap)
+        for i in range(numClasses):
+            if class_ap[i] is not None:
+                class_aps[i].append(class_ap[i])
         #aps_3.append(ap_3 )
         #aps_7.append(ap_7 )
         recalls_5.append(recall_5)
@@ -317,12 +321,13 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
             #if name=='text_start_gt':
 
-            for j in range(targetBBsSizes[b]):
-                plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
-                if model.predNumNeighbors:
-                    x=int(targetBBs[b,j,0])
-                    y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
-                    cv2.putText(image,'{:.2f}'.format(gtNumNeighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
+            if not pretty:
+                for j in range(targetBBsSizes[b]):
+                    plotRect(image,(1,0.5,0),targetBBs[b,j,0:5])
+                    if model.predNumNeighbors:
+                        x=int(targetBBs[b,j,0])
+                        y=int(targetBBs[b,j,1]+targetBBs[b,j,3])
+                        cv2.putText(image,'{:.2f}'.format(gtNumNeighbors[b,j]),(x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5,(0.6,0.3,0),2,cv2.LINE_AA)
                 #if alignmentBBs[b] is not None:
                 #    aj=alignmentBBs[b][j]
                 #    xc_gt = targetBBs[b,j,0]
@@ -366,11 +371,18 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if predClass[j,0] > predClass[j,1]:
                         color=[0,0,shade] #text
                     else:
-                        color=[shade,0,0] #field
+                        if pretty:
+                            color=[0,shade,shade]
+                        else:
+                            color=[shade,0,0] #field
                     if numClasses==2 and model.numBBTypes==3 and predClass[j,2] > 0.5:
                         color[1]=shade
-                    plotRect(image,color,bbs[j,1:6])
-                    if model.predNumNeighbors:
+                    if pretty:
+                        lineW=2
+                    else:
+                        lineW=1
+                    plotRect(image,color,bbs[j,1:6],lineW)
+                    if model.predNumNeighbors and not pretty:
                         x=int(bbs[j,1])
                         y=int(bbs[j,2]-bbs[j,4])
                         #color = int(min(abs(predNN[j]-gtNumNeighbors[j]),2)*127)
@@ -446,21 +458,19 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
             #print('finished writing {}'.format(startIndex+b))
         
     #return metricsOut
-    return (
-             #{ 'ap_5':np.array(aps_5).sum(axis=0),
-             #  'ap_3':np.array(aps_3).sum(axis=0),
-             #  'ap_7':np.array(aps_7).sum(axis=0),
-             #  'recall':np.array(recalls_5).sum(axis=0),
-             #  'prec':np.array(precs_5).sum(axis=0),
-             #}, 
-             { 'ap_5':aps_5,
-               'class_aps': class_aps,
+    toRet=   { 'ap_5':aps_5,
+                 #'class_aps': class_aps,
                  #'ap_3':aps_3,
                  #'ap_7':aps_7,
                'recall':recalls_5,
                'prec':precs_5,
                'nn_loss': nn_loss,
-             }, 
+             }
+    for i in range(numClasses):
+        toRet['class{}_ap'.format(i)]=class_aps[i]
+
+    return (
+             toRet,
              (lossThis, position_loss, conf_loss, class_loss, nn_loss, recall, precision,allPredNNs)
             )
 

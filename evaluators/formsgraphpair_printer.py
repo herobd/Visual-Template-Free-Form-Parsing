@@ -15,7 +15,7 @@ import json
 from utils.forms_annotations import fixAnnotations, getBBInfo
 
 
-def plotRect(img,color,xyrhw):
+def plotRect(img,color,xyrhw,lineWidth=1):
     xc=xyrhw[0].item()
     yc=xyrhw[1].item()
     rot=xyrhw[2].item()
@@ -28,10 +28,10 @@ def plotRect(img,color,xyrhw):
     br = ( int(w*math.cos(rot)+h*math.sin(rot) + xc),  int(w*math.sin(rot)-h*math.cos(rot) + yc) )
     bl = ( int(-w*math.cos(rot)+h*math.sin(rot) + xc), int(-w*math.sin(rot)-h*math.cos(rot) + yc) )
 
-    cv2.line(img,tl,tr,color,1)
-    cv2.line(img,tr,br,color,1)
-    cv2.line(img,br,bl,color,1)
-    cv2.line(img,bl,tl,color,1)
+    cv2.line(img,tl,tr,color,lineWidth)
+    cv2.line(img,tr,br,color,lineWidth)
+    cv2.line(img,br,bl,color,lineWidth)
+    cv2.line(img,bl,tl,color,lineWidth)
 
 def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
     def __eval_metrics(data,target):
@@ -509,7 +509,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     color=(0,0,shade) #text
                 else:
                     color=(0,shade,shade) #field
-                plotRect(image,color,bbs[j,1:6])
+                if pretty=='light':
+                    lineWidth=2
+                else:
+                    lineWidth=1
+                plotRect(image,color,bbs[j,1:6],lineWidth)
 
                 if predNN is not None and not pretty: #model.detector.predNumNeighbors:
                     x=int(bbs[j,1])
@@ -544,12 +548,19 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if relPred[i]>-1:
                     score = (relPred[i]+1)/2
                     pruned=False
+                    lineWidth=2
                 elif pretty!="light":
                     score = (relPred[i]+2+1)/2
                     pruned=True
+                    lineWidth=1
                 else:
                     score = (relPred[i]+1)/2
                     pruned=False
+                    lineWidth=2
+                #if pretty=='light':
+                #    lineWidth=3
+            else:
+                lineWidth=1
             if relPred[i]>EDGE_THRESH or (pretty and score>EDGE_THRESH):
                 ind1 = relCand[i][0]
                 ind2 = relCand[i][1]
@@ -574,7 +585,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                         hits[aId]=True
                     #if pruned:
                     #    color = color*0.7
-                    cv2.line(image,(x1,y1),(x2,y2),color.tolist(),1 if pruned else 2)
+                    cv2.line(image,(x1,y1),(x2,y2),color.tolist(),lineWidth)
                     #color=color/3
                     #x = int((x1+x2)/2)
                     #y = int((y1+y2)/2)
@@ -586,7 +597,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     shade = (relPred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
 
                     #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
-                    cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),1)
+                    cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),lineWidth)
                 numrelpred+=1
         if pretty and pretty!="light":
             for i in range(len(relCand)):
@@ -692,7 +703,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         retData['nn_loss_final']=nn_loss_final
         retData['nn_loss_diff']=nn_loss_final-nn_loss
         retData['nn_acc_final'] = nn_acc
-    if model.detector.predNumNeighbors:
+    if model.detector.predNumNeighbors and not useDetections:
         retData['nn_acc_detector'] = nn_acc_d
     if model.predClass:
         retData['class_loss_final']=class_loss_final

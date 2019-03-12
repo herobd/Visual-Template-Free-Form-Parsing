@@ -291,7 +291,8 @@ class PairingGraph(BaseModel):
 
         #self.pairer = GraphNet(config['graph_config'])
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
-
+        if 'max_graph_size' in config:
+            MAX_GRAPH_SIZE = config['max_graph_size']
 
         self.useOldDecay = config['use_old_len_decay'] if 'use_old_len_decay' in config else False
 

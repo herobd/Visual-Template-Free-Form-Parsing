@@ -652,7 +652,7 @@ class GraphPairTrainer(BaseTrainer):
                     prec=1
                     ap=1
                 recall=1
-                targIndex = -torch.ones(outputBoxes.size(0))
+                targIndex = -torch.ones(outputBoxes.size(0)).int()
             elif relPred is None:
                 if targetBoxes is not None:
                     recall=0

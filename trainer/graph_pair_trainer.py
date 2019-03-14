@@ -284,6 +284,7 @@ class GraphPairTrainer(BaseTrainer):
                             bbPredClass_use = None
                     else:
                         alignedClass_use = None
+                        bbPredClass_use = None
             else:
                 bbPredNN_use = None
                 bbPredClass_use = None

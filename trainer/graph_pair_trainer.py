@@ -265,7 +265,7 @@ class GraphPairTrainer(BaseTrainer):
                             target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
                         else:
                             target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-                        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+                        alignedNN_use = target_num_neighbors_use[bbAlignment_use.long()]
                     else:
                         bbPredNN_use=None
                         alignedNN_use=None
@@ -278,7 +278,7 @@ class GraphPairTrainer(BaseTrainer):
                         if toKeep.any():
                             bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
                             bbAlignment_use = bbAlignment[toKeep]
-                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use.long()][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
                         else:
                             alignedClass_use = None
                             bbPredClass_use = None

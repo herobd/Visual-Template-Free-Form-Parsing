@@ -56,7 +56,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
         return image, bbs, adjaceny, num_neighbors
 
-    EDGE_THRESH = 0#config['THRESH'] if 'THRESH' in config else 0.0
+    rel_thresholds = [config['THRESH']] if 'THRESH' in config else [0.5]
+    if ('sweep_threshold' in config and config['sweep_threshold']) or ('sweep_thresholds' in config and config['sweep_thresholds']):
+        rel_thresholds = np.arange(0.1,1.0,0.05)
+    if ('sweep_threshold_big' in config and config['sweep_threshold_big']) or ('sweep_thresholds_big' in config and config['sweep_thresholds_big']):
+        rel_thresholds = np.arange(0,20.0,1)
+    if ('sweep_threshold_small' in config and config['sweep_threshold_small']) or ('sweep_thresholds_small' in config and config['sweep_thresholds_small']):
+        rel_thresholds = np.arange(0,0.1,0.01)
+    draw_rel_thresh = config['draw_thresh'] if 'draw_thresh' in config else rel_thresholds[0]
     #print(type(instance['pixel_gt']))
     #if type(instance['pixel_gt']) == list:
     #    print(instance)
@@ -220,13 +227,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             print('ERROR, unknown rule {}'.format(config['rule']))
             exit()
     elif relPred is not None:
-        relPred = 2*torch.sigmoid(relPred)[:,0] -1
+        relPred = torch.sigmoid(relPred)[:,0]
+
+
 
 
     relCand = relIndexes
     if relCand is None:
         relCand=[]
-
 
     if model.rotation:
         bbAlignment, bbFullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,0.9,numClasses,extraPreds,hard_thresh=False)
@@ -236,57 +244,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         target_for_b = targetBoxes[0,:,:]
     else:
         target_for_b = torch.empty(0)
-    if 'optimize' in config and config['optimize']:
-        if 'penalty' in config:
-            penalty = config['penalty']
-        else:
-            penalty = 0.5
-        print('optimizing with penalty {}'.format(penalty))
-        thresh=0.3
-        while thresh<0.9:
-            keep = relPred>thresh
-            newRelPred = relPred[keep]
-            if newRelPred.size(0)<700:
-                break
-        if newRelPred.size(0)>0:
-            #newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
-            usePredNN= predNN is not None and config['optimize']!='gt'
-            idMap={}
-            newId=0
-            newRelCand=[]
-            numNeighbors=[]
-            for index,(id1,id2) in enumerate(relCand):
-                if keep[index]:
-                    if id1 not in idMap:
-                        idMap[id1]=newId
-                        if not usePredNN:
-                            numNeighbors.append(target_num_neighbors[0,bbAlignment[id1]])
-                        else:
-                            numNeighbors.append(predNN[id1])
-                        newId+=1
-                    if id2 not in idMap:
-                        idMap[id2]=newId
-                        if not usePredNN:
-                            numNeighbors.append(target_num_neighbors[0,bbAlignment[id2]])
-                        else:
-                            numNeighbors.append(predNN[id2])
-                        newId+=1
-                    newRelCand.append( [idMap[id1],idMap[id2]] )            
 
-
-            #if not usePredNN:
-                #    decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
-            #else:
-            decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty)
-            decision= torch.from_numpy( np.round_(decision).astype(int) )
-            decision=decision.to(relPred.device)
-            relPred[keep] = torch.where(0==decision,relPred[keep]-2,relPred[keep])
-            relPred[1-keep] -=2
-            EDGE_THRESH=-1
-    EDGE_THRESH = config['THRESH'] if 'THRESH' in config else EDGE_THRESH
-
-    data = data.numpy()
-    #threshed in model
     if outputBoxes.size(0)>0:
         maxConf = outputBoxes[:,0].max().item()
         minConf = outputBoxes[:,0].min().item()
@@ -297,159 +255,264 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     #    outputBoxes = non_max_sup_dist(outputBoxes.cpu(),threshConf,3)
     #else:
     #    outputBoxes = non_max_sup_iou(outputBoxes.cpu(),threshConf,0.4)
-
     if model.rotation:
         ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,model.numBBTypes,beforeCls=extraPreds)
     else:
         ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,model.numBBTypes,beforeCls=extraPreds)
-    #align bb predictions (final) with GT
-    if bbPred is not None and bbPred.size(0)>0:
-        #create aligned GT
-        #this was wrong...
-            #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
-            #toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
-        #remove predictions that overlapped with GT, but not enough
-        if model.predNN:
-            start=1
-            toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
-            if toKeep.any():
-                bbPredNN_use = bbPred[toKeep][:,0]
-                bbAlignment_use = bbAlignment[toKeep]
-                #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-                if target_num_neighborsT is not None:
-                    target_num_neighbors_use = torch.cat((target_num_neighborsT[0].float(),torch.zeros(1).to(target_num_neighborsT.device)),dim=0)
+
+    #precisionHistory={}
+    #precision=-1
+    #minStepSize=0.025
+    #targetPrecisions=[None]
+    #for targetPrecision in targetPrecisions:
+    #    if len(precisionHistory)>0:
+    #        closestPrec=9999
+    #        for prec in precisionHistory:
+    #            if abs(targetPrecision-prec)<abs(closestPrec-targetPrecision):
+    #                closestPrec=prec
+    #        precision=prec
+    #        stepSize=precisionHistory[prec][0]
+    #    else:
+    #        stepSize=0.1
+    #
+    #    while True: #abs(precision-targetPrecision)>0.001:
+    toRet={}
+    for rel_threshold in rel_thresholds:
+
+            if 'optimize' in config and config['optimize']:
+                if 'penalty' in config:
+                    penalty = config['penalty']
                 else:
-                    target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-                alignedNN_use = target_num_neighbors_use[bbAlignment_use]
-            else:
-                bbPredNN_use=None
-                alignedNN_use=None
-        else:
-            start=0
-        if model.predClass:
-            #We really don't care about the class of non-overlapping instances
-            if targetBoxes is not None:
-                toKeep = bbFullHit==1
-                if toKeep.any():
-                    bbPredClass_use = bbPred[toKeep][:,start:start+model.numBBTypes]
-                    bbAlignment_use = bbAlignment[toKeep]
-                    alignedClass_use =  targetBoxesT[0][bbAlignment_use][:,13:13+model.numBBTypes] #There should be no -1 indexes in hereS
+                    penalty = 0.25
+                print('optimizing with penalty {}'.format(penalty))
+                thresh=0.15
+                while thresh<0.45:
+                    keep = relPred>thresh
+                    newRelPred = relPred[keep]
+                    if newRelPred.size(0)<700:
+                        break
+                if newRelPred.size(0)>0:
+                    #newRelCand = [ cand for i,cand in enumerate(relCand) if keep[i] ]
+                    usePredNN= predNN is not None and config['optimize']!='gt'
+                    idMap={}
+                    newId=0
+                    newRelCand=[]
+                    numNeighbors=[]
+                    for index,(id1,id2) in enumerate(relCand):
+                        if keep[index]:
+                            if id1 not in idMap:
+                                idMap[id1]=newId
+                                if not usePredNN:
+                                    numNeighbors.append(target_num_neighbors[0,bbAlignment[id1]])
+                                else:
+                                    numNeighbors.append(predNN[id1])
+                                newId+=1
+                            if id2 not in idMap:
+                                idMap[id2]=newId
+                                if not usePredNN:
+                                    numNeighbors.append(target_num_neighbors[0,bbAlignment[id2]])
+                                else:
+                                    numNeighbors.append(predNN[id2])
+                                newId+=1
+                            newRelCand.append( [idMap[id1],idMap[id2]] )            
+
+
+                    #if not usePredNN:
+                        #    decision = optimizeRelationships(newRelPred,newRelCand,numNeighbors,penalty)
+                    #else:
+                    decision= optimizeRelationshipsSoft(newRelPred,newRelCand,numNeighbors,penalty, rel_threshold)
+                    decision= torch.from_numpy( np.round_(decision).astype(int) )
+                    decision=decision.to(relPred.device)
+                    relPred[keep] = torch.where(0==decision,relPred[keep]-1,relPred[keep])
+                    relPred[1-keep] -=1
+                    rel_threshold_use=0#-0.5
                 else:
-                    bbPredClass_use=None
-                    alignedClass_use=None
+                    rel_threshold_use=rel_threshold
             else:
-                alignedClass_use = None
-    else:
-        bbPredNN_use = None
-        bbPredClass_use = None
-    if model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
-        nn_loss_final = F.mse_loss(bbPredNN_use,alignedNN_use)
-        #nn_loss_final *= self.lossWeights['nn']
+                rel_threshold_use=rel_threshold
 
-        #loss += nn_loss_final
-        nn_loss_final = nn_loss_final.item()
-    else:
-        nn_loss_final=0
-    if model.predNN and predNN is not None:
-        predNN_p=bbPred[:,0]
-        diffs=torch.abs(predNN_p-target_num_neighborsT[0][bbAlignment].float())
-        nn_acc = (diffs<0.5).sum().item()
-        nn_acc /= predNN.size(0)
-    elif model.predNN:
-        nn_acc = 0 
-    if model.detector.predNumNeighbors and not useDetections:
-        predNN_d = outputBoxes[:,6]
-        diffs=torch.abs(predNN_d-target_num_neighbors[0][bbAlignment].float())
-        nn_acc_d = (diffs<0.5).sum().item()
-        nn_acc_d /= predNN.size(0)
+            #threshed in model
+            #if len(precisionHistory)==0:
+            if len(toRet)==0:
+                #align bb predictions (final) with GT
+                if bbPred is not None and bbPred.size(0)>0:
+                    #create aligned GT
+                    #this was wrong...
+                        #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
+                        #toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
+                    #remove predictions that overlapped with GT, but not enough
+                    if model.predNN:
+                        start=1
+                        toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
+                        if toKeep.any():
+                            bbPredNN_use = bbPred[toKeep][:,0]
+                            bbAlignment_use = bbAlignment[toKeep]
+                            #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                            if target_num_neighborsT is not None:
+                                target_num_neighbors_use = torch.cat((target_num_neighborsT[0].float(),torch.zeros(1).to(target_num_neighborsT.device)),dim=0)
+                            else:
+                                target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+                            alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+                        else:
+                            bbPredNN_use=None
+                            alignedNN_use=None
+                    else:
+                        start=0
+                    if model.predClass:
+                        #We really don't care about the class of non-overlapping instances
+                        if targetBoxes is not None:
+                            toKeep = bbFullHit==1
+                            if toKeep.any():
+                                bbPredClass_use = bbPred[toKeep][:,start:start+model.numBBTypes]
+                                bbAlignment_use = bbAlignment[toKeep]
+                                alignedClass_use =  targetBoxesT[0][bbAlignment_use][:,13:13+model.numBBTypes] #There should be no -1 indexes in hereS
+                            else:
+                                bbPredClass_use=None
+                                alignedClass_use=None
+                        else:
+                            alignedClass_use = None
+                else:
+                    bbPredNN_use = None
+                    bbPredClass_use = None
+                if model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
+                    nn_loss_final = F.mse_loss(bbPredNN_use,alignedNN_use)
+                    #nn_loss_final *= self.lossWeights['nn']
 
-    if model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
-        class_loss_final = F.binary_cross_entropy_with_logits(bbPredClass_use,alignedClass_use)
-        #class_loss_final *= self.lossWeights['class']
-        #loss += class_loss_final
-        class_loss_final = class_loss_final.item()
-    else:
-        class_loss_final = 0
-    #class_acc=0
-    useOutputBBs=None
+                    #loss += nn_loss_final
+                    nn_loss_final = nn_loss_final.item()
+                else:
+                    nn_loss_final=0
+                if model.predNN and predNN is not None:
+                    predNN_p=bbPred[:,0]
+                    diffs=torch.abs(predNN_p-target_num_neighborsT[0][bbAlignment].float())
+                    nn_acc = (diffs<0.5).sum().item()
+                    nn_acc /= predNN.size(0)
+                elif model.predNN:
+                    nn_acc = 0 
+                if model.detector.predNumNeighbors and not useDetections:
+                    predNN_d = outputBoxes[:,6]
+                    diffs=torch.abs(predNN_d-target_num_neighbors[0][bbAlignment].float())
+                    nn_acc_d = (diffs<0.5).sum().item()
+                    nn_acc_d /= predNN.size(0)
 
-    truePred=falsePred=badPred=0
-    scores=[]
-    matches=0
-    i=0
-    numMissedByHeur=0
-    targGotHit=set()
-    for i,(n0,n1) in enumerate(relCand):
-        t0 = bbAlignment[n0].item()
-        t1 = bbAlignment[n1].item()
-        if t0>=0 and bbFullHit[n0]:
-            targGotHit.add(t0)
-        if t1>=0 and bbFullHit[n1]:
-            targGotHit.add(t1)
-        if t0>=0 and t1>=0 and bbFullHit[n0] and bbFullHit[n1]:
-            if (min(t0,t1),max(t0,t1)) in adjacency:
-                matches+=1
-                scores.append( (relPred[i],True) )
-                if relPred[i]>EDGE_THRESH:
-                    truePred+=1
+                if model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
+                    class_loss_final = F.binary_cross_entropy_with_logits(bbPredClass_use,alignedClass_use)
+                    #class_loss_final *= self.lossWeights['class']
+                    #loss += class_loss_final
+                    class_loss_final = class_loss_final.item()
+                else:
+                    class_loss_final = 0
+            #class_acc=0
+            useOutputBBs=None
+
+            truePred=falsePred=badPred=0
+            scores=[]
+            matches=0
+            i=0
+            numMissedByHeur=0
+            targGotHit=set()
+            for i,(n0,n1) in enumerate(relCand):
+                t0 = bbAlignment[n0].item()
+                t1 = bbAlignment[n1].item()
+                if t0>=0 and bbFullHit[n0]:
+                    targGotHit.add(t0)
+                if t1>=0 and bbFullHit[n1]:
+                    targGotHit.add(t1)
+                if t0>=0 and t1>=0 and bbFullHit[n0] and bbFullHit[n1]:
+                    if (min(t0,t1),max(t0,t1)) in adjacency:
+                        matches+=1
+                        scores.append( (relPred[i],True) )
+                        if relPred[i]>rel_threshold_use:
+                            truePred+=1
+                    else:
+                        scores.append( (relPred[i],False) )
+                        if relPred[i]>rel_threshold_use:
+                            falsePred+=1
+                else:
+                    scores.append( (relPred[i],False) )
+                    if relPred[i]>rel_threshold_use:
+                        badPred+=1
+            for i in range(len(adjacency)-matches):
+                numMissedByHeur+=1
+                scores.append( (float('nan'),True) )
+            rel_ap=computeAP(scores)
+
+            numMissedByDetect=0
+            for t0,t1 in adjacency:
+                if t0 not in targGotHit or t1 not in targGotHit:
+                    numMissedByHeur-=1
+                    numMissedByDetect+=1
+            heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)
+            detectRecall = (len(adjacency)-numMissedByDetect)/len(adjacency)
+            if len(adjacency)>0:
+                relRecall = truePred/len(adjacency)
             else:
-                scores.append( (relPred[i],False) )
-                if relPred[i]>EDGE_THRESH:
-                    falsePred+=1
-        else:
-            scores.append( (relPred[i],False) )
-            if relPred[i]>EDGE_THRESH:
-                badPred+=1
-    for i in range(len(adjacency)-matches):
-        numMissedByHeur+=1
-        scores.append( (float('nan'),True) )
-    rel_ap=computeAP(scores)
-
-    numMissedByDetect=0
-    for t0,t1 in adjacency:
-        if t0 not in targGotHit or t1 not in targGotHit:
-            numMissedByHeur-=1
-            numMissedByDetect+=1
-    heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)
-    detectRecall = (len(adjacency)-numMissedByDetect)/len(adjacency)
-    if len(adjacency)>0:
-        relRecall = truePred/len(adjacency)
-    else:
-        relRecall = 1
-    if falsePred>0:
-        relPrec = truePred/(truePred+falsePred)
-    else:
-        relPrec = 1
-    if falsePred+badPred>0:
-        fullPrec = truePred/(truePred+falsePred+badPred)
-    else:
-        fullPrec = 1
-
-    #import pdb;pdb.set_trace()
-
-    #for b in range(len(outputBoxes)):
-    outputBoxes = outputBoxes.data.numpy()
+                relRecall = 1
+            #if falsePred>0:
+            #    relPrec = truePred/(truePred+falsePred)
+            #else:
+            #    relPrec = 1
+            if falsePred+badPred>0:
+                precision = truePred/(truePred+falsePred+badPred)
+            else:
+                precision = 1
     
-    
-    dists=defaultdict(list)
-    dists_x=defaultdict(list)
-    dists_y=defaultdict(list)
-    scaleDiffs=defaultdict(list)
-    rotDiffs=defaultdict(list)
-    b=0
-    #print('image {} has {} {}'.format(startIndex+b,targetBoxesSizes[name][b],name))
-    #bbImage = np.ones_like(image):w
+
+            toRet['prec@{}'.format(rel_threshold)]=precision
+            toRet['recall@{}'.format(rel_threshold)]=relRecall
+            if relRecall+precision>0:
+                toRet['F-M@{}'.format(rel_threshold)]=2*relRecall*precision/(relRecall+precision)
+            else:
+                toRet['F-M@{}'.format(rel_threshold)]=0
+            toRet['rel_AP@{}'.format(rel_threshold)]=rel_ap
+            #precisionHistory[precision]=(draw_rel_thresh,stepSize)
+            #if targetPrecision is not None:
+            #    if abs(precision-targetPrecision)<0.001:
+            #        break
+            #    elif stepSize<minStepSize:
+            #        if precision<targetPrecision:
+            #            draw_rel_thresh += stepSize*2
+            #            continue
+            #        else:
+            #            break
+            #    elif precision<targetPrecision:
+            #        draw_rel_thresh += stepSize
+            #        if not wasTooSmall:
+            #            reverse=True
+            #            wasTooSmall=True
+            #        else:
+            #            reverse=False
+            #    else:
+            #        draw_rel_thresh -= stepSize
+            #        if wasTooSmall:
+            #            reverse=True
+            #            wasTooSmall=False
+            #        else:
+            #            reverse=False
+            #    if reverse:
+            #        stepSize *= 0.5
+            #else:
+            #    break
+
+
+            #import pdb;pdb.set_trace()
+
+            #for b in range(len(outputBoxes)):
+            
+            
+            dists=defaultdict(list)
+            dists_x=defaultdict(list)
+            dists_y=defaultdict(list)
+            scaleDiffs=defaultdict(list)
+            rotDiffs=defaultdict(list)
+            b=0
+            #print('image {} has {} {}'.format(startIndex+b,targetBoxesSizes[name][b],name))
+            #bbImage = np.ones_like(image):w
 
     if outDir is not None:
-        #Write the results so we can train LF with them
-        #saveFile = os.path.join(outDir,resultsDirName,name,'{}'.format(imageName[b]))
-        #we must rescale the output to be according to the original image
-        #rescaled_outputBoxes_xyrs = outputBoxes_xyrs[name][b]
-        #rescaled_outputBoxes_xyrs[:,1] /= scale[b]
-        #rescaled_outputBoxes_xyrs[:,2] /= scale[b]
-        #rescaled_outputBoxes_xyrs[:,4] /= scale[b]
+        outputBoxes = outputBoxes.data.numpy()
+        data = data.numpy()
 
-        #np.save(saveFile,rescaled_outputBoxes_xyrs)
         image = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0)).copy()
         if image.shape[2]==1:
             image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
@@ -536,7 +599,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-        EDGE_THRESH = relPred.max() * EDGE_THRESH
+        draw_rel_thresh = relPred.max() * draw_rel_thresh
 
 
         #Draw pred pairings
@@ -545,23 +608,23 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         for i in range(len(relCand)):
             #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
             if pretty:
-                if relPred[i]>-1:
-                    score = (relPred[i]+1)/2
+                if relPred[i]>0 or pretty=='light':
+                    score = relPred[i]
                     pruned=False
                     lineWidth=2
-                elif pretty!="light":
-                    score = (relPred[i]+2+1)/2
+                else:
+                    score = relPred[i]+1
                     pruned=True
                     lineWidth=1
-                else:
-                    score = (relPred[i]+1)/2
-                    pruned=False
-                    lineWidth=2
+                #else:
+                #    score = (relPred[i]+1)/2
+                #    pruned=False
+                #    lineWidth=2
                 #if pretty=='light':
                 #    lineWidth=3
             else:
                 lineWidth=1
-            if relPred[i]>EDGE_THRESH or (pretty and score>EDGE_THRESH):
+            if relPred[i]>draw_rel_thresh or (pretty and score>draw_rel_thresh):
                 ind1 = relCand[i][0]
                 ind2 = relCand[i][1]
                 x1 = round(bbs[ind1,1])
@@ -579,9 +642,15 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                         elif (targ2,targ1) in adjacency:
                             aId = adjacency.index((targ2,targ1))
                     if aId is None:
-                        color=np.array([1,0,0])
+                        if pretty=='clean' and pruned:
+                            color=np.array([1,1,0])
+                        else:
+                            color=np.array([1,0,0])
                     else:
-                        color=np.array([0,1,0])
+                        if pretty=='clean' and pruned:
+                            color=np.array([1,0,1])
+                        else:
+                            color=np.array([0,1,0])
                         hits[aId]=True
                     #if pruned:
                     #    color = color*0.7
@@ -594,12 +663,12 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     #else:
                     #    cv2.putText(image,'{:.2}'.format(score),(x,y), cv2.FONT_HERSHEY_PLAIN,1.1,color.tolist(),1)
                 else:
-                    shade = (relPred[i].item()-EDGE_THRESH)/(1-EDGE_THRESH)
+                    shade = (relPred[i].item()-draw_rel_thresh)/(1-draw_rel_thresh)
 
                     #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
                     cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),lineWidth)
                 numrelpred+=1
-        if pretty and pretty!="light":
+        if pretty and pretty!="light" and pretty!="clean":
             for i in range(len(relCand)):
                 #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
                 if relPred[i]>-1:
@@ -608,7 +677,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 else:
                     score = (relPred[i]+2+1)/2
                     pruned=True
-                if relPred[i]>EDGE_THRESH or (pretty and score>EDGE_THRESH):
+                if relPred[i]>draw_rel_thresh or (pretty and score>draw_rel_thresh):
                     ind1 = relCand[i][0]
                     ind2 = relCand[i][1]
                     x1 = round(bbs[ind1,1])
@@ -681,17 +750,16 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     retData= { 'bb_ap':[ap_5],
                'bb_recall':[recall_5],
                'bb_prec':[prec_5],
-               'bb_Fm': (recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
+               'bb_Fm': -1,#(recall_5[0]+recall_5[1]+prec_5[0]+prec_5[1])/4,
                'nn_loss': nn_loss,
                'rel_recall':relRecall,
-               'rel_prec':relPrec,
-               'rel_Fm':(relRecall+relPrec)/2,
-               'rel_fullPrec':fullPrec,
-               'rel_fullFm':(relRecall+fullPrec)/2,
+               'rel_precision':precision,
+               'rel_Fm':2*relRecall*precision/(relRecall+precision) if relRecall+precision>0 else 0,
                'relMissedByHeur':numMissedByHeur,
                'relMissedByDetect':numMissedByDetect,
                'heurRecall': heurRecall,
-               'detectRecall': detectRecall
+               'detectRecall': detectRecall,
+               **toRet
 
              }
     if rel_ap is not None: #none ap if no relationships

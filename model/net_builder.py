@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.nn.utils.weight_norm import weight_norm
 import math
 import numpy as np
+from .coordconv import CoordConv
 
 def primeFactors(n):
     ret = [1]
@@ -170,14 +171,17 @@ class GeneralRes(nn.Module):
 
 
 
-def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None,depthwise=False):
+def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None,depthwise=False,coordconv=None):
     if type(dilation) is int:
         dilation=(dilation,dilation)
     if type(kernel) is int:
         kernel=(kernel,kernel)
     padding = ( dilation[0]*(kernel[0]//2), dilation[1]*(kernel[1]//2) )
     groups = in_ch if depthwise else 1
-    conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=padding,dilation=dilation,groups=groups)
+    if coordconv is not None:
+        conv2d = CoordConv(in_ch,out_ch, kernel_size=kernel, padding=padding,dilation=dilation,groups=groups,features=coordconv)
+    else:
+        conv2d = nn.Conv2d(in_ch,out_ch, kernel_size=kernel, padding=padding,dilation=dilation,groups=groups)
     #if i == len(cfg)-1:
     #    layers += [conv2d]
     #    break
@@ -300,6 +304,32 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             kernel_size=int(v[1:div])
             outCh=int(v[div+1:])
             layers += convReLU(in_channels[-1],outCh,norm,kernel=kernel_size,dropout=dropout)
+            layerCodes.append(v)
+            in_channels.append(outCh)
+        elif type(v)==str and v[:2] == 'cc': #CoordConv 'ccTYPE-k#,d#,hd-CHS'
+            div = v.find('-')
+            div2 = v.find('-',div+1)
+            typ = v[2:div]
+            kernel_size=[3,3]
+            dilate=1
+            if div2!=-1:
+                for param in v[div+1:div2].split(','):
+                    if param[0]=='k':
+                        kernel_size=int(param[1:])
+                        kernel_size=[kernel_size,kernel_size]
+                    elif param[0]=='d':
+                        dilate=int(param[1:])
+                    elif param[:2]=='h':
+                        kernel_size[0]=1
+                    elif param[:2]=='v':
+                        kernel_size[1]=1
+                    else:
+                        print("unknown subparameter {} in {}".format(param,v))
+                        exit()
+            else:
+                div2=div
+            outCh=int(v[div2+1:])
+            layers += convReLU(in_channels[-1],outCh,norm,dilate,kernel=kernel_size,dropout=dropout,coordconv=typ)
             layerCodes.append(v)
             in_channels.append(outCh)
         elif type(v)==str and v[0] == 'd': #3x3 conv layer with custom dilation

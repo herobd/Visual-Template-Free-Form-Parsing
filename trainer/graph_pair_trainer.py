@@ -115,6 +115,8 @@ class GraphPairTrainer(BaseTrainer):
         self.adaptLR_base = config['trainer']['adapt_lr_base'] if 'adapt_lr_base' in config['trainer'] else 165 #roughly average number of rels
         self.adaptLR_ep = config['trainer']['adapt_lr_ep'] if 'adapt_lr_ep' in config['trainer'] else 15
 
+        self.fixedAlign = config['fixed_align'] if 'fixed_align' in config else False
+
         self.debug = 'DEBUG' in  config['trainer']
 
         #Name change
@@ -263,7 +265,7 @@ class GraphPairTrainer(BaseTrainer):
                             target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
                         else:
                             target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-                        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+                        alignedNN_use = target_num_neighbors_use[bbAlignment_use.long()]
                     else:
                         bbPredNN_use=None
                         alignedNN_use=None
@@ -276,12 +278,13 @@ class GraphPairTrainer(BaseTrainer):
                         if toKeep.any():
                             bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
                             bbAlignment_use = bbAlignment[toKeep]
-                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use.long()][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
                         else:
                             alignedClass_use = None
                             bbPredClass_use = None
                     else:
                         alignedClass_use = None
+                        bbPredClass_use = None
             else:
                 bbPredNN_use = None
                 bbPredClass_use = None
@@ -650,7 +653,7 @@ class GraphPairTrainer(BaseTrainer):
                     prec=1
                     ap=1
                 recall=1
-                targIndex = -torch.ones(outputBoxes.size(0))
+                targIndex = -torch.ones(outputBoxes.size(0)).int()
             elif relPred is None:
                 if targetBoxes is not None:
                     recall=0
@@ -670,7 +673,7 @@ class GraphPairTrainer(BaseTrainer):
         if self.model.rotation:
             targIndex, fullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,hard_thresh=False)
         else:
-            targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False)
+            targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False,fixed=self.fixedAlign)
         #else:
         #    if self.model.rotation:
         #        targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)

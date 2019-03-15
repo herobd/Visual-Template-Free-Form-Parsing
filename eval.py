@@ -39,6 +39,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         config['THRESH'] = thresh
         if verbose:
             print('Threshold at {}'.format(thresh))
+    addDATASET=False
     if addToConfig is not None:
         for add in addToConfig:
             addTo=config
@@ -61,8 +62,10 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         pass
             addTo[add[-2]] = value
             if verbose:
-                printM+=add[-2]+']='+add[-1]
+                printM+=add[-2]+']={}'.format(value)
                 print(printM)
+            if (add[-2]=='useDetections' or add[-2]=='useDetect') and value!='gt':
+                addDATASET=True
 
         
     #config['data_loader']['batch_size']=math.ceil(config['data_loader']['batch_size']/2)
@@ -92,6 +95,9 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         data_loader, valid_data_loader = getDataLoader(config,'train')
     else:
         valid_data_loader, data_loader = getDataLoader(config,'test')
+
+    if addDATASET:
+        config['DATASET']=valid_data_loader.dataset
     #ttt=FormsDetect(dirPath='/home/ubuntu/brian/data/forms',split='train',config={'crop_to_page':False,'rescale_range':[450,800],'crop_params':{"crop_size":512},'no_blanks':True, "only_types": ["text_start_gt"], 'cache_resized_images': True})
     #data_loader = torch.utils.data.DataLoader(ttt, batch_size=16, shuffle=False, num_workers=5, collate_fn=forms_detect.collate)
     #valid_data_loader = data_loader.split_validation()
@@ -186,27 +192,13 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                 nns=[]
             curVI=0
 
+            validName='valid' if not test else 'test'
+
             for index in range(0,numberOfImages,step*batchSize):
-                if not test:
-                    for trainIndex in range(index,index+step*batchSize, batchSize):
-                        if trainIndex/batchSize < len(data_loader):
-                            if verbose>1:
-                                print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
-                            #data, target = train_iter.next() #data_loader[trainIndex]
-                            #dataT = _to_tensor(gpu,data)
-                            #output = model(dataT)
-                            #data = data.cpu().data.numpy()
-                            #output = output.cpu().data.numpy()
-                            #target = target.data.numpy()
-                            #metricsO = _eval_metrics_ind(metrics,output, target)
-                            _,aux=saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
-                            if 'save_nns' in config:
-                                nns+=aux[-1]
             
                 for validIndex in range(index,index+step*vBatchSize, vBatchSize):
                     if validIndex/vBatchSize < len(valid_data_loader):
-                        if verbose>1:
-                            print('valid batch index: {}/{}'.format(validIndex/vBatchSize,len(valid_data_loader)),end='\r')
+                        print('{} batch index: {}/{}'.format(validName,validIndex/vBatchSize,len(valid_data_loader)),end='\r')
                         #data, target = valid_iter.next() #valid_data_loader[validIndex]
                         curVI+=1
                         #dataT  = _to_tensor(gpu,data)
@@ -229,11 +221,26 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         else:
                             val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
+                if not test:
+                    for trainIndex in range(index,index+step*batchSize, batchSize):
+                        if trainIndex/batchSize < len(data_loader):
+                            print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
+                            #data, target = train_iter.next() #data_loader[trainIndex]
+                            #dataT = _to_tensor(gpu,data)
+                            #output = model(dataT)
+                            #data = data.cpu().data.numpy()
+                            #output = output.cpu().data.numpy()
+                            #target = target.data.numpy()
+                            #metricsO = _eval_metrics_ind(metrics,output, target)
+                            _,aux=saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
+                            if 'save_nns' in config:
+                                nns+=aux[-1]
+
             #if gpu is not None or numberOfImages==0:
             try:
                 for vi in range(curVI,len(valid_data_loader)):
                     if verbose>1:
-                        print('valid batch index: {}\{} (not save)'.format(vi,len(valid_data_loader)),end='\r')
+                        print('{} batch index: {}\{} (not save)'.format(validName,vi,len(valid_data_loader)),end='\r')
                     instance = valid_iter.next()
                     metricsO,_ = saveFunc(config,instance,model,gpu,metrics)
                     if type(metricsO) == dict:
@@ -253,7 +260,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
             ####
                 
             val_metrics_sum /= len(valid_data_loader)
-            print('Validation metrics')
+            print('{} metrics'.format(validName))
             for i in range(len(metrics)):
                 print(metrics[i].__name__ + ': '+str(val_metrics_sum[i]))
             for typ in val_comb_metrics:

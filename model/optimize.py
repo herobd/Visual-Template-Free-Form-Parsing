@@ -38,7 +38,7 @@ def optimizeRelationships(relPred,relNodes,gtNodeNeighbors,penalty=490):
     problem.solve(solver=cvxpy.ECOS_BB)
     assert(useRel.value is not None)
     return useRel.value
-def optimizeRelationshipsSoft(relPred,relNodes,predNodeNeighbors,penalty=1.2):
+def optimizeRelationshipsSoft(relPred,relNodes,predNodeNeighbors,penalty=1.2,threshold=0.5):
     #if 'cvxpy' not in sys.modules:
     import cvxpy
     useRel = cvxpy.Variable(relPred.size(0),boolean=True)
@@ -46,7 +46,7 @@ def optimizeRelationshipsSoft(relPred,relNodes,predNodeNeighbors,penalty=1.2):
     obj =0
     huh=0
     for i in range(relPred.size(0)):
-        obj += relPred[i].item()*useRel[i]
+        obj += (relPred[i].item()-threshold)*useRel[i]
         huh +=useRel[i]
 
 

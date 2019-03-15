@@ -257,14 +257,18 @@ class GraphPairTrainer(BaseTrainer):
                 if self.model.predNN:
                     start=1
                     toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
-                    bbPredNN_use = bbPred[toKeep][:,0]
-                    bbAlignment_use = bbAlignment[toKeep]
-                    #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-                    if target_num_neighbors is not None:
-                        target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                    if toKeep.any():
+                        bbPredNN_use = bbPred[toKeep][:,0]
+                        bbAlignment_use = bbAlignment[toKeep]
+                        #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                        if target_num_neighbors is not None:
+                            target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                        else:
+                            target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+                        alignedNN_use = target_num_neighbors_use[bbAlignment_use.long()]
                     else:
-                        target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-                    alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+                        bbPredNN_use=None
+                        alignedNN_use=None
                 else:
                     start=0
                 if self.model.predClass:
@@ -274,12 +278,13 @@ class GraphPairTrainer(BaseTrainer):
                         if toKeep.any():
                             bbPredClass_use = bbPred[toKeep][:,start:start+self.model.numBBTypes]
                             bbAlignment_use = bbAlignment[toKeep]
-                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use.long()][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
                         else:
                             alignedClass_use = None
                             bbPredClass_use = None
                     else:
                         alignedClass_use = None
+                        bbPredClass_use = None
             else:
                 bbPredNN_use = None
                 bbPredClass_use = None
@@ -648,7 +653,7 @@ class GraphPairTrainer(BaseTrainer):
                     prec=1
                     ap=1
                 recall=1
-                targIndex = -torch.ones(outputBoxes.size(0))
+                targIndex = -torch.ones(outputBoxes.size(0)).int()
             elif relPred is None:
                 if targetBoxes is not None:
                     recall=0

@@ -43,12 +43,57 @@ class BaseTrainer:
         if config['optimizer_type']!="none":
             self.optimizer = getattr(optim, config['optimizer_type'])(model.parameters(),
                                                                       **config['optimizer'])
-        self.lr_scheduler = getattr(
-            optim.lr_scheduler,
-            config['lr_scheduler_type'], None)
-        if self.lr_scheduler:
-            self.lr_scheduler = self.lr_scheduler(self.optimizer, **config['lr_scheduler'])
-            self.epoch_size = config['epoch_size']
+        self.useLearningSchedule = config['trainer']['use_learning_schedule'] if 'use_learning_schedule' in config['trainer'] else False
+        if self.useLearningSchedule=='LR_test':
+            start_lr=0.000001
+            slope = (1-start_lr)/self.iterations
+            lr_lambda = lambda step_num: start_lr + slope*step_num
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule=='cyclic':
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.001
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
+            lr_lambda = lambda step_num: (1-(1-min_lr_mul)*((step_num-1)%cycle_size)/(cycle_size-1))
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule=='cyclic-full':
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.25
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
+            def trueCycle (step_num):
+                cycle_num = step_num//cycle_size
+                if cycle_num%2==0: #even, rising
+                    return ((1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + min_lr_mul
+                else: #odd
+                    return (1-(1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,trueCycle)
+        elif self.useLearningSchedule=='1cycle':
+            low_lr_mul = config['trainer']['low_lr_mul'] if 'low_lr_mul' in config['trainer'] else 0.25
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.0001
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 1000
+            iters_in_trailoff = self.iterations-(2*cycle_size)
+            def oneCycle (step_num):
+                cycle_num = step_num//cycle_size
+                if step_num<cycle_size: #rising
+                    return ((1-low_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + low_lr_mul
+                elif step_num<cycle_size*2: #falling
+                    return (1-(1-low_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
+                else: #trail off
+                    t_step_num = step_num-(2*cycle_size)
+                    return low_lr_mul*(iters_in_trailoff-t_step_num)/iters_in_trailoff + min_lr_mul*t_step_num/iters_in_trailoff
+
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,oneCycle)
+        elif self.useLearningSchedule=='detector':
+            warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
+            lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule is True:
+            warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
+            #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
+            lr_lambda = lambda step_num: min((max(0.000001,step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
+            #y=((x-(2000-3))/100)^-0.1 and y=x*(1.485/2000)+0.01
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule:
+            print('Unrecognized learning schedule: {}'.format(self.useLearningSchedule))
+            exit()
+        
         self.monitor = config['trainer']['monitor']
         self.monitor_mode = config['trainer']['monitor_mode']
         #assert self.monitor_mode == 'min' or self.monitor_mode == 'max'
@@ -85,6 +130,8 @@ class BaseTrainer:
             t = timeit.default_timer()
             result=None
             lastErr=None
+            if self.useLearningSchedule:
+                self.lr_schedule.step()
             for attempt in range(self.retry_count):
                 try:
                     result = self._train_iteration(self.iteration)
@@ -195,14 +242,6 @@ class BaseTrainer:
                 #    print()#clear inplace text
                 #self.logger.info('Minor checkpoint saved for iteration '+str(self.iteration))
 
-            #LR ADJUST (I use a seperate scheduler for most training)
-            if self.lr_scheduler and self.iteration % self.epoch_size == 0:
-                self.lr_scheduler.step(self.iteration/self.epoch_size)
-                lr = self.lr_scheduler.get_lr()[0]
-                if self.iteration%self.log_step!=0:
-                    print('                   ', end='\r')
-                #    print()#clear inplace text
-                self.logger.info('New Learning Rate: {:.6f}'.format(lr))
             
 
     def _train_iteration(self, iteration):

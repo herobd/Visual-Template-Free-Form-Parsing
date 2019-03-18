@@ -238,9 +238,15 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc,getClas
                     precisions.append(1)
                     class_ap.append(1)
                 recalls.append(1)
-        return ap/numClasses, precisions, recalls, class_ap
+        if getClassAP:
+            return ap/numClasses, precisions, recalls, class_ap
+        else:
+            return ap/numClasses, precisions, recalls
     else:
-        return 1, [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
+        if getClassAP:
+            return 1, [1]*numClasses, [1]*numClasses, [1]*numClasses #we didn't for all classes :)
+        else:
+            return 1, [1]*numClasses, [1]*numClasses
 
     allScores=[]
     classScores=[[] for i in range(numClasses)]

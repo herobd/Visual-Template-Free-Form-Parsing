@@ -53,25 +53,6 @@ class BoxDetectTrainer(BaseTrainer):
         #self.log_step = int(np.sqrt(self.batch_size))
         #lr schedule from "Attention is all you need"
         #base_lr=config['optimizer']['lr']
-        if 'cyclic_lr' in config['trainer'] and config['trainer']['cyclic_lr']=='full':
-            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.25
-            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 1000
-            def trueCycle (step_num):
-                cycle_num = step_num//cycle_size
-                if cycle_num%2==0: #even, rising
-                    return ((1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + min_lr_mul
-                else: #odd, falling
-                    return (1-(1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
-            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,trueCycle)
-        elif 'cyclic_lr' in config['trainer'] and config['trainer']['cyclic_lr']:
-            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.01
-            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
-            lr_lambda = lambda step_num: (1-(1-min_lr_mul)*((step_num-1)%cycle_size)/(cycle_size-1))
-            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
-        else:
-            warmup_steps = config['warmup_steps'] if 'warmup_steps' in config else 1000
-            lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
-            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
 
         self.thresh_conf = config['thresh_conf'] if 'thresh_conf' in config else 0.92
         self.thresh_intersect = config['thresh_intersect'] if 'thresh_intersect' in config else 0.4
@@ -164,7 +145,6 @@ class BoxDetectTrainer(BaseTrainer):
         self.model.train()
         #self.model.eval()
         #print('WARNING EVAL')
-        self.lr_schedule.step()
 
         ##tic=timeit.default_timer()
         batch_idx = (iteration-1) % len(self.data_loader)

@@ -90,7 +90,7 @@ class BaseTrainer:
             lr_lambda = lambda step_num: min((max(0.000001,step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
             #y=((x-(2000-3))/100)^-0.1 and y=x*(1.485/2000)+0.01
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
-        else:
+        elif self.useLearningSchedule:
             print('Unrecognized learning schedule: {}'.format(self.useLearningSchedule))
             exit()
         

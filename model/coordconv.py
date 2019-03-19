@@ -6,12 +6,32 @@ class CoordConv(nn.Module):
     def  __init__(self,in_ch,out_ch,kernel_size=3,padding=1,dilation=1,groups=1,features='wave'):
         super(CoordConv, self).__init__()
         self.features=features
-        if features=='wave':
-            self.numChX=5
-            self.numChY=4
-            self.minCycle=16
-            self.maxCycleX=1000
-            self.maxCycleY=700
+        if 'wave' in features:
+            if 'Big' in features:
+                self.numChX=10
+                self.numChY=7
+                self.minCycle=8
+                self.maxCycleX=2000
+                self.maxCycleY=1400
+            elif 'Med' in features:
+                self.numChX=10
+                self.numChY=7
+                self.minCycle=4
+                self.maxCycleX=1000
+                self.maxCycleY=700
+            elif 'Small' in features:
+                self.numChX=10
+                self.numChY=7
+                self.minCycle=2
+                self.maxCycleX=500
+                self.maxCycleY=350
+            else:
+                self.numChX=5
+                self.numChY=4
+                self.minCycle=16
+                self.maxCycleX=1000
+                self.maxCycleY=700
+
             self.cycleStepX = (self.maxCycleX-self.minCycle)/((self.numChX-1)**2)
             self.cycleStepY = (self.maxCycleY-self.minCycle)/((self.numChY-1)**2)
             self.numExtra=self.numChX+self.numChY
@@ -22,7 +42,7 @@ class CoordConv(nn.Module):
         batch_size = input.size(0)
         dimY=input.size(2)
         dimX=input.size(3)
-        if self.features=='wave':
+        if 'wave' in self.features:
             if self.training:
                 xOffset = np.random.randint(0,self.maxCycleX)
                 yOffset = np.random.randint(0,self.maxCycleY)

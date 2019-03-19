@@ -30,11 +30,12 @@ def primeFactors(n):
         ret.append(n)
     return ret
 
-def getGroupSize(channels):
-    if channels>=32:
-        goalSize=8
-    else:
-        goalSize=4
+def getGroupSize(channels,goalSize=None):
+    if goalSize is None:
+        if channels>=32:
+            goalSize=8
+        else:
+            goalSize=4
     if channels%goalSize==0:
         return goalSize
     factors=primeFactors(channels)

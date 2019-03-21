@@ -122,7 +122,6 @@
             "repetitions": 4,
             "use_reptition_res": true,
             "encode_type": "attention"
-
         }
     }
 }

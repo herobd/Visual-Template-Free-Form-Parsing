@@ -41,10 +41,11 @@
         "in_channels": 256,
         "node_out": 0,
         "edge_out": 1,
-        "num_layers": 2,
-        "repitions": 4,
+        "num_layers": 1,
+        "repitions": 6,
+        "use_reptition_res": true,
         "num_heads": 4,
-        "encode_type": "fc",
+        "encode_type": "fc+attention",
         "infeats": 1
     }
 }

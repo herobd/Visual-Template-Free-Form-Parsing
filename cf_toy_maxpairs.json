@@ -4,13 +4,12 @@
     "gpu": 0,
     "override": true,
     "data_loader": {
-        "data_set_name": "RandomMessagesDataset",
+        "data_set_name": "RandomMaxPairsDataset",
         "data_dir": ".",
         "batch_size": 1,
         "shuffle": false,
-        "num_workers": 0,
-        "max_pairs": 1,
-        "max_nodes": 4
+        "num_workers": 5,
+        "max_nodes": 7
     },
     "validation": {
     },
@@ -25,8 +24,8 @@
     "loss": "sigmoid_BCE_loss",
     "metrics": [],
     "trainer": {
-        "class": "ToyMetaGraphTrainer",
-        "iterations": 50000,
+        "class": "MaxPairsMetaGraphTrainer",
+        "iterations": 20000,
         "save_dir": "saved/",
         "val_step": 500,
         "save_step": 5000,
@@ -40,14 +39,12 @@
     "arch": "MetaGraphNet", 
     "model": {
         "in_channels": 256,
-        "layer_type": "attention",
-        "node_out": 10,
-        "edge_out": 0,
+        "node_out": 0,
+        "edge_out": 1,
         "num_layers": 2,
-        "repitions":3,
+        "repitions": 4,
         "num_heads": 4,
         "encode_type": "fc",
-        "infeats": 12,
-        "dropout": null
+        "infeats": 1
     }
 }

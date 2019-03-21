@@ -12,6 +12,7 @@ from model.pairing_graph import PairingGraph
 from model.binary_pair_net import BinaryPairNet
 from model.binary_pair_real import BinaryPairReal
 from model.graph_net import GraphNet
+from model.meta_graph_net import MetaGraphNet
 from model.line_follower import LineFollower
 from model.simpleNN import SimpleNN
 #from .roi_align import ROIAlign

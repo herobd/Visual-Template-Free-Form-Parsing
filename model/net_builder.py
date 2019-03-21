@@ -75,25 +75,25 @@ class ResBlock(nn.Module):
         if not skipFirstReLU:
             #I'm not sure if this is the best thing
             #there should be a way to normalize (mask after normalization?)
-            if norm=='batch_norm':
+            if 'batch' in norm:
                 layers.append(nn.BatchNorm2d(out_ch))
-            if norm=='instance_norm':
+            if 'instance' in norm:
                 layers.append(nn.InstanceNorm2d(out_ch))
-            if norm=='group_norm':
+            if 'group' in norm:
                 layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
             layers.append(nn.ReLU(inplace=True)) 
         conv1=nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=dilation, dilation=dilation)
-        if norm=='weight_norm' or skipFirstReLU: #or just use this normalization?
+        if 'weight' in norm and not skipFirstReLU: #or just use this normalization?
             layers.append(weight_norm(conv1))
         else:
             layers.append(conv1)
 
 
-        if norm=='batch_norm':
+        if 'batch' in norm:
             layers.append(nn.BatchNorm2d(out_ch))
-        if norm=='instance_norm':
+        if 'instance' in norm:
             layers.append(nn.InstanceNorm2d(out_ch))
-        if norm=='group_norm':
+        if 'group' in norm:
             layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
         if dropout is not None:
             if dropout==True or dropout=='2d':
@@ -103,7 +103,7 @@ class ResBlock(nn.Module):
         layers.append(nn.ReLU(inplace=True)) 
         assert(secondKernel%2 == 1)
         conv2=nn.Conv2d(out_ch, out_ch, kernel_size=secondKernel, padding=(secondKernel-1)//2)
-        if norm=='weight_norm':
+        if 'weight' in norm:
             layers.append(weight_norm(conv2))
         else:
             layers.append(conv2)
@@ -133,24 +133,24 @@ class GeneralRes(nn.Module):
         if not skipFirstReLU:
             #I'm not sure if this is the best thing
             #there should be a way to normalize (mask after normalization?)
-            if norm=='batch_norm':
+            if 'batch' in norm:
                 layers.append(nn.BatchNorm2d(out_ch))
-            if norm=='instance_norm':
+            if 'instance' in norm:
                 layers.append(nn.InstanceNorm2d(out_ch))
-            if norm=='group_norm':
+            if 'group' in norm:
                 layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
             layers.append(nn.ReLU(inplace=True)) 
-        if norm=='weight_norm' or skipFirstReLU: #or just use this normalization?
+        if 'weight' in norm and not skipFirstReLU: #or just use this normalization?
             layers.append(weight_norm(ms[0]))
         else:
             layers.append(ms[0])
 
         for m in ms[1:]:
-            if norm=='batch_norm':
+            if 'batch' in norm:
                 layers.append(nn.BatchNorm2d(out_ch))
-            if norm=='instance_norm':
+            if 'instance' in norm:
                 layers.append(nn.InstanceNorm2d(out_ch))
-            if norm=='group_norm':
+            if 'group' in norm:
                 layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
             if dropout is not None:
                 if dropout==True or dropout=='2d':
@@ -159,7 +159,7 @@ class GeneralRes(nn.Module):
                     layers.append(nn.Dropout2d(p=0.1,inplace=True))
             layers.append(nn.ReLU(inplace=True)) 
             assert(secondKernel%2 == 1)
-            if norm=='weight_norm':
+            if 'weight' in norm:
                 layers.append(weight_norm(m))
             else:
                 layers.append(m)
@@ -186,15 +186,15 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None,depthwise=False,
     #if i == len(cfg)-1:
     #    layers += [conv2d]
     #    break
-    if norm=='weight_norm':
+    if 'weight' in norm:
         layers = [weight_norm(conv2d)]
     else:
         layers = [conv2d]
-    if norm=='batch_norm':
+    if 'batch' in norm:
         layers.append(nn.BatchNorm2d(out_ch))
-    elif norm=='instance_norm':
+    elif 'instance' in norm:
         layers.append(nn.InstanceNorm2d(out_ch))
-    elif norm=='group_norm':
+    elif 'group' in norm:
         layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
     if dropout is not None:
         if dropout==True or dropout=='2d':
@@ -208,15 +208,15 @@ def convReLU(in_ch,out_ch,norm,dilation=1,kernel=3,dropout=None,depthwise=False,
 
 def fcReLU(in_ch,out_ch,norm,dropout=None,relu=True):
     fc = nn.Linear(in_ch,out_ch)
-    if norm=='weight_norm':
+    if 'weight' in norm:
         layers = [weight_norm(fc)]
     else:
         layers = [fc]
-    if norm=='batch_norm':
+    if 'batch' in norm:
         layers.append(nn.BatchNorm1d(out_ch))
-    elif norm=='instance_norm':
+    elif 'instance' in norm:
         layers.append(nn.InstanceNorm1d(out_ch))
-    elif norm=='group_norm':
+    elif 'group' in norm:
         layers.append(nn.GroupNorm(getGroupSize(out_ch),out_ch))
     if dropout is not None:
         if dropout != False:

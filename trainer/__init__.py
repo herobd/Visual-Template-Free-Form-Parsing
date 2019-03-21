@@ -7,3 +7,5 @@ from .feature_pair_trainer import FeaturePairTrainer
 from .lf_trainer import LFTrainer
 from .pix_with_feats_trainer import PixWithFeatsTrainer
 from .toy_graph_trainer import ToyGraphTrainer
+from .toy_metagraph_trainer import ToyMetaGraphTrainer
+from .maxpairs_metagraph_trainer import MaxPairsMetaGraphTrainer

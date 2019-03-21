@@ -10,9 +10,9 @@ def collate(batch):
 class RandomDiffusionDataset(torch.utils.data.Dataset):
 
     def __init__(self,config):
-        self.max_on = 4
+        self.max_on =  config['max_on'] if 'max_on' in config else 4
         self.chs=6
-        self.max_nodes = 30
+        self.max_nodes = config['max_nodes'] if 'max_nodes' in config else 30
         self.with_sum=False
 
     def __len__(self):
@@ -26,6 +26,8 @@ class RandomDiffusionDataset(torch.utils.data.Dataset):
         visited=set()
         unvisited=set(range(num_nodes))
         ends = []
+
+        #add edges
         curNode=nextNode = 0
         visited.add(0)
         unvisited.remove(0)

@@ -409,6 +409,8 @@ class PairingGraph(BaseModel):
                     if bbOuts is not None:
                         bbOuts = (bbOuts+bbOuts_B)/2
                         relOuts = (relOuts+relOuts_B)/2
+                bbOuts = bbOuts[:,None,:]
+                relOuts = relOuts[:,None,:]
                 #bbOuts = graphOut[:numBBs]
                 #relOuts = graphOut[numBBs:]
                 ##print('pairer: {}'.format(timeit.default_timer()-tic))
@@ -419,15 +421,15 @@ class PairingGraph(BaseModel):
             if self.predNN:
                 if bbOuts.size(1)>1:
                     #bbOuts[:,0]+=1 #make pred range -1 (to pred o nieghbors)
-                    bbOuts = torch.cat((bbOuts[:,0:1]+1,bbOuts[:,1:]),dim=1) #remove inplace operation?
+                    bbOuts = torch.cat((bbOuts[:,-1,0:1]+1,bbOuts[:,-1,1:]),dim=1) #remove inplace operation?
                 else:
                     bbOuts=bbOuts+1
                 if self.detector.predNumNeighbors and not useGTBBs:
-                    bbPredictions[:,6]=bbOuts[:,0].detach()
+                    bbPredictions[:,6]=bbOuts[:,-1,0].detach()
             if self.predClass:
                 startIndex = 6+self.detector.predNumNeighbors
                 if not useGTBBs:
-                    bbPredictions[:,startIndex:startIndex+self.numBBTypes] = torch.sigmoid(bbOuts[:,self.predNN:self.predNN+self.numBBTypes].detach())
+                    bbPredictions[:,startIndex:startIndex+self.numBBTypes] = torch.sigmoid(bbOuts[:,-1,self.predNN:self.predNN+self.numBBTypes].detach())
             return bbPredictions, offsetPredictions, relOuts, relIndexes, bbOuts
         else:
             return bbPredictions, offsetPredictions, None, None, None

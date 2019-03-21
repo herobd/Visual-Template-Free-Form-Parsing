@@ -40,7 +40,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 1,
+        "lr": 0.004,
         "weight_decay": 0
     },
     "loss": {
@@ -62,7 +62,7 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 30000,
+        "iterations": 10000,
         "save_dir": "saved/",
         "val_step": 200,
         "save_step": 30000,

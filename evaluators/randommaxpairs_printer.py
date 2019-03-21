@@ -4,11 +4,11 @@ import torch
 import cv2
 import math
 from model.loss import *
-from datasets.test_random_diffusion import display
+from datasets.test_random_maxpairs import display
 
 
 
-def RandomDiffusionDataset_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
+def RandomMaxPairsDataset_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None, lossFunc=None):
     def __eval_metrics(data,target):
         acc_metrics = np.zeros((output.shape[0],len(metrics)))
         for ind in range(output.shape[0]):
@@ -17,33 +17,31 @@ def RandomDiffusionDataset_printer(config,instance, model, gpu, metrics, outDir=
         return acc_metrics
 
     def __to_tensor(instance,gpu):
-        features, adjaceny, gt, num = instance
+        features, adjaceny, gt = instance
 
         if gpu is not None:
             features = features.float().to(gpu)
             adjaceny = adjaceny.to(gpu)
-            gt = gt.float().to(gpu)
+            gt = gt.to(gpu)
         else:
             features = features.float()
-            gt = gt.float()
-        return features, adjaceny, gt, num
+        return features, adjaceny, gt
 
     
-    features, adj, gt, num = __to_tensor(instance,gpu)
+    features,edgeIndices, gt = __to_tensor(instance,gpu)
     if True:
-        output,_ = model((features,adj._indices(),None,None))
+        _,output = model((features,edgeIndices,None,None))
         #print(output[:,0])
-        output=output[:num]
-        gts=gt[:,None,:].expand(num,output.size(1),gt.size(1))
+        gts=gt[:,None,:].expand(gt.size(0),output.size(1),gt.size(1))
     else:
         output,_ = model(features,(adj,None),num)
     if lossFunc is not None:
-        loss = lossFunc(output,gts)
+        loss = lossFunc(output,gts.float())
         loss = loss.item()
     else:
         loss=0
 
-    acc = ((torch.sigmoid(output[:,-1])>0.5).float()==gt).float().mean().item()
+    acc = ((torch.sigmoid(output[:,-1])>0.5)==gt).float().mean().item()
 
     #print(loss)
     if 'score' not in config:

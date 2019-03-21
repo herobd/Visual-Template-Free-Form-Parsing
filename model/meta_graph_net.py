@@ -5,8 +5,77 @@ import math
 import json
 from .net_builder import make_layers, getGroupSize
 from .graphconvolution import MultiHeadedAttention
+from torch_geometric.nn import MetaLayer
+from torch_scatter import scatter_mean
 import numpy as np
 import logging
+
+class MetaGraphFCEncoderLayer(nn.Module):
+    def __init__(self, feat,edgeFeat,ch):
+        super(MetaGraphFCEncoderLayer, self).__init__()
+
+        self.node_layer = nn.Linear(feat,ch)
+        if type(edgeFeat) is int and edgeFeat>0:
+            self.edge_layer = nn.Linear(edgeFeat,ch)
+            self.hasEdgeInfo=True
+        else:
+            self.edge_layer = nn.Linear(feat*2,ch)
+            self.hasEdgeInfo=False
+
+    def forward(self, input): 
+        node_features, edge_indexes, edge_features, u_features = input
+        node_featuresN = self.node_layer(node_features)
+        if not self.hasEdgeInfo:
+            edge_features = node_features[edge_indexes].permute(1,0,2).reshape(edge_indexes.size(1),-1)
+        edge_features = self.edge_layer(edge_features)
+
+
+        return node_featuresN, edge_indexes, edge_features, u_features
+
+class MetaGraphMeanLayer(torch.nn.Module):
+    def __init__(self, ch,useGlobal):
+        super(MetaGraphMeanLayer, self).__init__()
+
+        self.edge_mlp = nn.Sequential(nn.Linear(3*ch, ch), nn.ReLU(), nn.Linear(ch, ch))
+        self.node_mlp = nn.Sequential(nn.Linear(2*ch, ch), nn.ReLU(), nn.Linear(ch, ch))
+        if useGlobal:
+            self.global_mlp = nn.Sequential(nn.Linear(ch, ch), nn.ReLU(), nn.Linear(ch, ch))
+
+        def edge_model(source, target, edge_attr, u):
+            # source, target: [E, F_x], where E is the number of edges.
+            # edge_attr: [E, F_e]
+            # u: [B, F_u], where B is the number of graphs.
+            out = torch.cat([source, target, edge_attr], dim=1)
+            return self.edge_mlp(out)
+
+        def node_model(x, edge_index, edge_attr, u):
+            # x: [N, F_x], where N is the number of nodes.
+            # edge_index: [2, E] with max entry N - 1.
+            # edge_attr: [E, F_e]
+            # u: [B, F_u]
+            row, col = edge_index
+            out = torch.cat([x[col], edge_attr], dim=1)
+            out = self.node_mlp(out)
+            return scatter_mean(out, row, dim=0, dim_size=x.size(0))
+
+        def global_model(x, edge_index, edge_attr, u, batch):
+            # x: [N, F_x], where N is the number of nodes.
+            # edge_index: [2, E] with max entry N - 1.
+            # edge_attr: [E, F_e]
+            # u: [B, F_u]
+            # batch: [N] with max entry B - 1.
+            if u is None:
+                return None
+            out = torch.cat([u, scatter_mean(x, batch, dim=0)], dim=1)
+            return self.global_mlp(out)
+
+        self.op = MetaLayer(edge_model, node_model, global_model)
+
+    def forward(self, input):
+        x, edge_index, edge_attr, u = input
+        batch=None
+        x, edge_attr, u = self.op(x, edge_index, edge_attr, u, batch)
+        return x, edge_index, edge_attr, u
 
 #This assumes the inputs are not activated
 class MetaGraphAttentionLayer(nn.Module):
@@ -23,25 +92,25 @@ class MetaGraphAttentionLayer(nn.Module):
             node_in=2
         else:
             node_in=1
-        act=[[] for i in range(5)]
+        act=[[] for i in range(7)]
         dropN=[]
         self.actN=[]
         if useGlobal:
             self.actN_u=[]
         if 'group' in norm:
             #for i in range(5):
-                #act[i].append(nn.GroupNorm(getGroupSize(hidden_ch),hidded_ch))
+                #act[i].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #global    
             act[0].append(nn.GroupNorm(getGroupSize(3*ch,24),3*ch))
-            act[1].append(nn.GroupNorm(getGroupSize(hidden_ch),hidded_ch))
+            act[1].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #edge
+            act[2].append(nn.GroupNorm(getGroupSize(edge_in*ch,edge_in*8),edge_in*ch))
+            act[3].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
+            #node
             self.actN.append(nn.GroupNorm(getGroupSize(ch),ch))
             if useGlobal:
                 self.actN_u.append(nn.GroupNorm(getGroupSize(ch),ch))
-            act[2].append(nn.GroupNorm(getGroupSize(hidden_ch),hidded_ch))
-            #node
-            act[3].append(nn.GroupNorm(getGroupSize(node_in*ch,node_in*8),node_in*ch))
-            act[4].append(nn.GroupNorm(getGroupSize(hidden_ch),hidded_ch))
+            act[4].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #out
             act[5].append(nn.GroupNorm(getGroupSize(ch),ch))
             act[6].append(nn.GroupNorm(getGroupSize(ch),ch))
@@ -52,12 +121,12 @@ class MetaGraphAttentionLayer(nn.Module):
             act[0].append(nn.BatchNorm1d(3*ch))
             act[1].append(nn.BatchNorm1d(hidden_ch))
             #edge
+            act[2].append(nn.BatchNorm1d(edge_in*ch))
+            act[3].append(nn.BatchNorm1d(hidden_ch))
+            #node
             self.actN.append(nn.BatchNorm1d(ch))
             if useGlobal:
                 self.actN_u.append(nn.BatchNorm1d(ch))
-            act[2].append(nn.BatchNorm1d(hidden_ch))
-            #node
-            act[3].append(nn.BatchNorm1d(node_in*ch))
             act[4].append(nn.BatchNorm1d(hidden_ch))
             #out
             act[5].append(nn.BatchNorm1d(ch))
@@ -69,12 +138,12 @@ class MetaGraphAttentionLayer(nn.Module):
             act[0].append(nn.InstanceNorm1d(3*ch))
             act[1].append(nn.InstanceNorm1d(hidden_ch))
             #edge
+            act[2].append(nn.InstanceNorm1d(edge_in*ch))
+            act[3].append(nn.InstanceNorm1d(hidden_ch))
+            #node
             self.actN.append(nn.InstanceNorm1d(ch))
             if useGlobal:
                 self.actN_u.append(nn.InstanceNorm1d(ch))
-            act[2].append(nn.InstanceNorm1d(hidden_ch))
-            #node
-            act[3].append(nn.InstanceNorm1d(node_in*ch))
             act[4].append(nn.InstanceNorm1d(hidden_ch))
             #out
             act[5].append(nn.InstanceNorm1d(ch))
@@ -87,10 +156,14 @@ class MetaGraphAttentionLayer(nn.Module):
             else:
                 da=0.1
             for i in range(7):
-                act[i].append((nn.Dropout(p=da,inplace=True))
-            dropN.append((nn.Dropout(p=da,inplace=True))
+                act[i].append(nn.Dropout(p=da,inplace=True))
+            dropN.append(nn.Dropout(p=da,inplace=True))
         for i in range(7):
             act[i].append(nn.ReLU(inplace=True))
+        self.actN=nn.Sequential(*self.actN)
+        if useGlobal:
+            self.actN_u=nn.Sequential(*self.actN_u)
+
         self.useGlobal=useGlobal
         if useGlobal:
             edge_in +=1
@@ -126,11 +199,13 @@ class MetaGraphAttentionLayer(nn.Module):
             eRange = torch.arange(col.size(0))
             mask = torch.zeros(x.size(0), edge_attr.size(0))
             mask[col,eRange]=1
+            mask = mask.to(x.device)
             #Add batch dimension
             x_b = x[None,...]
             edge_attr_b = edge_attr[None,...]
             g = self.mhAtt(x_b,edge_attr_b,edge_attr_b,mask) 
             #above uses unnormalized, unactivated features.
+            g = g[0] #discard batch dim
 
             xa = self.actN(x)
             if u is not None:
@@ -174,7 +249,8 @@ class MetaGraphAttentionLayer(nn.Module):
 
     def forward(self, input): 
         node_features, edge_indexes, edge_features, u_features = input
-        return self.layer(node_features, edge_indexes, edge_features, u_features)
+        node_features,edge_features,u_features = self.layer(node_features, edge_indexes, edge_features, u_features)
+        return node_features, edge_indexes, edge_features, u_features
 
 class MetaGraphNet(nn.Module):
     def __init__(self, config): # predCount, base_0, base_1):
@@ -188,30 +264,56 @@ class MetaGraphNet(nn.Module):
         self.randomReps = False
 
         ch = config['in_channels']
-        layerType = 'attention'
+        layerType = config['layer_type'] if 'layer_type' in config else 'attention'
         layerCount = config['num_layers'] if 'num_layers' in config else 3
+        numNodeOut = config['node_out']
+        numEdgeOut = config['edge_out']
         norm = config['norm'] if 'norm' in config else 'group'
-        
+        dropout = config['dropout'] if 'dropout' in config else 0.1
+        hasEdgeInfo = config['input_edge'] if 'input_edge' in config else True
         if layerType=='attention':
-            layers = [MetaGraphAttentionLayer(ch,heads=4,dropout=0.1,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
+            heads = config['num_heads'] if 'num_heads' in config else 4
+            layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
+            self.main_layers = nn.Sequential(*layers)
+        elif layerType=='mean':
+            layers = [MetaGraphMeanLayer(ch,False) for i in range(layerCount)]
             self.main_layers = nn.Sequential(*layers)
         else:
             print('Unknown layer type: {}'.format(layerType))
             exit()
 
-        if 'num_input_layers' in config and config['num_input_layers']>0:
-            if layerType=='attention':
-                layers = [MetaGraphAttentionLayer(ch,heads=4,dropout=0.1,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
+        if 'encode_type' in config:
+            inputLayerType = config['encode_type']
+            if inputLayerType=='attention': 
+                assert(config['encode_layers']>0)
+                layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
                 self.input_layers = nn.Sequential(*layers)
+            if inputLayerType=='fc':
+                infeats = config['infeats']
+                infeatsEdge = config['infeats_edge'] if 'infeats_edge' in config else 0
+                self.input_layers = MetaGraphFCEncoderLayer(infeats,infeatsEdge,ch)
         else:
+            assert(hasEdgeInfo==True)
             self.input_layers = None
 
+        actN=[]
+        actE=[]
+        if 'group' in norm:
+            actN.append(nn.GroupNorm(getGroupSize(ch),ch))
+            actE.append(nn.GroupNorm(getGroupSize(ch),ch))
+        elif norm:
+            raise NotImplemented('Havent implemented other norms ({}) in MetaGraphNet'.format(norm))
+        if dropout:
+            actN.append(nn.Dropout(p=dropout,inplace=True))
+            actE.append(nn.Dropout(p=dropout,inplace=True))
+        actN.append(nn.ReLU(inplace=True))
+        actE.append(nn.ReLU(inplace=True))
         if numNodeOut>0:
-            self.node_out_layers=nn.Sequential(*act[5],nn.Linear(ch,numNodeOut))
+            self.node_out_layers=nn.Sequential(*actN,nn.Linear(ch,numNodeOut))
         else:
             self.node_out_layers=lambda x:  None
         if numEdgeOut>0:
-            self.edge_out_layers=nn.Sequential(*act[6],nn.Linear(ch,numEdgeOut))
+            self.edge_out_layers=nn.Sequential(*actE,nn.Linear(ch,numEdgeOut))
         else:
             self.edge_out_layers=lambda x:  None
 
@@ -236,13 +338,13 @@ class MetaGraphNet(nn.Module):
             #    u_featuresA = None
 
         if self.input_layers is not None:
-            node_features, edge_indexes, edge_features, u_features = self.input_layers(node_features, edge_indexes, edge_features, u_features)
+            node_features, edge_indexes, edge_features, u_features = self.input_layers((node_features, edge_indexes, edge_features, u_features))
     
         out_nodes = []
         out_edges = [] #for holding each repititions outputs, so we can backprop on all of them
 
-        for i in range(repititions):
-            node_featuresT, edge_indexesT, edge_featuresT, u_featuresT = self.main_layers(node_features, edge_indexes, edge_features, u_features)
+        for i in range(repetitions):
+            node_featuresT, edge_indexesT, edge_featuresT, u_featuresT = self.main_layers((node_features, edge_indexes, edge_features, u_features))
             if self.useRepRes:
                 node_features+=node_featuresT
                 edge_features+=edge_featuresT
@@ -258,8 +360,19 @@ class MetaGraphNet(nn.Module):
             node_out = self.node_out_layers(node_features)
             edge_out = self.edge_out_layers(edge_features)
 
-            out_nodes.append(node_out)
-            out_edges.append(edge_out)
+            if node_out is not None:
+                out_nodes.append(node_out)
+            if edge_out is not None:
+                out_edges.append(edge_out)
+
+        if len(out_nodes)>0:
+            out_nodes = torch.stack(out_nodes,dim=1) #we introduce a 'time' dimension
+        else:
+            out_nodes = None
+        if len(out_edges)>0:
+            out_edges = torch.stack(out_edges,dim=1) #we introduce a 'time' dimension
+        else:
+            out_edges = None
 
         return out_nodes, out_edges
 

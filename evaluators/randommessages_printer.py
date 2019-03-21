@@ -30,8 +30,12 @@ def RandomMessagesDataset_printer(config,instance, model, gpu, metrics, outDir=N
 
     
     features, adj, gt, num = __to_tensor(instance,gpu)
-
-    output,_ = model(features,(adj,None),num)
+    if True : #type(model) is MetaGraphNet:
+        output,_ = model((features,adj._indices(),None,None))
+        output=output[:num]
+        gt=gt[:,None,:].expand(num,output.size(1),gt.size(1))
+    else:
+        output,_ = model(features,(adj,None),num)
     if lossFunc is not None:
         loss = lossFunc(output,gt)
         loss = loss.item()
@@ -39,7 +43,7 @@ def RandomMessagesDataset_printer(config,instance, model, gpu, metrics, outDir=N
         loss=0
 
     #print(loss)
-    display(instance,torch.sigmoid(output.cpu()))
+    display(instance,torch.sigmoid(output[:,-1].cpu()))
 
     return (
             {'loss':loss},

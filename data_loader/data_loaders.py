@@ -17,6 +17,7 @@ from datasets.forms_pair import FormsPair
 from datasets.forms_lf import FormsLF
 from datasets import random_messages
 from datasets import random_diffusion
+from datasets import random_maxpairs
 #from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -118,12 +119,16 @@ def getDataLoader(config,split):
                 validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
                 return trainLoader, validLoader
         elif data_set_name=='RandomMessagesDataset':
-            data = random_messages.RandomMessagesDataset(config)
+            data = random_messages.RandomMessagesDataset(config['data_loader'])
             dataLoader = torch.utils.data.DataLoader(data,batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers,collate_fn=random_messages.collate)
             return dataLoader,dataLoader
         elif data_set_name=='RandomDiffusionDataset':
             data = random_diffusion.RandomDiffusionDataset(config)
             dataLoader = torch.utils.data.DataLoader(data,batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers,collate_fn=random_diffusion.collate)
+            return dataLoader,dataLoader
+        elif data_set_name=='RandomMaxPairsDataset':
+            data = random_maxpairs.RandomMaxPairsDataset(config)
+            dataLoader = torch.utils.data.DataLoader(data,batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers,collate_fn=random_maxpairs.collate)
             return dataLoader,dataLoader
         else:
             print('Error, no dataloader has no set for {}'.format(data_set_name))

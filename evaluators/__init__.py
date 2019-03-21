@@ -15,6 +15,7 @@ from evaluators.formslf_printer import FormsLF_printer
 from evaluators.ai2d_printer import AI2D_printer
 from evaluators.randommessages_printer import RandomMessagesDataset_printer
 from evaluators.randomdiffusion_printer import RandomDiffusionDataset_printer
+from evaluators.randommaxpairs_printer import RandomMaxPairsDataset_printer
 
 
 #def FormsPair_printer(config,instance, model, gpu, metrics, outDir=None, startIndex=None):

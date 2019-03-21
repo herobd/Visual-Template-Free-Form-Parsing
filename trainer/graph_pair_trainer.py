@@ -567,19 +567,24 @@ class GraphPairTrainer(BaseTrainer):
                 #total_val_metrics += self._eval_metrics(output, target)
         if mAP_count==0:
             mAP_count=1
+        total_rel_prec/=len(self.valid_data_loader)
+        total_rel_recall/=len(self.valid_data_loader)
+        mRecall/=len(self.valid_data_loader)
+        mPrecision/=len(self.valid_data_loader)
+
         toRet= {
             'val_loss': total_val_loss / len(self.valid_data_loader),
             'val_box_loss': total_box_loss / len(self.valid_data_loader),
             'val_rel_loss': total_rel_loss / len(self.valid_data_loader),
             'val_metrics': (total_val_metrics / len(self.valid_data_loader)).tolist(),
-            'val_bb_recall':(mRecall/len(self.valid_data_loader)).tolist(),
-            'val_bb_precision':(mPrecision/len(self.valid_data_loader)).tolist(),
+            'val_bb_recall':(mRecall).tolist(),
+            'val_bb_precision':(mPrecision).tolist(),
             #'val_bb_F':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).tolist(),
-            'val_bb_F_avg':(( (mRecall+mPrecision)/2 )/len(self.valid_data_loader)).mean(),
+            'val_bb_F_avg':( 2*(mRecall*mPrecision)/(mRecall+mPrecision) ).mean(),
             'val_bb_mAP':(mAP/mAP_count),
-            'val_rel_recall':total_rel_recall/len(self.valid_data_loader),
-            'val_rel_prec':total_rel_prec/len(self.valid_data_loader),
-            'val_rel_F':(total_rel_prec+total_rel_recall)/(2*len(self.valid_data_loader)),
+            'val_rel_recall':total_rel_recall,
+            'val_rel_prec':total_rel_prec,
+            'val_rel_F':2*(total_rel_prec*total_rel_recall)/(total_rel_prec+total_rel_recall),
             'val_rel_fullPrec':total_rel_fullPrec/len(self.valid_data_loader),
             'val_rel_mAP': total_AP/AP_count
             #'val_position_loss':total_position_loss / len(self.valid_data_loader),
@@ -636,7 +641,7 @@ class GraphPairTrainer(BaseTrainer):
 
         rels = relIndexes #relPred._indices().cpu()
         predsAll = relPred #relPred._values()
-        sigPredsAll = torch.sigmoid(predsAll)
+        sigPredsAll = torch.sigmoid(predsAll[:,-1])
         predsPos = []
         predsNeg = []
         scores = []
@@ -674,11 +679,11 @@ class GraphPairTrainer(BaseTrainer):
             scores.append( (float('nan'),True) )
     
         if len(predsPos)>0:
-            predsPos = torch.cat(predsPos).to(relPred.device)
+            predsPos = torch.stack(predsPos).to(relPred.device)
         else:
             predsPos = None
         if len(predsNeg)>0:
-            predsNeg = torch.cat(predsNeg).to(relPred.device)
+            predsNeg = torch.stack(predsNeg).to(relPred.device)
         else:
             predsNeg = None
 
@@ -711,7 +716,7 @@ class GraphPairTrainer(BaseTrainer):
             return torch.tensor([]),torch.tensor([]),recall,prec,prec,ap
         rels = relIndexes #relPred._indices().cpu().t()
         predsAll = relPred
-        sigPredsAll = torch.sigmoid(predsAll)
+        sigPredsAll = torch.sigmoid(predsAll[:,-1])
 
         #gt = torch.empty(len(rels))#rels.size(0))
         predsPos = []
@@ -736,11 +741,11 @@ class GraphPairTrainer(BaseTrainer):
         #return gt.to(relPred.device), relPred._values().view(-1).view(-1)
         #return gt.to(relPred[1].device), relPred[1].view(-1)
         if len(predsPos)>0:
-            predsPos = torch.cat(predsPos).to(relPred.device)
+            predsPos = torch.stack(predsPos).to(relPred.device)
         else:
             predsPos = None
         if len(predsNeg)>0:
-            predsNeg = torch.cat(predsNeg).to(relPred.device)
+            predsNeg = torch.stack(predsNeg).to(relPred.device)
         else:
             predsNeg = None
         if len(adj)>0:

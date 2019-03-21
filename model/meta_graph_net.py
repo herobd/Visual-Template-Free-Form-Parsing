@@ -282,19 +282,23 @@ class MetaGraphNet(nn.Module):
             print('Unknown layer type: {}'.format(layerType))
             exit()
 
+        self.input_layers=None
         if 'encode_type' in config:
             inputLayerType = config['encode_type']
-            if inputLayerType=='attention': 
-                assert(config['encode_layers']>0)
-                layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
-                self.input_layers = nn.Sequential(*layers)
-            if inputLayerType=='fc':
+            if 'fc' in inputLayerType:
                 infeats = config['infeats']
                 infeatsEdge = config['infeats_edge'] if 'infeats_edge' in config else 0
                 self.input_layers = MetaGraphFCEncoderLayer(infeats,infeatsEdge,ch)
+            if 'attention' in inputLayerType:
+                #layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
+                #self.input_layers = nn.Sequential(*layers)
+                layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat')
+                if self.input_layers is None:
+                    self.input_layers = layer
+                else:
+                    self.input_layers = nn.Sequential(self.input_layers,layer)
         else:
             assert(hasEdgeInfo==True)
-            self.input_layers = None
 
         actN=[]
         actE=[]

@@ -75,7 +75,7 @@
         "warmup_steps": 1000,
         "conf_thresh_init": 0.5,
         "conf_thresh_change_iters": 0,
-        "retry_count":2,
+        "retry_count":1,
 
         "unfreeze_detector": 2000,
         "partial_from_gt": 0,
@@ -121,7 +121,7 @@
             "num_heads": 4,
             "repetitions": 4,
             "use_reptition_res": true,
-            "encode_type": "attention",
+            "encode_type": "attention"
         }
     }
 }

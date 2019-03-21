@@ -378,7 +378,7 @@ class PairingGraph(BaseModel):
                     useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>1:
             if self.useMetaGraph:
-                graph = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))
+                graph,relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))
                 bbOuts, relOuts = self.pairer(graph)
             else:
                 #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
@@ -783,13 +783,15 @@ class PairingGraph(BaseModel):
             nodeFeatures= bb_features
             edgeFeatures= relFeats
 
-            edges=list(candidates)
-            edges += edges[::-1] #add backward edges for undirected graph
+            edges=candidates
+            edges += [(y,x) for x,y in edges] #add backward edges for undirected graph
             edgeIndexes = torch.LongTensor(edges).t().to(relFeats.device)
+            #now we need to also replicate the edgeFeatures
+            edgeFeatures = edgeFeatures.repeat(2,1)
 
             #features
             universalFeatures=None
-            return nodeFeatures, edgeIndexes, edgeFeatures, universalFeatures
+            return (nodeFeatures, edgeIndexes, edgeFeatures, universalFeatures), relIndexes
         else:
             if bb_features is None:
                 numBB=0

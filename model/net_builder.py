@@ -231,6 +231,8 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
     
     layers=[]
     layerCodes=[]
+    if norm is None:
+        norm = ''
     for i,v in enumerate(cfg[1:]):
         if v == 'M':
             modules.append(nn.Sequential(*layers))
@@ -395,7 +397,7 @@ def make_layers(cfg, dilation=1, norm=None, dropout=None):
             if v[2:4]=='nR':
                 div= 4
                 relu=False
-                norm=None
+                norm=''
                 dropout=None
             else:
                 div = 2

@@ -154,8 +154,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 otherThreshIntur=1 if confThresh is not None else None,
                 hard_detect_limit=600)
 
+    #relPredFull = relPred
+    relPred = relPred[:,-1] #remove time
     if model.predNN and bbPred is not None:
-        predNN = bbPred[:,0]
+        predNN = bbPred[:,-1,0]
     else:
         predNN=None
     if  model.detector.predNumNeighbors and not useDetections:
@@ -345,7 +347,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                         start=1
                         toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
                         if toKeep.any():
-                            bbPredNN_use = bbPred[toKeep][:,0]
+                            bbPredNN_use = bbPred[toKeep][:,:,0]
                             bbAlignment_use = bbAlignment[toKeep]
                             #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
                             if target_num_neighborsT is not None:
@@ -363,7 +365,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                         if targetBoxes is not None:
                             toKeep = bbFullHit==1
                             if toKeep.any():
-                                bbPredClass_use = bbPred[toKeep][:,start:start+model.numBBTypes]
+                                bbPredClass_use = bbPred[toKeep][:,:,start:start+model.numBBTypes]
                                 bbAlignment_use = bbAlignment[toKeep]
                                 alignedClass_use =  targetBoxesT[0][bbAlignment_use][:,13:13+model.numBBTypes] #There should be no -1 indexes in hereS
                             else:
@@ -375,6 +377,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     bbPredNN_use = None
                     bbPredClass_use = None
                 if model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
+                    alignedNN_use = alignedNN_use[:,None,:] #introduce "time" dimension to broadcast
                     nn_loss_final = F.mse_loss(bbPredNN_use,alignedNN_use)
                     #nn_loss_final *= self.lossWeights['nn']
 
@@ -383,7 +386,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 else:
                     nn_loss_final=0
                 if model.predNN and predNN is not None:
-                    predNN_p=bbPred[:,0]
+                    predNN_p=bbPred[:,-1,0]
                     diffs=torch.abs(predNN_p-target_num_neighborsT[0][bbAlignment].float())
                     nn_acc = (diffs<0.5).sum().item()
                     nn_acc /= predNN.size(0)
@@ -396,6 +399,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     nn_acc_d /= predNN.size(0)
 
                 if model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
+                    alignedClass_use = alignedClass_use[:,None,:] #introduce "time" dimension to broadcast
                     class_loss_final = F.binary_cross_entropy_with_logits(bbPredClass_use,alignedClass_use)
                     #class_loss_final *= self.lossWeights['class']
                     #loss += class_loss_final

@@ -379,6 +379,8 @@ class PairingGraph(BaseModel):
         if useBBs.size(0)>1:
             if self.useMetaGraph:
                 graph,relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))
+                if graph is None:
+                    return bbPredictions, offsetPredictions, None, None, None
                 bbOuts, relOuts = self.pairer(graph)
             else:
                 #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
@@ -439,7 +441,10 @@ class PairingGraph(BaseModel):
         candidates = self.selectCandidateEdges(bbs,imageHeight,imageWidth)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
         if len(candidates)==0:
-            return None,None,None,None,None
+            if self.useMetaGraph:
+                return None, None
+            else:
+                return None,None,None,None,None
         ##tic=timeit.default_timer()
 
         #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.relWindowSize,self.relWindowSize)).to(features.device())

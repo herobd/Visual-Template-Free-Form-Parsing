@@ -301,7 +301,7 @@ class GraphPairTrainer(BaseTrainer):
 
 
         if self.model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
-            alignedNN_use = alignedNN_use[:,None,:] #introduce "time" dimension to broadcast
+            alignedNN_use = alignedNN_use[:,None] #introduce "time" dimension to broadcast
             nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
             nn_loss_final *= self.lossWeights['nn']
 
@@ -311,7 +311,7 @@ class GraphPairTrainer(BaseTrainer):
             nn_loss_final=0
 
         if self.model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
-            alignedClass_use = alignedClass_use[:,None,:] #introduce "time" dimension to broadcast
+            alignedClass_use = alignedClass_use[:,None] #introduce "time" dimension to broadcast
             class_loss_final = self.loss['class'](bbPredClass_use,alignedClass_use)
             class_loss_final *= self.lossWeights['class']
             loss += class_loss_final
@@ -523,7 +523,7 @@ class GraphPairTrainer(BaseTrainer):
                     bbPredClass_use = None
 
                 if self.model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
-                    alignedNN_use = alignedNN_use[:,None,:] #introduce "time" dimension to broadcast
+                    alignedNN_use = alignedNN_use[:,None] #introduce "time" dimension to broadcast
                     nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
 
@@ -540,7 +540,7 @@ class GraphPairTrainer(BaseTrainer):
                 nn_acc_total += nn_acc
 
                 if self.model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
-                    alignedClass_use = alignedClass_use[:,None,:] #introduce "time" dimension to broadcast
+                    alignedClass_use = alignedClass_use[:,None] #introduce "time" dimension to broadcast
                     class_loss_final = self.loss['class'](bbPredClass_use,alignedClass_use)
                     class_loss_final *= self.lossWeights['class']
                     loss += class_loss_final

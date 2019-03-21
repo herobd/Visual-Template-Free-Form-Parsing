@@ -377,7 +377,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     bbPredNN_use = None
                     bbPredClass_use = None
                 if model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
-                    alignedNN_use = alignedNN_use[:,None,:] #introduce "time" dimension to broadcast
+                    alignedNN_use = alignedNN_use[:,None] #introduce "time" dimension to broadcast
                     nn_loss_final = F.mse_loss(bbPredNN_use,alignedNN_use)
                     #nn_loss_final *= self.lossWeights['nn']
 

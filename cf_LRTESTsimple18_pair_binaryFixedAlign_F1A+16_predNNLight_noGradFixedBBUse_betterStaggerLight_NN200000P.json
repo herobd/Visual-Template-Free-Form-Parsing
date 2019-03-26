@@ -38,9 +38,9 @@
     
     "lr_scheduler_type": "none",
  
-    "optimizer_type": "Adam",
+    "optimizer_type": "SGD",
     "optimizer": {
-        "lr": 0.004,
+        "lr": 1,
         "weight_decay": 0
     },
     "loss": {
@@ -50,8 +50,8 @@
     },
     "loss_weights": {
         "box": 1.0,
-        "edge": 1.0,
-        "nn": 1.0
+        "edge": 0.5,
+        "nn": 0.25
     },
     "loss_params": 
         {

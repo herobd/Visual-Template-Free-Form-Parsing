@@ -216,6 +216,8 @@ class BoxDetectDataset(torch.utils.data.Dataset):
         else:
             self.useRandomAugProb = None
 
+        self.coordConv = config['coord_conv'] if 'coord_conv' in config else False
+
 
 
 
@@ -277,6 +279,13 @@ class BoxDetectDataset(torch.utils.data.Dataset):
 
         bbs,line_gts,point_gts,pixel_gt,numClasses,numNeighbors,pairs = self.parseAnn(np_img,annotations,s,imagePath)
 
+        if self.coordConv: #add absolute position information
+            xs = 255*np.arange(np_img.shape[1])/(np_img.shape[1]) 
+            xs = np.repeat(xs[None,:,None],np_img.shape[0], axis=0)
+            ys = 255*np.arange(np_img.shape[0])/(np_img.shape[0]) 
+            ys = np.repeat(ys[:,None,None],np_img.shape[1], axis=1)
+            np_img = np.concatenate((np_img,xs.astype(np_img.dtype),ys.astype(np_img.dtype)), axis=2)
+
         ##ticTr=timeit.default_timer()
         if self.transform is not None:
             pairs = None
@@ -303,11 +312,11 @@ class BoxDetectDataset(torch.utils.data.Dataset):
             line_gts = out['line_gt']
 
             ##tic=timeit.default_timer()
-            if np_img.shape[2]==3:
-                np_img = augmentation.apply_random_color_rotation(np_img)
-                np_img = augmentation.apply_tensmeyer_brightness(np_img)
+            if self.color:
+                np_img[:,:,:3] = augmentation.apply_random_color_rotation(np_img[:,:,:3])
+                np_img[:,:,:3] = augmentation.apply_tensmeyer_brightness(np_img[:,:,:3])
             else:
-                np_img = augmentation.apply_tensmeyer_brightness(np_img)
+                np_img[:,:,0:1] = augmentation.apply_tensmeyer_brightness(np_img[:,:,0:1])
             ##print('augmentation: {}'.format(timeit.default_timer()-tic))
         ##print('transfrm: {}  [{}, {}]'.format(timeit.default_timer()-ticTr,org_img.shape[0],org_img.shape[1]))
 

@@ -64,6 +64,18 @@ class BaseTrainer:
                 else: #odd
                     return (1-(1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1))
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,trueCycle)
+        elif self.useLearningSchedule=='cyclic-decay':
+            min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.25
+            cycle_size = config['trainer']['cycle_size'] if 'cycle_size' in config['trainer'] else 500
+            decay_rate = config['trainer']['decay_rate'] if 'decay_rate' in config['trainer'] else 0.99994 #saturates at about 50000 iterations
+            def decayCycle (step_num):
+                cycle_num = step_num//cycle_size
+                decay = decay_rate**step_num
+                if cycle_num%2==0: #even, rising
+                    return decay*((1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1)) + min_lr_mul
+                else: #odd
+                    return -decay*(1-min_lr_mul)*((step_num)%cycle_size)/(cycle_size-1) + 1-(1-min_lr_mul)*(1-decay)
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,decayCycle)
         elif self.useLearningSchedule=='1cycle':
             low_lr_mul = config['trainer']['low_lr_mul'] if 'low_lr_mul' in config['trainer'] else 0.25
             min_lr_mul = config['trainer']['min_lr_mul'] if 'min_lr_mul' in config['trainer'] else 0.0001

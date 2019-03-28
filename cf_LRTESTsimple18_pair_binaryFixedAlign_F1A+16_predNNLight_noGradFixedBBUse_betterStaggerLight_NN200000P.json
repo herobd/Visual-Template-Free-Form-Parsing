@@ -40,7 +40,7 @@
  
     "optimizer_type": "SGD",
     "optimizer": {
-        "lr": 1,
+        "lr": 3,
         "weight_decay": 0
     },
     "loss": {

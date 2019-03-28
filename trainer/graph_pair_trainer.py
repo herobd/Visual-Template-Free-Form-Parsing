@@ -304,8 +304,11 @@ class GraphPairTrainer(BaseTrainer):
             alignedNN_use = alignedNN_use[:,None] #introduce "time" dimension to broadcast
             nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
             nn_loss_final *= self.lossWeights['nn']
-
-            loss += nn_loss_final
+            
+            if loss is not None:
+                loss += nn_loss_final
+            else:
+                loss = nn_loss_final
             nn_loss_final = nn_loss_final.item()
         else:
             nn_loss_final=0
@@ -536,11 +539,11 @@ class GraphPairTrainer(BaseTrainer):
                 else:
                     nn_loss_final=0
                 nn_loss_final_total += nn_loss_final
-                if model.predNN and predNN is not None:
+                nn_acc=-1
+                if self.model.predNN and bbPred is not None:
                     predNN_p=bbPred[:,-1,0]
                     diffs=torch.abs(predNN_p-target_num_neighbors[0][bbAlignment].float())
-                    nn_acc = (diffs<0.5).sum().item()
-                    nn_acc /= predNN.size(0)
+                    nn_acc = (diffs<0.5).float().mean().item()
                 nn_acc_total += nn_acc
 
                 if self.model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:

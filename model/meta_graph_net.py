@@ -338,6 +338,7 @@ class MetaGraphAttentionLayer(nn.Module):
             self.global_mlp = nn.Sequential(*(act[0]),nn.Linear(ch*3, hidden_ch), *(act[1]), nn.Linear(hidden_ch, ch))
 
         self.edge_mlp = nn.Sequential(*(act[2]),nn.Linear(ch*edge_in, hidden_ch), *(act[3]), nn.Linear(hidden_ch, ch))
+        
         if self.soft_prune_edges:
             if edge_decider is None:
                 self.edge_decider = nn.Sequential(*(act[5]),nn.Linear(ch, 1), nn.Sigmoid())
@@ -346,6 +347,8 @@ class MetaGraphAttentionLayer(nn.Module):
             else:
                 # we shouldn't need that bias here since it's already getting trained
                 self.edge_decider = nn.Sequential(edge_decider, SharpSigmoid(-1))
+        else:
+            self.edge_decider = None
         self.node_mlp = nn.Sequential(*dropN,nn.Linear(ch*node_in, hidden_ch), *(act[4]), nn.Linear(hidden_ch, ch))
         self.mhAtt = MultiHeadedAttention(heads,ch)
 
@@ -482,8 +485,10 @@ class MetaGraphNet(nn.Module):
                 edge_decider = None
             if soft_prune_edges=='last':
                 soft_prune_edges_l = ([False]*(layerCount-1)) + [True]
-            else:
+            elif soft_prune_edges:
                 soft_prune_edges_l = [True]*layerCount
+            else:
+                soft_prune_edges_l = [False]*layerCount
 
 
             layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider) for i in range(layerCount)]

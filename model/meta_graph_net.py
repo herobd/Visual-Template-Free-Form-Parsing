@@ -239,6 +239,7 @@ class MetaGraphSelectiveLayer(nn.Module):
 #1/(1+(e^(-(x+1)/0.5)))
 class SharpSigmoid(nn.Module):
     def __init__(self,center,sharp=0.5):
+        super(SharpSigmoid, self).__init__()
         self.c=center
         self.sharp=sharp
     def forward(self,input):
@@ -362,7 +363,7 @@ class MetaGraphAttentionLayer(nn.Module):
             out = self.edge_mlp(out)
             if self.soft_prune_edges:
                 pruneDecision = self.edge_decider(out)
-                print(pruneDecision)
+                #print(pruneDecision)
                 out *= self.soft_prune_edges
             if self.res:
                 out+=edge_attr
@@ -479,8 +480,13 @@ class MetaGraphNet(nn.Module):
                 edge_decider = self.edge_out_layers
             else:
                 edge_decider = None
+            if soft_prune_edges=='last':
+                soft_prune_edges_l = ([False]*(layerCount-1)) + [True]
+            else:
+                soft_prune_edges_l = [True]*layerCount
 
-            layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges,edge_decider=edge_decider) for i in range(layerCount)]
+
+            layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider) for i in range(layerCount)]
             self.main_layers = nn.Sequential(*layers)
         elif layerType=='mean':
             layers = [MetaGraphMeanLayer(ch,False) for i in range(layerCount)]

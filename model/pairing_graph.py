@@ -316,7 +316,7 @@ class PairingGraph(BaseModel):
             print('Unfroze detector')
         
 
-    def forward(self, image, gtBBs=None, gtNNs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300, debug=False):
+    def forward(self, image, gtBBs=None, gtNNs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300, debug=False,old_nn=False):
         ##tic=timeit.default_timer()
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
@@ -410,8 +410,9 @@ class PairingGraph(BaseModel):
                     #Average results together
                     if bbOuts is not None:
                         bbOuts = (bbOuts+bbOuts_B)/2
-                        relOuts = (relOuts+relOuts_B)/2
-                bbOuts = bbOuts[:,None,:]
+                    relOuts = (relOuts+relOuts_B)/2
+                if bbOuts is not None:
+                    bbOuts = bbOuts[:,None,:]
                 relOuts = relOuts[:,None,:]
                 #bbOuts = graphOut[:numBBs]
                 #relOuts = graphOut[numBBs:]
@@ -426,8 +427,9 @@ class PairingGraph(BaseModel):
                     bbOuts = torch.cat((bbOuts[:,:,0:1]+1,bbOuts[:,:,1:]),dim=2) #remove inplace operation?
                 else:
                     bbOuts=bbOuts+1
-                if self.detector.predNumNeighbors and not useGTBBs:
+                if not old_nn and self.detector.predNumNeighbors and not useGTBBs:
                     bbPredictions[:,6]=bbOuts[:,-1,0].detach()
+                
             if self.predClass:
                 startIndex = 6+self.detector.predNumNeighbors
                 if not useGTBBs:

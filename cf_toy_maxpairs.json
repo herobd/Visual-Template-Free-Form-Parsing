@@ -45,9 +45,10 @@
         "repetitions": 4,
         "use_reptition_res": true,
         "num_heads": 4,
-        "soft_prune_edges": "last",
+        "soft_prune_edges": false,
         "prune_with_classifier": false,
         "encode_type": "fc+attention",
+        "force_encoding" : true,
         "infeats": 1
     }
 }

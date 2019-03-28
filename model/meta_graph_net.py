@@ -510,6 +510,7 @@ class MetaGraphNet(nn.Module):
                     self.input_layers = layer
                 else:
                     self.input_layers = nn.Sequential(self.input_layers,layer)
+            self.force_encoding = config['force_encoding'] if 'force_encoding' in config else False
         else:
             assert(hasEdgeInfo==True)
 
@@ -534,11 +535,20 @@ class MetaGraphNet(nn.Module):
             #else:
             #    u_featuresA = None
 
-        if self.input_layers is not None:
-            node_features, edge_indexes, edge_features, u_features = self.input_layers((node_features, edge_indexes, edge_features, u_features))
-    
         out_nodes = []
         out_edges = [] #for holding each repititions outputs, so we can backprop on all of them
+
+        if self.input_layers is not None:
+            node_features, edge_indexes, edge_features, u_features = self.input_layers((node_features, edge_indexes, edge_features, u_features))
+
+            if self.force_encoding:
+                node_out = self.node_out_layers(node_features)
+                edge_out = self.edge_out_layers(edge_features)
+
+                if node_out is not None:
+                    out_nodes.append(node_out)
+                if edge_out is not None:
+                    out_edges.append(edge_out)
         
         for i in range(repetitions):
             node_featuresT, edge_indexesT, edge_featuresT, u_featuresT = self.main_layers((node_features, edge_indexes, edge_features, u_features))

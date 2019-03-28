@@ -96,7 +96,7 @@ class MaxPairsMetaGraphTrainer(BaseTrainer):
         self.optimizer.step()
 
         loss = loss.item()
-        acc = ((torch.sigmoid(output[:,-1])>0.5)==gt).float().mean().item()
+        acc = ((torch.sigmoid(output[:,-1])>0.5)==gt[:,-1]).float().mean().item()
 
         ##toc=timeit.default_timer()
         ##print('bac: '+str(toc-tic))

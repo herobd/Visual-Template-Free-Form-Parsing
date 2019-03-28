@@ -31,7 +31,7 @@ class RandomMaxPairsDataset(torch.utils.data.Dataset):
             if len(ends)>0 and np.random.rand()<0.5:
                 curNode = ends.pop()
             while nextNode==curNode:
-                if np.random.rand()<0.55:
+                if np.random.rand()<0.4:
                     nextNode = np.random.choice(list(unvisited))
                     visited.add(nextNode)
                     unvisited.remove(nextNode)

@@ -231,9 +231,9 @@ class FormsBoxDetect(BoxDetectDataset):
                     np_img.shape[1],
                     annotations['pairs'])
         except Exception as inst:
+            table_points=None
+            table_pixels=None
             if imageName not in self.errors:
-                table_points=None
-                table_pixels=None
                 print(inst)
                 print('Table error on: '+imageName)
                 self.errors.append(imageName)

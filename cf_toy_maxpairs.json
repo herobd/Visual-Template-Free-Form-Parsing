@@ -8,7 +8,7 @@
         "data_dir": ".",
         "batch_size": 1,
         "shuffle": false,
-        "num_workers": 5,
+        "num_workers": 9,
         "max_nodes": 7
     },
     "validation": {
@@ -41,10 +41,12 @@
         "in_channels": 256,
         "node_out": 0,
         "edge_out": 1,
-        "num_layers": 1,
-        "repitions": 6,
+        "num_layers": 2,
+        "repetitions": 4,
         "use_reptition_res": true,
         "num_heads": 4,
+        "soft_prune_edges": "last",
+        "prune_with_classifier": false,
         "encode_type": "fc+attention",
         "infeats": 1
     }

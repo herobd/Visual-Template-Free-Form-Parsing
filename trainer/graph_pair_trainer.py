@@ -502,14 +502,18 @@ class GraphPairTrainer(BaseTrainer):
                     if self.model.predNN:
                         start=1
                         toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
-                        bbPredNN_use = bbPred[toKeep][:,:,0]
-                        bbAlignment_use = bbAlignment[toKeep]
-                        #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
-                        if target_num_neighbors is not None:
-                            target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                        if toKeep.any():
+                            bbPredNN_use = bbPred[toKeep][:,0]
+                            bbAlignment_use = bbAlignment[toKeep]
+                            #becuase we used -1 to indicate no match (in bbAlignment), we add 0 as the last position in the GT, as unmatched 
+                            if target_num_neighbors is not None:
+                                target_num_neighbors_use = torch.cat((target_num_neighbors[0].float(),torch.zeros(1).to(target_num_neighbors.device)),dim=0)
+                            else:
+                                target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
+                            alignedNN_use = target_num_neighbors_use[bbAlignment_use]
                         else:
-                            target_num_neighbors_use = torch.zeros(1).to(bbPred.device)
-                        alignedNN_use = target_num_neighbors_use[bbAlignment_use]
+                            bbAlignment_use=None
+                            alignedNN_use=None
                     else:
                         start=0
                     if self.model.predClass:
@@ -556,7 +560,7 @@ class GraphPairTrainer(BaseTrainer):
                     nn_loss_diff_total += nn_loss_final-nn_loss
                     class_loss_diff_total += class_loss_final-class_loss
                 
-                if self.model.detector.predNumNeighbors:
+                if self.model.detector.predNumNeighbors and outputBoxes.size(0)>0:
                     outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()

@@ -158,6 +158,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 old_nn=True)
 
     #relPredFull = relPred
+    relPred_otherTimes = relPred[:,:-1]
     relPred = relPred[:,-1] #remove time
     if model.predNN and bbPred is not None:
         predNN = bbPred[:,-1,0]
@@ -231,8 +232,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         else:
             print('ERROR, unknown rule {}'.format(config['rule']))
             exit()
+        relPred_otherTimes=torch.FloatTensor()
     elif relPred is not None:
         relPred = torch.sigmoid(relPred)[:,0]
+        relPred_otherTimes=torch.sigmoid(relPred_otherTimes)[:,:,0]
 
 
 
@@ -285,6 +288,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     for rel_threshold in rel_thresholds:
 
             if 'optimize' in config and config['optimize']:
+                relPred_otherTimes=torch.FloatTensor()
                 if 'penalty' in config:
                     penalty = config['penalty']
                 else:
@@ -414,6 +418,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
             truePred=falsePred=badPred=0
             scores=[]
+            scores_otherTimes=[[] for i in range(relPred_otherTimes.size(1))]
             matches=0
             i=0
             numMissedByHeur=0
@@ -428,21 +433,29 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if t0>=0 and t1>=0 and bbFullHit[n0] and bbFullHit[n1]:
                     if (min(t0,t1),max(t0,t1)) in adjacency:
                         matches+=1
-                        scores.append( (relPred[i],True) )
+                        gtRel=True
                         if relPred[i]>rel_threshold_use:
                             truePred+=1
                     else:
-                        scores.append( (relPred[i],False) )
+                        gtRel=False
                         if relPred[i]>rel_threshold_use:
                             falsePred+=1
                 else:
-                    scores.append( (relPred[i],False) )
+                    gtRel=False
                     if relPred[i]>rel_threshold_use:
                         badPred+=1
+                scores.append( (relPred[i],gtRel) )
+                for t in range(relPred_otherTimes.size(1)):
+                    scores_otherTimes[t].append( (relPred_otherTimes[i,t],gtRel) )
             for i in range(len(adjacency)-matches):
                 numMissedByHeur+=1
                 scores.append( (float('nan'),True) )
+                for t in range(relPred_otherTimes.size(1)):
+                    scores_otherTimes[t].append( (float('nan'),True) )
             rel_ap=computeAP(scores)
+            rel_ap_otherTimes=[]
+            for t in range(relPred_otherTimes.size(1)):
+                rel_ap_otherTimes.append( computeAP(scores_otherTimes[t]) )
 
             numMissedByDetect=0
             for t0,t1 in adjacency:
@@ -772,6 +785,13 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if rel_ap is not None: #none ap if no relationships
         retData['rel_AP']=rel_ap
         retData['no_targs']=0
+        #calculate rel_ap differences for timesteps
+        for t in range(1,len(rel_ap_otherTimes)):
+            diff = rel_ap_otherTimes[t]-rel_ap_otherTimes[t-1]
+            retData['rel_AP_diff{}_{}'.format(t-1,t)] = diff
+        if len(rel_ap_otherTimes)>0:
+            diff = rel_ap-rel_ap_otherTimes[-1]
+            retData['rel_AP_diff{}_{}'.format(len(rel_ap_otherTimes)-1,len(rel_ap_otherTimes))] = diff
     else:
         retData['no_targs']=1
     if model.predNN:

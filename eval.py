@@ -252,7 +252,8 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                             else:
                                 if type(typeLists) is float or type(typeLists) is int:
                                     typeLists = [typeLists]
-                                val_comb_metrics[typ]+=typeLists
+                                if val_comb_metrics is not None and typeLists is not None:
+                                    val_comb_metrics[typ]+=typeLists
                     else:
                         val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
             except StopIteration:

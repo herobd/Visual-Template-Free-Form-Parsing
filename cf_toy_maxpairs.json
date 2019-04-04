@@ -1,5 +1,5 @@
 {
-    "name": "toy_graph",
+    "name": "toy_graph2",
     "cuda": true,
     "gpu": 0,
     "override": true,
@@ -45,10 +45,13 @@
         "repetitions": 4,
         "use_reptition_res": true,
         "num_heads": 4,
+        "att_mod": "half",
         "soft_prune_edges": false,
         "prune_with_classifier": false,
         "encode_type": "fc+attention",
         "force_encoding" : true,
+        "rcrhdn_size": 32,
+        "relu_node_act": false,
         "infeats": 1
     }
 }

@@ -80,7 +80,7 @@ class MetaGraphMeanLayer(torch.nn.Module):
 
 #This assumes the inputs are not activated
 class MetaGraphSelectiveLayer(nn.Module):
-    def __init__(self, ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',edge_decider=None): 
+    def __init__(self, ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',edge_decider=None,att_mod=False): 
         super(MetaGraphAttentionLayer, self).__init__()
         
         self.thinker=agg_thinker
@@ -177,7 +177,7 @@ class MetaGraphSelectiveLayer(nn.Module):
         else:
             self.edge_decider = nn.Sequential(edge_decider, SharpSigmoid(0.2))
         self.node_mlp = nn.Sequential(*dropN,nn.Linear(ch*node_in, hidden_ch), *(act[4]), nn.Linear(hidden_ch, ch))
-        self.mhAtt = MultiHeadedAttention(heads,ch)
+        self.mhAtt = MultiHeadedAttention(heads,ch,mod=att_mod)
 
 
         def edge_model(source, target, edge_attr, u):
@@ -248,21 +248,33 @@ class SharpSigmoid(nn.Module):
 
 #This assumes the inputs are not activated
 class MetaGraphAttentionLayer(nn.Module):
-    def __init__(self, ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=False,edge_decider=None): 
+    def __init__(self, ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=False,edge_decider=None,rcrhdn_size=0,relu_node_act=False,att_mod=False): 
         super(MetaGraphAttentionLayer, self).__init__()
         
         self.thinker=agg_thinker
         self.soft_prune_edges=soft_prune_edges
-        if hidden_ch is None:
-            hidden_ch=ch
         self.res=useRes
+
+        if rcrhdn_size>0:
+            #use a special memory channel for recurrent applications of this layer
+            self.rcrhdn_size = rcrhdn_size
+            self.use_rcrhdn = True
+            self.rcrhdn_edges=None
+            self.rcrhdn_nodes=None
+            if useGlobal:
+                self.rcrhdn_global=None
+        else:
+            self.rcrhdn_size = 0
+            self.use_rcrhdn = False
+        if hidden_ch is None:
+            hidden_ch=ch+self.rcrhdn_size
 
         edge_in=3
         if self.thinker=='cat':
             node_in=2
         else:
             node_in=1
-        act=[[] for i in range(7)]
+        act=[[] for i in range(9)]
         dropN=[]
         self.actN=[]
         if useGlobal:
@@ -271,19 +283,24 @@ class MetaGraphAttentionLayer(nn.Module):
             #for i in range(5):
                 #act[i].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #global    
-            act[0].append(nn.GroupNorm(getGroupSize(3*ch,24),3*ch))
+            act[0].append(nn.GroupNorm(getGroupSize(3*ch+rcrhdn_size,24),3*ch+rcrhdn_size))
             act[1].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #edge
-            act[2].append(nn.GroupNorm(getGroupSize(edge_in*ch,edge_in*8),edge_in*ch))
+            act[2].append(nn.GroupNorm(getGroupSize(edge_in*ch+rcrhdn_size,edge_in*8),edge_in*ch+rcrhdn_size))
             act[3].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #node
-            self.actN.append(nn.GroupNorm(getGroupSize(ch),ch))
+            self.actN.append(nn.GroupNorm(getGroupSize(ch+rcrhdn_size),ch+rcrhdn_size))
             if useGlobal:
                 self.actN_u.append(nn.GroupNorm(getGroupSize(ch),ch))
             act[4].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #decider
             act[5].append(nn.GroupNorm(getGroupSize(ch),ch))
+
+            if self.use_rcrhdn:
+                for i in range(6,9):
+                    act[i].append(nn.GroupNorm(getGroupSize(ch),ch))
         elif 'batch' in norm:
+            raise NotImplemented('Havent added rcrhdn_size')
             #for i in range(5):
             #    act[i].append(nn.BatchNorm1d(ch))
             #global
@@ -300,6 +317,7 @@ class MetaGraphAttentionLayer(nn.Module):
             #decider
             act[5].append(nn.BatchNorm1d(ch))
         elif 'instance' in norm:
+            raise NotImplemented('Havent added rcrhdn_size')
             #for i in range(5):
             #    act[i].append(nn.InstanceNorm1d(ch))
             #global
@@ -322,11 +340,13 @@ class MetaGraphAttentionLayer(nn.Module):
                 da=dropout
             else:
                 da=0.1
-            for i in range(7):
+            for i in range(len(act)):
                 act[i].append(nn.Dropout(p=da,inplace=True))
             dropN.append(nn.Dropout(p=da,inplace=True))
-        for i in range(7):
+        for i in range(len(act)):
             act[i].append(nn.ReLU(inplace=True))
+        if relu_node_act:
+            self.actN.append(nn.ReLU(inplace=True))
         self.actN=nn.Sequential(*self.actN)
         if useGlobal:
             self.actN_u=nn.Sequential(*self.actN_u)
@@ -335,9 +355,9 @@ class MetaGraphAttentionLayer(nn.Module):
         if useGlobal:
             edge_in +=1
             node_in +=1
-            self.global_mlp = nn.Sequential(*(act[0]),nn.Linear(ch*3, hidden_ch), *(act[1]), nn.Linear(hidden_ch, ch))
+            self.global_mlp = nn.Sequential(*(act[0]),nn.Linear(ch*3+rcrhdn_size, hidden_ch), *(act[1]), nn.Linear(hidden_ch, ch+rcrhdn_size))
 
-        self.edge_mlp = nn.Sequential(*(act[2]),nn.Linear(ch*edge_in, hidden_ch), *(act[3]), nn.Linear(hidden_ch, ch))
+        self.edge_mlp = nn.Sequential(*(act[2]),nn.Linear(ch*edge_in+rcrhdn_size, hidden_ch), *(act[3]), nn.Linear(hidden_ch, ch+rcrhdn_size))
         
         if self.soft_prune_edges:
             if edge_decider is None:
@@ -349,8 +369,15 @@ class MetaGraphAttentionLayer(nn.Module):
                 self.edge_decider = nn.Sequential(edge_decider, SharpSigmoid(-1))
         else:
             self.edge_decider = None
-        self.node_mlp = nn.Sequential(*dropN,nn.Linear(ch*node_in, hidden_ch), *(act[4]), nn.Linear(hidden_ch, ch))
-        self.mhAtt = MultiHeadedAttention(heads,ch)
+        self.node_mlp = nn.Sequential(*dropN,nn.Linear(ch*node_in+rcrhdn_size, hidden_ch), *(act[4]), nn.Linear(hidden_ch, ch+rcrhdn_size))
+        self.mhAtt = MultiHeadedAttention(heads,ch,mod=att_mod)
+
+        if self.use_rcrhdn:
+            #these layers are for providing initial values when cold-starting the recurrent net
+            self.start_rcrhdn_nodes = nn.Sequential(*act[6],nn.Linear(ch,self.rcrhdn_size))
+            self.start_rcrhdn_edges = nn.Sequential(*act[7],nn.Linear(ch,self.rcrhdn_size))
+            if self.useGlobal:
+                self.start_rcrhdn_edges = nn.Sequential(*act[8],nn.Linear(ch,self.rcrhdn_size))
 
 
         def edge_model(source, target, edge_attr, u):
@@ -363,7 +390,12 @@ class MetaGraphAttentionLayer(nn.Module):
                 out = torch.cat([source, target, edge_attr,us], dim=1)
             else:
                 out = torch.cat([source, target, edge_attr], dim=1)
+            if self.use_rcrhdn:
+                out = torch.cat([out,self.rcrhdn_edges],dim=1)
             out = self.edge_mlp(out)
+            if self.use_rcrhdn:
+                self.rcrhdn_edges=out[:,-self.rcrhdn_size:]
+                out=out[:,:-self.rcrhdn_size]
             if self.soft_prune_edges:
                 pruneDecision = self.edge_decider(out)
                 #print(pruneDecision)
@@ -389,21 +421,28 @@ class MetaGraphAttentionLayer(nn.Module):
             #above uses unnormalized, unactivated features.
             g = g[0] #discard batch dim
 
-            xa = self.actN(x)
+            if self.use_rcrhdn:
+                xa = self.actN(torch.cat((x,self.rcrhdn_nodes),dim=1))
+            else:
+                xa = self.actN(x)
             if u is not None:
                 assert(u.size(0)==1)
                 us = u.expand(source.size(0),u.size(1))
                 us = self.actN_u(us)
                 if self.thinker=='cat':
-                    out= self.node_mlp(torch.cat((xa,g,us),dim=1))
+                    input=torch.cat((xa,g,us),dim=1)
                 elif self.thinker=='add':
                     g+=xa
-                    out= self.node_mlp(torch.cat((g,us),dim=1))
+                    input=torch.cat((g,us),dim=1)
             else:
                 if self.thinker=='cat':
-                    out= self.node_mlp(torch.cat((xa,g),dim=1))
+                    input=torch.cat((xa,g),dim=1)
                 elif self.thinker=='add':
-                    out= self.node_mlp(g+xa)
+                    input= g+xa
+            out= self.node_mlp(input)
+            if self.use_rcrhdn:
+                self.rcrhdn_nodes=out[:,-self.rcrhdn_size:]
+                out=out[:,:-self.rcrhdn_size]
             if self.res:
                 out+=x
             return out
@@ -420,7 +459,12 @@ class MetaGraphAttentionLayer(nn.Module):
                 else:
                     raise NotImplemented('batching not implemented for scatter_mean of edge_attr')
                     out = torch.cat([u, scatter_mean(x, batch, dim=0)], dim=1)
+                if self.use_rcrhdn:
+                    out = torch.cat([out,self.rcrhdn_global],dim=1)
                 out = self.global_mlp(out)
+                if self.use_rcrhdn:
+                    self.rcrhdn_global=out[:,-self.rcrhdn_size:]
+                    out=out[:,:-self.rcrhdn_size]
                 if self.res:
                     out+=u
                 return out
@@ -431,8 +475,18 @@ class MetaGraphAttentionLayer(nn.Module):
 
     def forward(self, input): 
         node_features, edge_indexes, edge_features, u_features = input
+        if self.use_rcrhdn and self.rcrhdn_nodes is None:
+            self.rcrhdn_nodes = self.start_rcrhdn_nodes(node_features)
+            self.rcrhdn_edges = self.start_rcrhdn_edges(edge_features)
+            if self.useGlobal:
+                self.rcrhdn_global = self.start_rcrhdn_global(u_features)
         node_features,edge_features,u_features = self.layer(node_features, edge_indexes, edge_features, u_features)
         return node_features, edge_indexes, edge_features, u_features
+
+    def clear(self):
+        self.rcrhdn_nodes = None
+        self.rcrhdn_edges = None
+        self.rcrhdn_global = None
 
 class MetaGraphNet(nn.Module):
     def __init__(self, config): # predCount, base_0, base_1):
@@ -477,6 +531,9 @@ class MetaGraphNet(nn.Module):
 
 
         if layerType=='attention':
+            rcrhdn_size = config['rcrhdn_size'] if 'rcrhdn_size' in config else 0
+            att_mod = config['att_mod'] if 'att_mod' in config else False
+            relu_node_act = config['relu_node_act'] if 'relu_node_act' in config else 0
             heads = config['num_heads'] if 'num_heads' in config else 4
             soft_prune_edges = config['soft_prune_edges'] if 'soft_prune_edges' in config else False
             if 'prune_with_classifier' in config and config['prune_with_classifier']:
@@ -491,7 +548,7 @@ class MetaGraphNet(nn.Module):
                 soft_prune_edges_l = [False]*layerCount
 
 
-            layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider) for i in range(layerCount)]
+            layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size,relu_node_act=relu_node_act,att_mod=att_mod) for i in range(layerCount)]
             self.main_layers = nn.Sequential(*layers)
         elif layerType=='mean':
             layers = [MetaGraphMeanLayer(ch,False) for i in range(layerCount)]
@@ -510,7 +567,7 @@ class MetaGraphNet(nn.Module):
             if 'attention' in inputLayerType:
                 #layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
                 #self.input_layers = nn.Sequential(*layers)
-                layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat')
+                layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',relu_node_act=relu_node_act,att_mod=att_mod)
                 if self.input_layers is None:
                     self.input_layers = layer
                 else:
@@ -576,6 +633,8 @@ class MetaGraphNet(nn.Module):
                 out_nodes.append(node_out)
             if edge_out is not None:
                 out_edges.append(edge_out)
+        for layer in self.main_layers:
+            layer.clear()
 
         if len(out_nodes)>0:
             out_nodes = torch.stack(out_nodes,dim=1) #we introduce a 'time' dimension
@@ -585,6 +644,7 @@ class MetaGraphNet(nn.Module):
             out_edges = torch.stack(out_edges,dim=1) #we introduce a 'time' dimension
         else:
             out_edges = None
+
 
         return out_nodes, out_edges
 

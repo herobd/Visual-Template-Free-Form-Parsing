@@ -10,9 +10,11 @@ from model.binary_pair_net import BinaryPairNet
 from model.binary_pair_real import BinaryPairReal
 #from model.roi_align.roi_align import RoIAlign
 from model.roi_align import ROIAlign as RoIAlign
+from model.cnn_lstm import CRNN
 from skimage import draw
 from model.net_builder import make_layers, getGroupSize
 from utils.yolo_tools import non_max_sup_iou, non_max_sup_dist
+from utils.util import decode_handwriting
 import math
 import random
 import json
@@ -298,6 +300,26 @@ class PairingGraph(BaseModel):
 
         self.useOldDecay = config['use_old_len_decay'] if 'use_old_len_decay' in config else False
 
+
+        #HWR stuff
+        if 'text_rec' in config:
+            if config['text_rec']['model'] == 'CRNN':
+                self.hw_channels=config['text_rec']['num_channels']
+                self.text_rec = [CRNN(config['text_rec']['cnn_out_size'],config['text_rec']['num_channels'],config['text_rec']['num_outputs'],512)]
+                print('WARNING, text_rec is wrapped to prevent training')
+                self.text_rec[0].eval()
+                self.text_rec[0] = self.text_rec[0].cuda()
+                state=torch.load(config['text_rec']['file'])
+                self.text_rec[0].load_state_dict(state)
+                self.hw_input_height = config['text_rec']['input_height']
+                with open(config['text_rec']['char_set']) as f:
+                    char_set = json.load(f)
+                self.idx_to_char = {}
+                for k,v in char_set['idx_to_char'].items():
+                    self.idx_to_char[int(k)] = v
+
+            self.embedding_model = lambda x: None #This could be a learned function, or preload something
+
         if 'DEBUG' in config:
             self.detector.setDEBUG()
             self.setDEBUG()
@@ -377,8 +399,13 @@ class PairingGraph(BaseModel):
                 else:
                     useBBs = torch.cat((useBBs,classes),dim=1)
         if useBBs.size(0)>1:
+            if self.text_rec is not None:
+                transcriptions = self.getTranscriptions(useBBs,image)
+                embeddings = self.embedding_model(transcriptions)
+            else:
+                embeddings=None
             if self.useMetaGraph:
-                graph,relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))
+                graph,relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings)
                 if graph is None:
                     return bbPredictions, offsetPredictions, None, None, None
                 bbOuts, relOuts = self.pairer(graph)
@@ -387,7 +414,7 @@ class PairingGraph(BaseModel):
                 if self.training: #0.3987808480 0.398469038200 not a big difference, but it's "the right" thing to do
                     if debug:
                         import pdb;pdb.set_trace()
-                    bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1))# ,debug_image=image)
+                    bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings)# ,debug_image=image)
                     if bbAndRel_features is None:
                         return bbPredictions, offsetPredictions, None, None, None
 
@@ -396,11 +423,11 @@ class PairingGraph(BaseModel):
                     bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
                 else:
                     #If evaluating, force the masks of relationships to be the two ways and average
-                    bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),flip=False)
+                    bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings,flip=False)
                     if bbAndRel_features is None:
                         return bbPredictions, offsetPredictions, None, None, None
 
-                    bbAndRel_features_B, adjacencyMatrix_B, numBBs_B, numRel_B, relIndexes_B = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),flip=True)
+                    bbAndRel_features_B, adjacencyMatrix_B, numBBs_B, numRel_B, relIndexes_B = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings,flip=True)
 
                     assert(numBBs==numBBs_B and numRel==numRel_B)
                     for i,(n1,n2) in enumerate(relIndexes):
@@ -436,7 +463,9 @@ class PairingGraph(BaseModel):
         else:
             return bbPredictions, offsetPredictions, None, None, None
 
-    def createGraph(self,bbs,features,features2,imageHeight,imageWidth,flip=None,debug_image=None):
+    def createGraph(self,bbs,features,features2,imageHeight,imageWidth,text_emb=None,flip=None,debug_image=None):
+        if text_emb is not None:
+            raise NotImplemented('having appened text emb yet')
         ##tic=timeit.default_timer()
         candidates = self.selectCandidateEdges(bbs,imageHeight,imageWidth)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
@@ -1140,6 +1169,89 @@ class PairingGraph(BaseModel):
         #This is a problem, we couldn't prune down enough
         print("ERROR: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
         return list(candidates)[:MAX_GRAPH_SIZE-numBoxes]
+
+    def getTranscriptions(self,bbs,image):
+        #get corners from bb predictions
+        x = bbs[:,0]
+        y = bbs[:,1]
+        r = bbs[:,2]
+        h = bbs[:,3]
+        w = bbs[:,4]
+        cos_r = torch.cos(r)
+        sin_r = torch.sin(r)
+        tlX = -w*cos_r + -h*sin_r +x
+        tlY =  w*sin_r + -h*cos_r +y
+        trX =  w*cos_r + -h*sin_r +x
+        trY = -w*sin_r + -h*cos_r +y
+        brX =  w*cos_r + h*sin_r +x
+        brY = -w*sin_r + h*cos_r +y
+        blX = -w*cos_r + h*sin_r +x
+        blY =  w*sin_r + h*cos_r +y
+
+        tlX = tlX.cpu()
+        tlY = tlY.cpu()
+        trX = trX.cpu()
+        trY = trY.cpu()
+        blX = blX.cpu()
+        blY = blY.cpu()
+        brX = brX.cpu()
+        brY = brY.cpu()
+
+        x1 = torch.min(torch.min(tlX,trX),torch.min(brX,blX)).int()
+        x2 = torch.max(torch.max(tlX,trX),torch.max(brX,blX)).int()
+        y1 = torch.min(torch.min(tlY,trY),torch.min(brY,blY)).int()
+        y2 = torch.max(torch.max(tlY,trY),torch.max(brY,blY)).int()
+
+        x1 = torch.max(x1,torch.tensor(0).int())
+        x2 = torch.min(x2,torch.tensor(image.size(3)-1).int())
+        y1 = torch.max(y1,torch.tensor(0).int())
+        y2 = torch.min(y2,torch.tensor(image.size(2)-1).int())
+
+        h *=2
+        w *=2
+
+        scale = self.hw_input_height/h
+        scaled_w = (w*scale).int()
+        max_w = scaled_w.max().item()
+
+        #scale = scale.cpu().detach()
+        #scaled_w = scaled_w.cpu().detach()
+        #r = r.cpu().detach()
+        #h = h.cpu().detach()
+        #w = w.cpu().detach()
+
+        lines = torch.FloatTensor(bbs.size(0),image.size(1),self.hw_input_height,max_w).fill_(0).to(image.device)
+        imm = [None]*bbs.size(0)
+        for i in range(bbs.size(0)):
+            
+            if self.rotation:
+                crop = rotate(image[0,:,y1[i]:y2[i]+1,x1[i]:x2[i]+1],r[i],(h[i],w[i]))
+            else:
+                crop = image[...,y1[i]:y2[i]+1,x1[i]:x2[i]+1]
+            scale = self.hw_input_height/crop.size(2)
+            scaled_w = int(crop.size(3)*scale)
+            lines[i,:,:,0:scaled_w] = F.interpolate(crop, size=(self.hw_input_height,scaled_w), mode='bilinear')#.to(crop.device)
+            imm[i] = lines[i].cpu().numpy().transpose([1,2,0])
+            imm[i] = 256*(2-imm[i])/2
+
+
+
+        if lines.size(1)==1 and self.hw_channels==3:
+            lines = lines.expand(-1,3,-1,-1)
+
+        res = self.text_rec[0](lines)
+
+        #Debug
+        resN=res.data.cpu().numpy()
+        output_strings, decoded_raw_hw = decode_handwriting(resN, self.idx_to_char)
+        for i in range(bbs.size(0)):
+            cv2.imwrite('out2/line{}-{}.png'.format(i,output_strings[i]),imm[i])
+            #cv2.imshow('line',imm)
+            #cv2.waitKey()
+
+        return res
+
+
 
     def setDEBUG(self):
         self.debug=True

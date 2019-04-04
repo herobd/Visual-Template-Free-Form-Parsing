@@ -11,6 +11,7 @@ class RandomMaxPairsDataset(torch.utils.data.Dataset):
 
     def __init__(self,config):
         self.max_nodes = config['max_nodes'] if 'max_nodes' in config else 7
+        self.max_edges = 25
 
     def __len__(self):
         return 25
@@ -27,11 +28,11 @@ class RandomMaxPairsDataset(torch.utils.data.Dataset):
         curNode=nextNode = 0
         visited.add(0)
         unvisited.remove(0)
-        while len(unvisited)>0:
+        while len(unvisited)>0 and len(edges)<self.max_edges:
             if len(ends)>0 and np.random.rand()<0.5:
                 curNode = ends.pop()
             while nextNode==curNode:
-                if np.random.rand()<0.55:
+                if np.random.rand()<0.4:
                     nextNode = np.random.choice(list(unvisited))
                     visited.add(nextNode)
                     unvisited.remove(nextNode)

@@ -15,6 +15,16 @@ If upgrading cuda, remove the old version first either with apt-get or uninstall
 * `pytorch torchvision -c pytorch` or what ever the command is on pytorch.org given cuda version, etc
 * `opencv`
 * `scikit-image`
+for pytorch geometric (meta graph):
+$ pip install --verbose --no-cache-dir torch-scatter
+$ pip install --verbose --no-cache-dir torch-sparse
+$ pip install --verbose --no-cache-dir torch-cluster
+$ pip install --verbose --no-cache-dir torch-spline-conv (optional)
+$ pip install torch-geometric
+
+for cvxpy (optimiation), must have python 3.7 or later:
+clone github: https://github.com/cvxgrp/cvxpy
+python setup.py install
 
 # Install
 `python setup.py build develop`

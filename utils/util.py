@@ -1,6 +1,7 @@
 import os
 import struct
 import torch
+from . import string_utils
 
 
 def ensure_dir(path):
@@ -121,3 +122,18 @@ def get_image_size(file_path):
             )
 
     return width, height
+
+def decode_handwriting(out, idx_to_char):
+    hw_out = out#['hw']
+    list_of_pred = []
+    list_of_raw_pred = []
+    for i in range(hw_out.shape[0]):
+        logits = hw_out[i,...]
+        pred, raw_pred = string_utils.naive_decode(logits)
+        pred_str = string_utils.label2str_single(pred, idx_to_char, False)
+        raw_pred_str = string_utils.label2str_single(raw_pred, idx_to_char, True)
+        list_of_pred.append(pred_str)
+        list_of_raw_pred.append(raw_pred_str)
+
+    return list_of_pred, list_of_raw_pred
+

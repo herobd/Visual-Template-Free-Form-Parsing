@@ -120,8 +120,27 @@ def attention(query, key, value, mask=None, dropout=None):
     if dropout is not None:
         p_attn = dropout(p_attn)
     return torch.matmul(p_attn, value), p_attn
+def learned_attention(query, key, value, mask=None, dropout=None,network=None):
+    "Compute Attention using provided network"
+
+    #naive "everywhere" implmenetation
+    assert(len(query.size())==4)
+    query_ex = query[:,:,:,None,:].expand(-1,-1,query.size(2),key.size(2),-1)
+    key_ex = key[:,:,None,:,:].expand(-1,-1,query.size(2),key.size(2),-1)
+    comb = torch.cat((query_ex,key_ex),dim=4)
+    comb = comb.view(comb.size(0),comb.size(1),-1,comb.size(-1))
+    scores = network(comb[:,0])
+    #scores = torch.stack(scores,dim=1)
+    scores = scores.view(scores.size(0),1,query.size(2),key.size(2))
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, -1e9)
+
+    p_attn = F.softmax(scores, dim = -1)
+    if dropout is not None:
+        p_attn = dropout(p_attn)
+    return torch.matmul(p_attn, value), p_attn
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, h, d_model, dropout=0.1):
+    def __init__(self, h, d_model, dropout=0.1, mod=None):
         "Take in model size and number of heads."
         super(MultiHeadedAttention, self).__init__()
         assert d_model % h == 0
@@ -131,6 +150,16 @@ class MultiHeadedAttention(nn.Module):
         self.linears = clones(nn.Linear(d_model, d_model), 4) #W_q W_k W_v W_o
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
+        self.mod=mod #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
+        if mod=='learned':
+            self.attNet = nn.Sequential(
+                    #nn.GroupNorm(getGroupSize(self.d_k*2),self.d_k*2),
+                    nn.ReLU(inplace=True),
+                    nn.Linear(self.d_k*2,self.d_k//4),
+                    #nn.GroupNorm(getGroupSize(self.d_k//4),self.d_k//4),
+                    nn.ReLU(inplace=True),
+                    nn.Linear(self.d_k//4,1) 
+                    ) 
         
     def forward(self, query, key, value, mask=None):
         "Implements Figure 2"
@@ -145,8 +174,15 @@ class MultiHeadedAttention(nn.Module):
              for l, x in zip(self.linears, (query, key, value))]
         
         # 2) Apply attention on all the projected vectors in batch. 
-        x, self.attn = attention(query, key, value, mask=mask, 
-                                 dropout=self.dropout)
+        if self.mod=='half':
+            x, self.attn = attention(query[...,:self.d_k//2], key[...,:self.d_k//2], value, mask=mask, 
+                                     dropout=self.dropout)
+        elif self.mod=='learned':
+            x, self.attn = learned_attention(query, key, value, mask=mask, 
+                                     dropout=self.dropout,network=self.attNet)
+        else:
+            x, self.attn = attention(query, key, value, mask=mask, 
+                                     dropout=self.dropout)
         
         # 3) "Concat" using a view and apply a final linear. 
         x = x.transpose(1, 2).contiguous() \

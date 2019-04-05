@@ -175,3 +175,55 @@ class ScaleRotateMatrixGenerator(Module):
         output[:,0,1] =  sinuses * scaler
 
         return output
+
+#from https://gist.github.com/ncullen93/425ca642955f73452ebc097b3b46c493
+def transform_matrix_offset_center(matrix, x, y):
+    """Apply offset to a transform matrix so that the image is
+    transformed about the center of the image. 
+    NOTE: This is a fairly simple operaion, so can easily be
+    moved to full torch.
+    Arguments
+    ---------
+    matrix : 3x3 matrix/array
+    x : integer
+        height dimension of image to be transformed
+    y : integer
+        width dimension of image to be transformed
+    """
+    o_x = float(x) / 2 + 0.5
+    o_y = float(y) / 2 + 0.5
+    offset_matrix = np.array([[1, 0, o_x], [0, 1, o_y], [0, 0, 1]])
+    reset_matrix = np.array([[1, 0, -o_x], [0, 1, -o_y], [0, 0, 1]])
+    transform_matrix = np.dot(np.dot(offset_matrix, matrix), reset_matrix)
+    return transform_matrix
+
+def apply_transform(x, transform, fill_mode='nearest', fill_value=0., out_shape=None):
+    """Applies an affine transform to a 2D array, or to each channel of a 3D array.
+    NOTE: this can and certainly should be moved to full torch operations.
+    Arguments
+    ---------
+    x : np.ndarray
+        array to transform. NOTE: array should be ordered CHW
+    
+    transform : 3x3 affine transform matrix
+        matrix to apply
+    """
+    x = x.astype('float32')
+    transform = transform_matrix_offset_center(transform, x.shape[1], x.shape[2])
+    final_affine_matrix = transform[:2, :2]
+    final_offset = transform[:2, 2]
+    channel_images = [ndi.interpolation.affine_transform(x_channel, final_affine_matrix,
+            final_offset,output_shape=out_shape, order=0, mode=fill_mode, cval=fill_value) for x_channel in x]
+    x = np.stack(channel_images, axis=0)
+    return x
+
+def rotate(input, rotation, crop_to):
+    #if rotation==0:
+    #    return input
+    theta = rotation #math.pi / 180 * degree
+    rotation_matrix = np.array([[math.cos(theta), -math.sin(theta), 0],
+                                [math.sin(theta), math.cos(theta), 0],
+                                [0, 0, 1]])
+    x_transformed = torch.from_numpy(apply_transform(input.numpy(), rotation_matrix,
+        fill_mode=self.fill_mode, fill_value=self.fill_value, out_shape=crop_to))
+    return x_transformed

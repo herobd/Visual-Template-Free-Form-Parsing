@@ -466,12 +466,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 if t0 not in targGotHit or t1 not in targGotHit:
                     numMissedByHeur-=1
                     numMissedByDetect+=1
-            heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)
-            detectRecall = (len(adjacency)-numMissedByDetect)/len(adjacency)
             if len(adjacency)>0:
                 relRecall = truePred/len(adjacency)
+                heurRecall = (len(adjacency)-numMissedByHeur)/len(adjacency)
+                detectRecall = (len(adjacency)-numMissedByDetect)/len(adjacency)
             else:
                 relRecall = 1
+                heurRecall = 1
+                detectRecall = 1
             #if falsePred>0:
             #    relPrec = truePred/(truePred+falsePred)
             #else:

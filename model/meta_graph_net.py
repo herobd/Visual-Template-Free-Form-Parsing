@@ -454,6 +454,8 @@ class MetaGraphNet(nn.Module):
         dropout = config['dropout'] if 'dropout' in config else 0.1
         hasEdgeInfo = config['input_edge'] if 'input_edge' in config else True
 
+        self.trackAtt=False
+
         actN=[]
         actE=[]
         if 'group' in norm:
@@ -543,8 +545,13 @@ class MetaGraphNet(nn.Module):
         out_nodes = []
         out_edges = [] #for holding each repititions outputs, so we can backprop on all of them
 
+        if self.trackAtt:
+            self.attn=[]
+
         if self.input_layers is not None:
             node_features, edge_indexes, edge_features, u_features = self.input_layers((node_features, edge_indexes, edge_features, u_features))
+            if self.trackAtt:
+                self.attn.append(self.input_layers.mhAtt.attn)
 
             if self.force_encoding:
                 node_out = self.node_out_layers(node_features)
@@ -557,6 +564,9 @@ class MetaGraphNet(nn.Module):
         
         for i in range(repetitions):
             node_featuresT, edge_indexesT, edge_featuresT, u_featuresT = self.main_layers((node_features, edge_indexes, edge_features, u_features))
+            if self.trackAtt:
+                for layer in self.main_layers:
+                    self.attn.append(layer.mhAtt.attn)
             if self.useRepRes:
                 node_features+=node_featuresT
                 edge_features+=edge_featuresT

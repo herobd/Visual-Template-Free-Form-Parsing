@@ -87,7 +87,9 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         instance['num_neighbors']=None
     dataT, targetBoxesT, adjT, target_num_neighborsT = __to_tensor(instance,gpu)
 
-
+    trackAtt = config['showAtt'] if 'showAtt' in config else False
+    if trackAtt:
+        model.pairer.trackAtt=True
     pretty = config['pretty'] if 'pretty' in config else False
     useDetections = config['useDetections'] if 'useDetections' in config else False
     if 'useDetect' in config:
@@ -157,6 +159,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 hard_detect_limit=600,
                 old_nn=True)
 
+    if trackAtt:
+        attList = model.pairer.attn
     #relPredFull = relPred
     relPred_otherTimes = relPred[:,:-1]
     relPred = relPred[:,-1] #remove time
@@ -529,7 +533,45 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #print('image {} has {} {}'.format(startIndex+b,targetBoxesSizes[name][b],name))
             #bbImage = np.ones_like(image):w
 
-    if outDir is not None:
+    if trackAtt:
+        data = data.numpy()
+        imageO = (1-((1+np.transpose(data[b][:,:,:],(1,2,0)))/2.0))
+        bbs = outputBoxes.numpy()
+        for attL,attn in enumerate(attList):
+            image = imageO.copy()
+            if image.shape[2]==1:
+                image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
+            for i in range(len(relCand)):
+                
+                ind1 = relCand[i][0]
+                ind2 = relCand[i][1]
+                x1 = int(round(bbs[ind1,1]))
+                y1 = int(round(bbs[ind1,2]))
+                x2 = int(round(bbs[ind2,1]))
+                y2 = int(round(bbs[ind2,2]))
+                xh = (x1+x2)//2
+                yh = (y1+y2)//2
+
+                #a1 = attn[0,:,ind1,i].max().item()
+                #a2 = attn[0,:,ind2,i].max().item()
+                #color1 = (a1,0,0.5-abs(a1-0.5))
+                #color2 = (a2,0,0.5-abs(a2-0.5))
+                a1 = attn[0,:,ind1,i]
+                a2 = attn[0,:,ind2,i]
+                color1 = (a1[0].item(),a1[1].item(),a1[2].item())
+                color2 = (a2[0].item(),a2[1].item(),a2[2].item())
+
+                cv2.line(image,(x1,y1),(xh,yh),color1,1)
+                cv2.line(image,(x2,y2),(xh,yh),color2,1)
+            #cv2.imshow('attention',image)
+            #cv2.waitKey()
+            saveName='{}_att{}.png'.format(imageName,attL)
+            io.imsave(os.path.join(outDir,saveName),image)
+
+
+
+
+    elif outDir is not None:
         outputBoxes = outputBoxes.data.numpy()
         data = data.numpy()
 

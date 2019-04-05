@@ -5,4 +5,8 @@ python eval.py -c saved/Mix18_staggerLight_NN/checkpoint-iteration200000.pth.tar
 
 
 Toy maxpairs
-1,fe,rcr,hal    0.68
+1,fe,rcr,hal    0.69
+    step at 10  0.76
+    step 15     0.85
+    step 20 @40 0.86
+    step 30 @40 0.88

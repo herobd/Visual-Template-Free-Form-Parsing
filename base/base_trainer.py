@@ -96,6 +96,16 @@ class BaseTrainer:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,lr_lambda)
+        elif self.useLearningSchedule=='step':
+            steps = config['trainer']['lr_steps']
+            assert(type(steps) is list)
+            def stepLR(step_num):
+                mul=1
+                for step in steps:
+                    if step_num>=step:
+                        mul*=0.1
+                return mul
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,stepLR)
         elif self.useLearningSchedule is True:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)

@@ -1,5 +1,5 @@
 {
-    "name": "toy_graph2",
+    "name": "toy_graph",
     "cuda": true,
     "gpu": 0,
     "override": true,
@@ -15,7 +15,6 @@
     },
 
     
-    "lr_scheduler_type": "none",
  
     "optimizer_type": "Adam",
     "optimizer": {
@@ -25,7 +24,7 @@
     "metrics": [],
     "trainer": {
         "class": "MaxPairsMetaGraphTrainer",
-        "iterations": 20000,
+        "iterations": 40000,
         "save_dir": "saved/",
         "val_step": 500,
         "save_step": 5000,
@@ -34,7 +33,9 @@
         "verbosity": 1,
         "monitor": "loss",
         "monitor_mode": "none",
-        "adapt_lr": false
+        "adapt_lr": false,
+        "use_learning_schedule": "step",
+        "lr_steps": [20000,30000]
     },
     "arch": "MetaGraphNet", 
     "model": {
@@ -44,8 +45,8 @@
         "num_layers": 2,
         "repetitions": 4,
         "use_reptition_res": true,
-        "num_heads": 4,
-        "att_mod": "half",
+        "num_heads": 1,
+        "att_mod": "learned",
         "soft_prune_edges": false,
         "prune_with_classifier": false,
         "encode_type": "fc+attention",

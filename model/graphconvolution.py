@@ -151,7 +151,9 @@ class MultiHeadedAttention(nn.Module):
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
         self.mod=mod #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
-        if mod=='learned':
+        if 'learned' in mod:
+            self.learned=True
+            assert(h==1)
             self.attNet = nn.Sequential(
                     #nn.GroupNorm(getGroupSize(self.d_k*2),self.d_k*2),
                     nn.ReLU(inplace=True),
@@ -159,7 +161,12 @@ class MultiHeadedAttention(nn.Module):
                     #nn.GroupNorm(getGroupSize(self.d_k//4),self.d_k//4),
                     nn.ReLU(inplace=True),
                     nn.Linear(self.d_k//4,1) 
-                    ) 
+                    )
+        else:
+            self.learned=False
+        self.half = 'half' in mod
+        self.none = 'none' in mod
+        
         
     def forward(self, query, key, value, mask=None):
         "Implements Figure 2"
@@ -167,6 +174,11 @@ class MultiHeadedAttention(nn.Module):
             # Same mask applied to all h heads.
             mask = mask[None,None,...]#mask.unsqueeze(1)
         nbatches = query.size(0)
+
+        if self.none:
+            key = torch.cat((key,torch.zeros(key.size(0),1,key.size(2)).to(key.device)),dim=1)
+            value = torch.cat((value,torch.zeros(value.size(0),1,value.size(2)).to(value.device)),dim=1)
+            mask = torch.cat((mask,torch.ones(1,1,mask.size(2),1).to(mask.device)),dim=3)
         
         # 1) Do all the linear projections in batch from d_model => h x d_k 
         query, key, value = \
@@ -174,10 +186,10 @@ class MultiHeadedAttention(nn.Module):
              for l, x in zip(self.linears, (query, key, value))]
         
         # 2) Apply attention on all the projected vectors in batch. 
-        if self.mod=='half':
+        if self.half:
             x, self.attn = attention(query[...,:self.d_k//2], key[...,:self.d_k//2], value, mask=mask, 
                                      dropout=self.dropout)
-        elif self.mod=='learned':
+        elif self.learned:
             x, self.attn = learned_attention(query, key, value, mask=mask, 
                                      dropout=self.dropout,network=self.attNet)
         else:

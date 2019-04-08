@@ -46,7 +46,7 @@
         "repetitions": 4,
         "use_repetition_res": true,
         "num_heads": 1,
-        "att_mod": "learned",
+        "att_mod": "learned+none",
         "avg_edges": true,
         "soft_prune_edges": false,
         "prune_with_classifier": false,

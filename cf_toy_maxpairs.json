@@ -44,7 +44,7 @@
         "edge_out": 1,
         "num_layers": 2,
         "repetitions": 4,
-        "use_reptition_res": true,
+        "use_repetition_res": false,
         "num_heads": 1,
         "att_mod": "learned",
         "soft_prune_edges": false,

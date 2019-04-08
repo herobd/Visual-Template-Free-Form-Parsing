@@ -120,7 +120,7 @@
             "num_layers": 2,
             "num_heads": 4,
             "repetitions": 4,
-            "use_reptition_res": true,
+            "use_repetition_res": false,
             "encode_type": "attention"
         }
     }

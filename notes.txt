@@ -15,4 +15,4 @@ Step sch, #40,000
 1,fe,rcr,learned        0.94
 1,fe,rcr,half           0.80
 1,fe,rcr                0.76
-1,fe,rcr,learned,avgE   0.92
+1,fe,rcr,learned,avgE   0.92, 0.89

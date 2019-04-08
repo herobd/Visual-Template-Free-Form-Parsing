@@ -12,7 +12,10 @@ Toy maxpairs
     step 30 @40 0.88
 
 Step sch, #40,000
-1,fe,rcr,learned        0.94
-1,fe,rcr,half           0.80
-1,fe,rcr                0.76
-1,fe,rcr,learned,avgE   0.92, 0.89
+1,fe,rcr,learned4           0.94
+1,fe,rcr,half               0.80
+1,fe,rcr                    0.76
+1,fe,rcr,learned4,avgE      0.92, 0.89
+1,fe,rcr,learned4,avgE,rr   0.88, 0.91
+1,fe,rcr,learned4,rr        0.86, 0.88
+1,fe,rcr,learned1,avgE,rr   0.94, 0.90

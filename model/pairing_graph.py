@@ -320,6 +320,8 @@ class PairingGraph(BaseModel):
                     self.idx_to_char[int(k)] = v
 
             self.embedding_model = lambda x: None #This could be a learned function, or preload something
+        else:
+            self.text_rec=None
 
         if 'DEBUG' in config:
             self.detector.setDEBUG()
@@ -410,7 +412,8 @@ class PairingGraph(BaseModel):
                 if graph is None:
                     return bbPredictions, offsetPredictions, None, None, None
                 bbOuts, relOuts = self.pairer(graph)
-                relIndexes = relIndexes[:len(relIndexes)//2]
+                if self.fixBiDirection or not self.training:
+                    relIndexes = relIndexes[:len(relIndexes)//2]
                 if self.fixBiDirection:
                     relOuts = (relOuts[:relOuts.size(0)//2] + relOuts[relOuts.size(0)//2:])/2 #average two directions of edge
             else:

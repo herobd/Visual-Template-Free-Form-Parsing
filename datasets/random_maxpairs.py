@@ -39,8 +39,8 @@ class RandomMaxPairsDataset(torch.utils.data.Dataset):
                 else:
                     nextNode = np.random.choice(list(visited))
                 
-            edges.add((curNode,nextNode))
-            edges.add((nextNode,curNode))
+            edges.add((min(curNode,nextNode),max(curNode,nextNode)))
+            #edges.add((nextNode,curNode))
 
             if np.random.rand()<0.2:
                 ends.append(nextNode)
@@ -78,7 +78,10 @@ class RandomMaxPairsDataset(torch.utils.data.Dataset):
                 c_first = (l_first).sum()
                 l_second = second==node
                 c_second = (l_second).sum()
-                if c_first!=c_second or c_first>1 or (l_first.any() and sel_edges[l_first][:,1]!=sel_edges[l_second][:,0]):
+                #if c_first!=c_second or c_first>1 or (l_first.any() and sel_edges[l_first][:,1]!=sel_edges[l_second][:,0]):
+                #    valid=False
+                #    break
+                if c_first+c_second>1:
                     valid=False
                     break
             if valid:
@@ -86,9 +89,11 @@ class RandomMaxPairsDataset(torch.utils.data.Dataset):
                 gt=selectedEdge
 
         #gt=gt.float()
+        gt = gt.repeat(2)
         gt=gt[:,None]
 
-
+        edges+=[(y,x) for (x,y) in edges]
+        edgesT = torch.LongTensor(edges)
         edgeLocs = edgesT.t()
         #ones = torch.ones(len(edges))
         #adjacencyMatrix = torch.sparse.FloatTensor(edgeLocs,ones,torch.Size([num_nodes,num_nodes]))

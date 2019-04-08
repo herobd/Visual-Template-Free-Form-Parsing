@@ -631,10 +631,10 @@ class MetaGraphNet(nn.Module):
                 for layer in self.main_layers:
                     self.attn.append(layer.mhAtt.attn)
             if self.useRepRes:
-                node_features+=node_featuresT
-                edge_features+=edge_featuresT
+                node_features=node_features+node_featuresT
+                edge_features=edge_features+edge_featuresT
                 if u_features is not None:
-                    u_features+=u_featuresT
+                    u_features=u_features+u_featuresT
                 else:
                     u_features=u_featuresT
             else:

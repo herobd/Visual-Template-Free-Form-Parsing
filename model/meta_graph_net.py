@@ -499,7 +499,7 @@ class MetaGraphNet(nn.Module):
         self.logger = logging.getLogger(self.__class__.__name__)
 
         
-        self.useRepRes = config['use_reptition_res'] if 'use_repetition_res' in config else False
+        self.useRepRes = config['use_repetition_res'] if 'use_repetition_res' in config else False
         #how many times to re-apply main layers
         self.repetitions = config['repetitions'] if 'repetitions' in config else 1 
         self.randomReps = False

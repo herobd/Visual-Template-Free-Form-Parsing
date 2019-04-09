@@ -272,6 +272,7 @@ class MetaGraphAttentionLayer(nn.Module):
                 self.rcrhdn_global=None
         else:
             self.rcrhdn_size = 0
+            rcrhdn_size_out = 0
             self.use_rcrhdn = False
         if hidden_ch is None:
             hidden_ch=ch+self.rcrhdn_size
@@ -296,7 +297,7 @@ class MetaGraphAttentionLayer(nn.Module):
             act[2].append(nn.GroupNorm(getGroupSize(edge_in*ch+rcrhdn_size,edge_in*8),edge_in*ch+rcrhdn_size))
             act[3].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #node
-            self.actN.append(nn.GroupNorm(getGroupSize(ch+rcrhdn_size),ch+rcrhdn_size))
+            self.actN.append(nn.GroupNorm(getGroupSize(ch+rcrhdn_size),ch+rcrhdn_size_out))
             if useGlobal:
                 self.actN_u.append(nn.GroupNorm(getGroupSize(ch),ch))
             act[4].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
@@ -386,7 +387,8 @@ class MetaGraphAttentionLayer(nn.Module):
             if self.useGlobal:
                 self.start_rcrhdn_edges = nn.Sequential(*act[8],nn.Linear(ch,self.rcrhdn_size))
             if self.use_rcrhdn=='gru':
-                self.edge_rcr = nn.GRU(input_size=ch,hidden_size=rcrhdn_size,num_layers=1)
+                self.edge_rcr = nn.GRU(input_size=ch*edge_in,hidden_size=rcrhdn_size,num_layers=1)
+                self.node_rcr = nn.GRU(input_size=ch*node_in,hidden_size=rcrhdn_size,num_layers=1)
 
 
         def edge_model(source, target, edge_attr, u):
@@ -400,7 +402,7 @@ class MetaGraphAttentionLayer(nn.Module):
             else:
                 out = torch.cat([source, target, edge_attr], dim=1)
             if self.use_rcrhdn=='gru':
-                _, self.rcrhdn_edges = self.edge_rcr(out, self.rcrhdn_edges[None,...])[0]
+                self.rcrhdn_edges = self.edge_rcr(out[None,...], self.rcrhdn_edges[None,...])[1][0]
             if self.use_rcrhdn:
                 out = torch.cat([out,self.rcrhdn_edges],dim=1)
             out = self.edge_mlp(out)
@@ -438,9 +440,7 @@ class MetaGraphAttentionLayer(nn.Module):
             #above uses unnormalized, unactivated features.
             g = g[0] #discard batch dim
 
-            if self.use_rcrhdn=='gru':
-                _, self.rcrhdn_nodes = self.node_rcr(out, self.rcrhdn_nodes[None,...])[0]
-            if self.use_rcrhdn:
+            if self.use_rcrhdn and self.use_rcrhdn!='gru':
                 xa = self.actN(torch.cat((x,self.rcrhdn_nodes),dim=1))
             else:
                 xa = self.actN(x)
@@ -458,6 +458,9 @@ class MetaGraphAttentionLayer(nn.Module):
                     input=torch.cat((xa,g),dim=1)
                 elif self.thinker=='add':
                     input= g+xa
+            if self.use_rcrhdn=='gru':
+                self.rcrhdn_nodes = self.node_rcr(input[None,...], self.rcrhdn_nodes[None,...])[1][0]
+                input = torch.cat((input,self.rcrhdn_nodes),dim=1)
             out= self.node_mlp(input)
             if self.use_rcrhdn  and self.use_rcrhdn!='gru':
                 self.rcrhdn_nodes=out[:,-self.rcrhdn_size:]

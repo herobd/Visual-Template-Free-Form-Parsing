@@ -832,10 +832,10 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #calculate rel_ap differences for timesteps
         for t in range(1,len(rel_ap_otherTimes)):
             diff = rel_ap_otherTimes[t]-rel_ap_otherTimes[t-1]
-            retData['rel_AP_diff{}_{}'.format(t-1,t)] = diff
+            retData['rel_AP_gain{}_{}'.format(t-1,t)] = diff
         if len(rel_ap_otherTimes)>0:
             diff = rel_ap-rel_ap_otherTimes[-1]
-            retData['rel_AP_diff{}_{}'.format(len(rel_ap_otherTimes)-1,len(rel_ap_otherTimes))] = diff
+            retData['rel_AP_gain{}_{}'.format(len(rel_ap_otherTimes)-1,len(rel_ap_otherTimes))] = diff
     else:
         retData['no_targs']=1
     if model.predNN:

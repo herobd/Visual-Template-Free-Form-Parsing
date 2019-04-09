@@ -7,6 +7,12 @@ based on victoresque pytorch template
 
 # Installing to get it to work with pytorch 1
 First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower)
+            p install --verbose --no-cache-dir torch-sparseif 'Med' in features
+                self.numChX=10
+                self.numChY=7
+                self.minCycle=4
+                self.maxCycleX=1000
+                self.maxCycleY=700
 If upgrading cuda, remove the old version first either with apt-get or uninstall script in /usr/cuda/bin.
     (Be sure CUDA_HOME and PATH are right after installation)
 

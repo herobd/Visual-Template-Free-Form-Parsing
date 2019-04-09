@@ -295,6 +295,7 @@ class PairingGraph(BaseModel):
         #self.pairer = GraphNet(config['graph_config'])
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
         self.useMetaGraph = type(self.pairer) is MetaGraphNet
+        self.fixBiDirection= config['fix_bi_dir'] if 'fix_bi_dir' in config else False
         if 'max_graph_size' in config:
             MAX_GRAPH_SIZE = config['max_graph_size']
 
@@ -319,6 +320,8 @@ class PairingGraph(BaseModel):
                     self.idx_to_char[int(k)] = v
 
             self.embedding_model = lambda x: None #This could be a learned function, or preload something
+        else:
+            self.text_rec=None
 
         if 'DEBUG' in config:
             self.detector.setDEBUG()
@@ -409,6 +412,10 @@ class PairingGraph(BaseModel):
                 if graph is None:
                     return bbPredictions, offsetPredictions, None, None, None
                 bbOuts, relOuts = self.pairer(graph)
+                if self.fixBiDirection or not self.training:
+                    relIndexes = relIndexes[:len(relIndexes)//2]
+                if self.fixBiDirection:
+                    relOuts = (relOuts[:relOuts.size(0)//2] + relOuts[relOuts.size(0)//2:])/2 #average two directions of edge
             else:
                 #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
                 if self.training: #0.3987808480 0.398469038200 not a big difference, but it's "the right" thing to do

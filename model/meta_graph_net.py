@@ -248,12 +248,13 @@ class SharpSigmoid(nn.Module):
 
 #This assumes the inputs are not activated
 class MetaGraphAttentionLayer(nn.Module):
-    def __init__(self, ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=False,edge_decider=None,rcrhdn_size=0,relu_node_act=False,att_mod=False): 
+    def __init__(self, ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=False,edge_decider=None,rcrhdn_size=0,relu_node_act=False,att_mod=False,avgEdges=False): 
         super(MetaGraphAttentionLayer, self).__init__()
         
         self.thinker=agg_thinker
         self.soft_prune_edges=soft_prune_edges
         self.res=useRes
+        self.avgEdges=avgEdges
 
         if rcrhdn_size>0:
             #use a special memory channel for recurrent applications of this layer
@@ -402,6 +403,10 @@ class MetaGraphAttentionLayer(nn.Module):
                 out *= self.soft_prune_edges
             if self.res:
                 out+=edge_attr
+            if self.avgEdges: #assumes bidirection edges repeated in order
+                avg = (out[:out.size(0)//2] + out[out.size(0)//2:])/2
+                out = avg.repeat(2,1)
+
             return out
 
         def node_model(x, edge_index, edge_attr, u):
@@ -494,7 +499,7 @@ class MetaGraphNet(nn.Module):
         self.logger = logging.getLogger(self.__class__.__name__)
 
         
-        self.useRepRes = config['use_reptition_res'] if 'use_repetition_res' in config else False
+        self.useRepRes = config['use_repetition_res'] if 'use_repetition_res' in config else False
         #how many times to re-apply main layers
         self.repetitions = config['repetitions'] if 'repetitions' in config else 1 
         self.randomReps = False
@@ -507,6 +512,8 @@ class MetaGraphNet(nn.Module):
         norm = config['norm'] if 'norm' in config else 'group'
         dropout = config['dropout'] if 'dropout' in config else 0.1
         hasEdgeInfo = config['input_edge'] if 'input_edge' in config else True
+
+        self.trackAtt=False
 
         actN=[]
         actE=[]
@@ -533,6 +540,7 @@ class MetaGraphNet(nn.Module):
         if layerType=='attention':
             rcrhdn_size = config['rcrhdn_size'] if 'rcrhdn_size' in config else 0
             att_mod = config['att_mod'] if 'att_mod' in config else False
+            avgEdges = config['avg_edges'] if 'avg_edges' in config else False
             relu_node_act = config['relu_node_act'] if 'relu_node_act' in config else 0
             heads = config['num_heads'] if 'num_heads' in config else 4
             soft_prune_edges = config['soft_prune_edges'] if 'soft_prune_edges' in config else False
@@ -548,7 +556,7 @@ class MetaGraphNet(nn.Module):
                 soft_prune_edges_l = [False]*layerCount
 
 
-            layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size,relu_node_act=relu_node_act,att_mod=att_mod) for i in range(layerCount)]
+            layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size,relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges) for i in range(layerCount)]
             self.main_layers = nn.Sequential(*layers)
         elif layerType=='mean':
             layers = [MetaGraphMeanLayer(ch,False) for i in range(layerCount)]
@@ -567,7 +575,7 @@ class MetaGraphNet(nn.Module):
             if 'attention' in inputLayerType:
                 #layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat') for i in range(layerCount)]
                 #self.input_layers = nn.Sequential(*layers)
-                layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',relu_node_act=relu_node_act,att_mod=att_mod)
+                layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges)
                 if self.input_layers is None:
                     self.input_layers = layer
                 else:
@@ -600,8 +608,13 @@ class MetaGraphNet(nn.Module):
         out_nodes = []
         out_edges = [] #for holding each repititions outputs, so we can backprop on all of them
 
+        if self.trackAtt:
+            self.attn=[]
+
         if self.input_layers is not None:
             node_features, edge_indexes, edge_features, u_features = self.input_layers((node_features, edge_indexes, edge_features, u_features))
+            if self.trackAtt:
+                self.attn.append(self.input_layers.mhAtt.attn)
 
             if self.force_encoding:
                 node_out = self.node_out_layers(node_features)
@@ -614,11 +627,14 @@ class MetaGraphNet(nn.Module):
         
         for i in range(repetitions):
             node_featuresT, edge_indexesT, edge_featuresT, u_featuresT = self.main_layers((node_features, edge_indexes, edge_features, u_features))
+            if self.trackAtt:
+                for layer in self.main_layers:
+                    self.attn.append(layer.mhAtt.attn)
             if self.useRepRes:
-                node_features+=node_featuresT
-                edge_features+=edge_featuresT
+                node_features=node_features+node_featuresT
+                edge_features=edge_features+edge_featuresT
                 if u_features is not None:
-                    u_features+=u_featuresT
+                    u_features=u_features+u_featuresT
                 else:
                     u_features=u_featuresT
             else:

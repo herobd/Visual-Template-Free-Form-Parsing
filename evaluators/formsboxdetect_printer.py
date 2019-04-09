@@ -174,16 +174,17 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
     precs_5=[]
     if 'no_blanks' in config['data_loader'] and not config['data_loader']['no_blanks']:
         numClasses-=1
-    if model.predNumNeighbors:
-        extraPreds=1
-        predNN=outputBBs[:,-(numClasses+1)]
-        diffs=torch.abs(predNN-target_num_neighborsT[:,bbAlignment].float())
-        nn_acc = (diffs<0.5).sum().item()
-        nn_acc /= predNN.size(0)
-    else:
-        extraPreds=0
+    nn_acc=[-1]*batchSize
     
     for b in range(batchSize):
+        if model.predNumNeighbors:
+            extraPreds=1
+            #predNN=outputBBs[b][-(numClasses+1)]
+            #diffs=torch.abs(predNN-target_num_neighborsT[:,bbAlignment].float())
+            #nn_acc[b] = (diffs<0.5).sum().item()
+            #nn_acc[b] /= predNN.size(0)
+        else:
+            extraPreds=0
         #outputBBs[b]=torch.cat((outputBBs[b][:,0:6],outputBBs[b][:,7:]),dim=1)
         #extraPreds=0
 

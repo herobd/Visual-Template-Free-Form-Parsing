@@ -176,7 +176,7 @@ class MultiHeadedAttention(nn.Module):
         nbatches = query.size(0)
 
         if self.none:
-            key = torch.cat((key,torch.zeros(key.size(0),1,key.size(2)).to(key.device)),dim=1)
+            key = torch.cat((key,torch.ones(key.size(0),1,key.size(2)).to(key.device)),dim=1)
             value = torch.cat((value,torch.zeros(value.size(0),1,value.size(2)).to(value.device)),dim=1)
             mask = torch.cat((mask,torch.ones(1,1,mask.size(2),1).to(mask.device)),dim=3)
         

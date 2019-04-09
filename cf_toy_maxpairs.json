@@ -52,7 +52,7 @@
         "prune_with_classifier": false,
         "encode_type": "fc+attention",
         "force_encoding" : true,
-        "rcrhdn_size": 32,
+        "rcrhdn_size":32,
         "relu_node_act": false,
         "infeats": 1
     }

@@ -256,16 +256,23 @@ class MetaGraphAttentionLayer(nn.Module):
         self.res=useRes
         self.avgEdges=avgEdges
 
-        if rcrhdn_size>0:
-            #use a special memory channel for recurrent applications of this layer
+        if rcrhdn_size!=0:
+            if rcrhdn_size<0:
+                rcrhdn_size*=-1
+                rcrhdn_size_out=0
+                self.use_rcrhdn='gru'
+            else:
+                #use a special memory channel for recurrent applications of this layer
+                self.use_rcrhdn = True
+                rcrhdn_size_out=rcrhdn_size
             self.rcrhdn_size = rcrhdn_size
-            self.use_rcrhdn = True
             self.rcrhdn_edges=None
             self.rcrhdn_nodes=None
             if useGlobal:
                 self.rcrhdn_global=None
         else:
             self.rcrhdn_size = 0
+            rcrhdn_size_out = 0
             self.use_rcrhdn = False
         if hidden_ch is None:
             hidden_ch=ch+self.rcrhdn_size
@@ -290,7 +297,7 @@ class MetaGraphAttentionLayer(nn.Module):
             act[2].append(nn.GroupNorm(getGroupSize(edge_in*ch+rcrhdn_size,edge_in*8),edge_in*ch+rcrhdn_size))
             act[3].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             #node
-            self.actN.append(nn.GroupNorm(getGroupSize(ch+rcrhdn_size),ch+rcrhdn_size))
+            self.actN.append(nn.GroupNorm(getGroupSize(ch+rcrhdn_size),ch+rcrhdn_size_out))
             if useGlobal:
                 self.actN_u.append(nn.GroupNorm(getGroupSize(ch),ch))
             act[4].append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
@@ -356,9 +363,9 @@ class MetaGraphAttentionLayer(nn.Module):
         if useGlobal:
             edge_in +=1
             node_in +=1
-            self.global_mlp = nn.Sequential(*(act[0]),nn.Linear(ch*3+rcrhdn_size, hidden_ch), *(act[1]), nn.Linear(hidden_ch, ch+rcrhdn_size))
+            self.global_mlp = nn.Sequential(*(act[0]),nn.Linear(ch*3+rcrhdn_size, hidden_ch), *(act[1]), nn.Linear(hidden_ch, ch+rcrhdn_size_out))
 
-        self.edge_mlp = nn.Sequential(*(act[2]),nn.Linear(ch*edge_in+rcrhdn_size, hidden_ch), *(act[3]), nn.Linear(hidden_ch, ch+rcrhdn_size))
+        self.edge_mlp = nn.Sequential(*(act[2]),nn.Linear(ch*edge_in+rcrhdn_size, hidden_ch), *(act[3]), nn.Linear(hidden_ch, ch+rcrhdn_size_out))
         
         if self.soft_prune_edges:
             if edge_decider is None:
@@ -370,7 +377,7 @@ class MetaGraphAttentionLayer(nn.Module):
                 self.edge_decider = nn.Sequential(edge_decider, SharpSigmoid(-1))
         else:
             self.edge_decider = None
-        self.node_mlp = nn.Sequential(*dropN,nn.Linear(ch*node_in+rcrhdn_size, hidden_ch), *(act[4]), nn.Linear(hidden_ch, ch+rcrhdn_size))
+        self.node_mlp = nn.Sequential(*dropN,nn.Linear(ch*node_in+rcrhdn_size, hidden_ch), *(act[4]), nn.Linear(hidden_ch, ch+rcrhdn_size_out))
         self.mhAtt = MultiHeadedAttention(heads,ch,mod=att_mod)
 
         if self.use_rcrhdn:
@@ -379,6 +386,9 @@ class MetaGraphAttentionLayer(nn.Module):
             self.start_rcrhdn_edges = nn.Sequential(*act[7],nn.Linear(ch,self.rcrhdn_size))
             if self.useGlobal:
                 self.start_rcrhdn_edges = nn.Sequential(*act[8],nn.Linear(ch,self.rcrhdn_size))
+            if self.use_rcrhdn=='gru':
+                self.edge_rcr = nn.GRU(input_size=ch*edge_in,hidden_size=rcrhdn_size,num_layers=1)
+                self.node_rcr = nn.GRU(input_size=ch*node_in,hidden_size=rcrhdn_size,num_layers=1)
 
 
         def edge_model(source, target, edge_attr, u):
@@ -391,12 +401,16 @@ class MetaGraphAttentionLayer(nn.Module):
                 out = torch.cat([source, target, edge_attr,us], dim=1)
             else:
                 out = torch.cat([source, target, edge_attr], dim=1)
+            if self.use_rcrhdn=='gru':
+                self.rcrhdn_edges = self.edge_rcr(out[None,...], self.rcrhdn_edges[None,...])[1][0]
             if self.use_rcrhdn:
                 out = torch.cat([out,self.rcrhdn_edges],dim=1)
             out = self.edge_mlp(out)
-            if self.use_rcrhdn:
+            if self.use_rcrhdn and self.use_rcrhdn!='gru':
                 self.rcrhdn_edges=out[:,-self.rcrhdn_size:]
                 out=out[:,:-self.rcrhdn_size]
+                
+
             if self.soft_prune_edges:
                 pruneDecision = self.edge_decider(out)
                 #print(pruneDecision)
@@ -426,7 +440,7 @@ class MetaGraphAttentionLayer(nn.Module):
             #above uses unnormalized, unactivated features.
             g = g[0] #discard batch dim
 
-            if self.use_rcrhdn:
+            if self.use_rcrhdn and self.use_rcrhdn!='gru':
                 xa = self.actN(torch.cat((x,self.rcrhdn_nodes),dim=1))
             else:
                 xa = self.actN(x)
@@ -444,8 +458,11 @@ class MetaGraphAttentionLayer(nn.Module):
                     input=torch.cat((xa,g),dim=1)
                 elif self.thinker=='add':
                     input= g+xa
+            if self.use_rcrhdn=='gru':
+                self.rcrhdn_nodes = self.node_rcr(input[None,...], self.rcrhdn_nodes[None,...])[1][0]
+                input = torch.cat((input,self.rcrhdn_nodes),dim=1)
             out= self.node_mlp(input)
-            if self.use_rcrhdn:
+            if self.use_rcrhdn  and self.use_rcrhdn!='gru':
                 self.rcrhdn_nodes=out[:,-self.rcrhdn_size:]
                 out=out[:,:-self.rcrhdn_size]
             if self.res:
@@ -464,6 +481,8 @@ class MetaGraphAttentionLayer(nn.Module):
                 else:
                     raise NotImplemented('batching not implemented for scatter_mean of edge_attr')
                     out = torch.cat([u, scatter_mean(x, batch, dim=0)], dim=1)
+                if self.use_rcrhdn=='gru':
+                    raise NotImplemented('GRU not implemented for global, but is easy to do')
                 if self.use_rcrhdn:
                     out = torch.cat([out,self.rcrhdn_global],dim=1)
                 out = self.global_mlp(out)

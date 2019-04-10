@@ -28,7 +28,7 @@ Step sch, #40,000
 1,fe,gru,lrn1,avgE,rr       0.90,0.88
 1,fe,rcr,lrn1,avgE,rr,prune 0.84,0.82,0.86
 1,fe,rcr,lrn4,avgE,rr,prune 0.90,0.86
-1,fe,rcr,lrn4,avgE,rr       0.91,0.90
+1,fe,rcr,lrn4,avgE,rr       0.91,0.90,0.92,0.84
 
 step only 30000
 1,fe,gru,lrn1,avgE,rr       0.94,0.88

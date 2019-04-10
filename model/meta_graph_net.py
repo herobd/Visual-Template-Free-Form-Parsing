@@ -208,6 +208,8 @@ class NodeTreeFunc(nn.Module):
         self.rcrhdn_nodes=None
 
     def summerize(self,data,x):
+        if data.size(0)==0:
+            return data
         data = self.sum_encode(torch.cat((data,x.view(1,-1).expand(data.size(0),-1)),dim=1))
         oddout=None
         while data.size(0)>1 or oddout is not None:
@@ -838,7 +840,7 @@ class MetaGraphNet(nn.Module):
 
 
             #layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size,relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges) for i in range(layerCount)]
-        if layerType=='tree':
+        elif layerType=='tree':
             def getEdgeFunc(i):
                 return EdgeFunc(ch,dropout=dropout,norm=norm,useRes=True,useGlobal=useGlobal,hidden_ch=None,soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size[i],avgEdges=avgEdges)
             def getNodeFunc(i):
@@ -873,7 +875,7 @@ class MetaGraphNet(nn.Module):
                 infeats = config['infeats']
                 infeatsEdge = config['infeats_edge'] if 'infeats_edge' in config else 0
                 self.input_layers = MetaGraphFCEncoderLayer(infeats,infeatsEdge,ch)
-            if '+' in inputLayerType:
+            if inputLayerType!='fc':
                 #layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges)
                 layer = MetaGraphLayer(getEdgeFunc(-1),getNodeFunc(-1),getGlobalFunc(-1))
                 if self.input_layers is None:

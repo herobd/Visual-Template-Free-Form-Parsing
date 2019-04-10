@@ -9,6 +9,7 @@ from torch_geometric.nn import MetaLayer
 from torch_scatter import scatter_mean
 import numpy as np
 import logging
+import random
 
 class MetaGraphFCEncoderLayer(nn.Module):
     def __init__(self, feat,edgeFeat,ch):
@@ -137,6 +138,138 @@ class EdgeFunc(nn.Module):
             avg = (out[:out.size(0)//2] + out[out.size(0)//2:])/2
             out = avg.repeat(2,1)
 
+        return out
+
+class NodeTreeFunc(nn.Module):
+    def __init__(self,ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,rcrhdn_size=0):
+        super(NodeTreeFunc, self).__init__()
+        self.res=useRes
+
+        if rcrhdn_size!=0:
+            if rcrhdn_size<0:
+                rcrhdn_size*=-1
+                rcrhdn_size_out=0
+                self.use_rcrhdn='gru'
+            else:
+                #use a special memory channel for recurrent applications of this layer
+                self.use_rcrhdn = True
+                rcrhdn_size_out=rcrhdn_size
+            self.rcrhdn_size = rcrhdn_size
+            self.rcrhdn_nodes=None
+        else:
+            self.rcrhdn_size = 0
+            rcrhdn_size_out = 0
+            self.use_rcrhdn = False
+        if hidden_ch is None:
+            hidden_ch=ch+self.rcrhdn_size
+
+        node_in=2
+        self.useGlobal=useGlobal
+        if useGlobal:
+            node_in+=1
+        actS=[]
+        actM=[]
+        actR=[]
+        actE=[]
+        act1Step=[]
+        act2Step=[]
+        acts=[actS,actM,actR,actE,act1Step,act2Step]
+        if 'group' in norm:
+            actS.append(nn.GroupNorm(getGroupSize(node_in*ch+rcrhdn_size,node_in*8),node_in*ch+rcrhdn_size))
+            actM.append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
+            if self.use_rcrhdn:
+                actR.append(nn.GroupNorm(getGroupSize(ch),ch))
+            actE.append(nn.GroupNorm(getGroupSize(ch*2),ch*2))
+            act1Step.append(nn.GroupNorm(getGroupSize(ch*3),ch*3))
+            act2Step.append(nn.GroupNorm(getGroupSize(ch*2),ch*2))
+        elif norm:
+            raise NotImplemented('Norm: {}, not implmeneted for EdgeFunc'.format(norm))
+        if dropout is not None:
+            if type(dropout) is float or dropout==0:
+                da=dropout
+            else:
+                da=0.1
+            for act in acts:
+                act.append(nn.Dropout(p=da,inplace=True))
+        for act in acts:
+            act.append(nn.ReLU(inplace=True))
+
+
+        self.node_mlp = nn.Sequential(*actS,nn.Linear(ch*node_in+rcrhdn_size, hidden_ch), *(actM), nn.Linear(hidden_ch, ch+rcrhdn_size_out))
+        if self.use_rcrhdn:
+            #these layers are for providing initial values when cold-starting the recurrent net
+            self.start_rcrhdn_nodes = nn.Sequential(*actR,nn.Linear(ch,self.rcrhdn_size))
+            if self.use_rcrhdn=='gru':
+                self.node_rcr = nn.GRU(input_size=ch*node_in,hidden_size=rcrhdn_size,num_layers=1)
+        self.sum_encode = nn.Sequential(*actE,nn.Linear(2*ch,ch))
+        self.sum_step = nn.Sequential(*act1Step,nn.Linear(3*ch,2*ch),*act2Step,nn.Linear(2*ch,ch))
+
+    def clear(self):
+        self.rcrhdn_nodes=None
+
+    def summerize(self,data,x):
+        data = self.sum_encode(torch.cat((data,x.view(1,-1).expand(data.size(0),-1)),dim=1))
+        oddout=None
+        while data.size(0)>1 or oddout is not None:
+            if oddout is not None:
+                if (data.size(0)+oddout.size(0))%2==0:
+                    data = torch.cat((data,oddout),dim=0)
+                    oddout = None#torch.FloatTensor
+                elif oddout.size(0)>1:
+                    data = torch.cat((data,oddout[:-1]),dim=0)
+                    oddout = oddout[-1:]
+            else:
+                if data.size(0)%2==1:
+                    oddout = data[-1:]
+                    data = data[:-1]
+            paired = data.view(data.size(0)//2,data.size(1)*2)
+            x_e = x.view(1,-1).expand(paired.size(0),-1)
+            cated = torch.cat((paired,x_e),dim=1)
+            #cated=cated.clone()
+            #return cated[0:1,-x.size(0):]
+            data = self.sum_step(cated)
+            #data = cated[:,:x.size(0)]+cated[:,x.size(0):2*x.size(0)]+cated[:,-x.size(0):]
+            #return data[0:1]
+            
+                #data = paired.view(data.size(0),data.size(1))
+        return data
+
+    def forward(self, x, edge_index, edge_attr, u):
+        if self.use_rcrhdn and self.rcrhdn_nodes is None:
+            self.rcrhdn_nodes = self.start_rcrhdn_nodes(x)
+        # x: [N, F_x], where N is the number of nodes.
+        # edge_index: [2, E] with max entry N - 1.
+        # edge_attr: [E, F_e]
+        # u: [B, F_u]
+        edgeLists=[[] for i in range(x.size(0))]
+        row, col = edge_index
+        for i in range(col.size(0)):
+            edgeLists[col[i]].append(i)#edge_attr[:,
+        if self.train:
+            for node in range(x.size(0)):
+                random.shuffle(edgeLists[node])
+        #summary = torch.FloatTensor(x.size(0),edge_attr.size(1)).to(x.device)
+        summary=[]
+        for node in range(x.size(0)): #TODO this can be optimized by doing everything at once and doing book keeping
+            summary.append( self.summerize(edge_attr[edgeLists[node]],x[node]) )
+        summary=torch.cat(summary,dim=0)
+        if u is not None:
+            assert(u.size(0)==1)
+            us = u.expand(source.size(0),u.size(1))
+            out = torch.cat([x, summary,us], dim=1)
+        else:
+            out = torch.cat([x, summary], dim=1)
+        if self.use_rcrhdn=='gru':
+            self.rcrhdn_nodes = self.node_rcr(out[None,...], self.rcrhdn_nodes[None,...])[1][0]
+        if self.use_rcrhdn:
+            out = torch.cat([out,self.rcrhdn_nodes],dim=1)
+        out = self.node_mlp(out)
+        if self.use_rcrhdn and self.use_rcrhdn!='gru':
+            self.rcrhdn_nodes=out[:,-self.rcrhdn_size:]
+            out=out[:,:-self.rcrhdn_size]
+            
+        if self.res:
+            out+=x
         return out
 
 class NodeAttFunc(nn.Module):
@@ -671,26 +804,27 @@ class MetaGraphNet(nn.Module):
 
         useGlobal=None
 
+        rcrhdn_size = config['rcrhdn_size'] if 'rcrhdn_size' in config else 0
+        avgEdges = config['avg_edges'] if 'avg_edges' in config else False
+        soft_prune_edges = config['soft_prune_edges'] if 'soft_prune_edges' in config else False
+        if 'prune_with_classifier' in config and config['prune_with_classifier']:
+            edge_decider = self.edge_out_layers
+        else:
+            edge_decider = None
+        if soft_prune_edges=='last':
+            soft_prune_edges_l = ([False]*(layerCount-1)) + [True]
+        elif soft_prune_edges:
+            soft_prune_edges_l = [True]*layerCount
+        else:
+            soft_prune_edges_l = [False]*layerCount
+        soft_prune_edges_l.append(False)
+        rcrhdn_size = [rcrhdn_size]*layerCount
+        rcrhdn_size.append(0)
+
         if layerType=='attention':
-            rcrhdn_size = config['rcrhdn_size'] if 'rcrhdn_size' in config else 0
             att_mod = config['att_mod'] if 'att_mod' in config else False
-            avgEdges = config['avg_edges'] if 'avg_edges' in config else False
             relu_node_act = config['relu_node_act'] if 'relu_node_act' in config else 0
             heads = config['num_heads'] if 'num_heads' in config else 4
-            soft_prune_edges = config['soft_prune_edges'] if 'soft_prune_edges' in config else False
-            if 'prune_with_classifier' in config and config['prune_with_classifier']:
-                edge_decider = self.edge_out_layers
-            else:
-                edge_decider = None
-            if soft_prune_edges=='last':
-                soft_prune_edges_l = ([False]*(layerCount-1)) + [True]
-            elif soft_prune_edges:
-                soft_prune_edges_l = [True]*layerCount
-            else:
-                soft_prune_edges_l = [False]*layerCount
-            soft_prune_edges_l.append(False)
-            rcrhdn_size = [rcrhdn_size]*layerCount
-            rcrhdn_size.append(0)
 
             def getEdgeFunc(i):
                 return EdgeFunc(ch,dropout=dropout,norm=norm,useRes=True,useGlobal=useGlobal,hidden_ch=None,soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size[i],avgEdges=avgEdges)
@@ -704,6 +838,16 @@ class MetaGraphNet(nn.Module):
 
 
             #layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size,relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges) for i in range(layerCount)]
+        if layerType=='tree':
+            def getEdgeFunc(i):
+                return EdgeFunc(ch,dropout=dropout,norm=norm,useRes=True,useGlobal=useGlobal,hidden_ch=None,soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size[i],avgEdges=avgEdges)
+            def getNodeFunc(i):
+                return NodeTreeFunc(ch,dropout=dropout,norm=norm,useRes=True,useGlobal=useGlobal,hidden_ch=None,rcrhdn_size=rcrhdn_size[i])
+            def getGlobalFunc(i):
+                if useGlobal:
+                    return GlobalFunc(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,hidden_ch=None,rcrhdn_size=rcrhdn_size[i])
+                else:
+                    return NoGlobalFunc()
         elif layerType=='mean':
             def getEdgeFunc(i):
                 return EdgeFunc(ch,dropout=dropout,norm=norm,useRes=True,useGlobal=useGlobal,hidden_ch=None,soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size,avgEdges=avgEdges)
@@ -729,7 +873,7 @@ class MetaGraphNet(nn.Module):
                 infeats = config['infeats']
                 infeatsEdge = config['infeats_edge'] if 'infeats_edge' in config else 0
                 self.input_layers = MetaGraphFCEncoderLayer(infeats,infeatsEdge,ch)
-            if 'attention' in inputLayerType:
+            if '+' in inputLayerType:
                 #layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges)
                 layer = MetaGraphLayer(getEdgeFunc(-1),getNodeFunc(-1),getGlobalFunc(-1))
                 if self.input_layers is None:

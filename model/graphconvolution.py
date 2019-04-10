@@ -125,13 +125,14 @@ def learned_attention(query, key, value, mask=None, dropout=None,network=None):
 
     #naive "everywhere" implmenetation
     assert(len(query.size())==4)
+    batch_size = query.size(0)
+    heads = query.size(1)
     query_ex = query[:,:,:,None,:].expand(-1,-1,query.size(2),key.size(2),-1)
     key_ex = key[:,:,None,:,:].expand(-1,-1,query.size(2),key.size(2),-1)
     comb = torch.cat((query_ex,key_ex),dim=4)
-    comb = comb.view(comb.size(0),comb.size(1),-1,comb.size(-1))
-    scores = network(comb[:,0])
-    #scores = torch.stack(scores,dim=1)
-    scores = scores.view(scores.size(0),1,query.size(2),key.size(2))
+    comb = comb.view(batch_size*heads,-1,comb.size(-1))
+    scores = network(comb) #same function for each head
+    scores = scores.view(batch_size,heads,query.size(2),key.size(2))
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
 
@@ -153,7 +154,6 @@ class MultiHeadedAttention(nn.Module):
         self.mod=mod if mod else '' #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
         if 'learned' in self.mod:
             self.learned=True
-            assert(h==1)
             self.attNet = nn.Sequential(
                     #nn.GroupNorm(getGroupSize(self.d_k*2),self.d_k*2),
                     nn.ReLU(inplace=True),

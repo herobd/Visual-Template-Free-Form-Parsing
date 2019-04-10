@@ -12,16 +12,23 @@ Toy maxpairs
     step 30 @40 0.88
 
 Step sch, #40,000
-1,fe,rcr,learned4           0.94
+1,fe,rcr,learnedQ           0.94
 1,fe,rcr,half               0.80
 1,fe,rcr                    0.76
-1,fe,rcr,learned4,avgE      0.92, 0.89
-1,fe,rcr,learned4,avgE,rr   0.88, 0.91
-1,fe,rcr,learned4,rr        0.86, 0.88
-1,fe,rcr,lrn1,avgE,rr   0.94, 0.90 *
+1,fe,rcr,learnedQ,avgE      0.92, 0.89
+1,fe,rcr,learnedQ,avgE,rr   0.88, 0.91
+1,fe,rcr,learnedQ,rr        0.86, 0.88
+1,fe,rcr,lrn1,avgE,rr       0.94, 0.90 *
 1,fe,rcr,lrn1,avgE,rr,none0 0.47, 0.68
 1,fe,lrn1,avgE,rr           0.83, 0.82
 1,fe,rcr,lrn1,avgE,rr,relu  0.91, 0.89
-1,fe,rcr,lrn1               0.89, 0.85
-1,fe,lrn1                   0.69
-1,fe,rcr,lrn1,avgE,rr,none1 0.47, 0.68
+1,fe,rcr,lrn1               0.89, 0.85, 0.87
+1,fe,lrn1                   0.69, 0.64
+1,fe,rcr,lrn1,avgE,rr,none1 0.66
+1,fe,gru,lrn1,avgE,rr       0.90,0.88
+1,fe,rcr,lrn1,avgE,rr,prune 0.84,0.82,0.86
+1,fe,rcr,lrn4,avgE,rr,prune 0.90,0.86
+1,fe,rcr,lrn4,avgE,rr       0.91,0.90,0.92,0.84
+
+step only 30000
+1,fe,gru,lrn1,avgE,rr       0.94,0.88

@@ -48,11 +48,11 @@
         "num_heads": 1,
         "att_mod": "learned",
         "avg_edges": true,
-        "soft_prune_edges": false,
+        "soft_prune_edges": true,
         "prune_with_classifier": false,
         "encode_type": "fc+attention",
         "force_encoding" : true,
-        "rcrhdn_size":-32,
+        "rcrhdn_size":32,
         "relu_node_act": false,
         "infeats": 1
     }

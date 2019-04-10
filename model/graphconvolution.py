@@ -151,8 +151,8 @@ class MultiHeadedAttention(nn.Module):
         self.linears = clones(nn.Linear(d_model, d_model), 4) #W_q W_k W_v W_o
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
-        self.mod=mod #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
-        if 'learned' in mod:
+        self.mod=mod if mod else '' #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
+        if 'learned' in self.mod:
             self.learned=True
             self.attNet = nn.Sequential(
                     #nn.GroupNorm(getGroupSize(self.d_k*2),self.d_k*2),
@@ -164,8 +164,8 @@ class MultiHeadedAttention(nn.Module):
                     )
         else:
             self.learned=False
-        self.half = 'half' in mod
-        self.none = 'none' in mod
+        self.half = 'half' in self.mod
+        self.none = 'none' in self.mod
         
         
     def forward(self, query, key, value, mask=None):

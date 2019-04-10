@@ -209,7 +209,7 @@ class NodeTreeFunc(nn.Module):
 
     def summerize(self,data,x):
         if data.size(0)==0:
-            return data
+            return torch.zeros(1,x.size(0)).to(x.device)
         data = self.sum_encode(torch.cat((data,x.view(1,-1).expand(data.size(0),-1)),dim=1))
         oddout=None
         while data.size(0)>1 or oddout is not None:

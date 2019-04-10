@@ -154,7 +154,6 @@ class MultiHeadedAttention(nn.Module):
         self.mod=mod #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
         if 'learned' in mod:
             self.learned=True
-            assert(h==1)
             self.attNet = nn.Sequential(
                     #nn.GroupNorm(getGroupSize(self.d_k*2),self.d_k*2),
                     nn.ReLU(inplace=True),

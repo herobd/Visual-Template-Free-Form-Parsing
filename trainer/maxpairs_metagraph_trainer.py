@@ -4,6 +4,7 @@ from base import BaseTrainer
 import timeit
 #from datasets.test_random_walk import display
 import random
+#from torchviz import make_dot
 
 
 class MaxPairsMetaGraphTrainer(BaseTrainer):
@@ -81,6 +82,7 @@ class MaxPairsMetaGraphTrainer(BaseTrainer):
         features, edgeIndices, gt = self._to_tensor(thisInstance)
         _,output = self.model((features,edgeIndices,None,None))
         #print(output[:,0])
+        #make_dot(output.mean(), params=dict(self.model.named_parameters()))
         gt=gt[:,None,:].expand(gt.size(0),output.size(1),gt.size(1))
 
         loss = self.loss(output,gt.float())

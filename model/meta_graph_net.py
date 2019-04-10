@@ -272,6 +272,7 @@ class MetaGraphAttentionLayer(nn.Module):
                 self.rcrhdn_global=None
         else:
             self.rcrhdn_size = 0
+            rcrhdn_size_out=0
             self.use_rcrhdn = False
         if hidden_ch is None:
             hidden_ch=ch+self.rcrhdn_size

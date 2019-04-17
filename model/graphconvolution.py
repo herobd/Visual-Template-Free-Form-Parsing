@@ -125,13 +125,14 @@ def learned_attention(query, key, value, mask=None, dropout=None,network=None):
 
     #naive "everywhere" implmenetation
     assert(len(query.size())==4)
+    batch_size = query.size(0)
+    heads = query.size(1)
     query_ex = query[:,:,:,None,:].expand(-1,-1,query.size(2),key.size(2),-1)
     key_ex = key[:,:,None,:,:].expand(-1,-1,query.size(2),key.size(2),-1)
     comb = torch.cat((query_ex,key_ex),dim=4)
-    comb = comb.view(comb.size(0),comb.size(1),-1,comb.size(-1))
-    scores = network(comb[:,0])
-    #scores = torch.stack(scores,dim=1)
-    scores = scores.view(scores.size(0),1,query.size(2),key.size(2))
+    comb = comb.view(batch_size*heads,-1,comb.size(-1))
+    scores = network(comb) #same function for each head
+    scores = scores.view(batch_size,heads,query.size(2),key.size(2))
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
 
@@ -150,10 +151,9 @@ class MultiHeadedAttention(nn.Module):
         self.linears = clones(nn.Linear(d_model, d_model), 4) #W_q W_k W_v W_o
         self.attn = None
         self.dropout = nn.Dropout(p=dropout)
-        self.mod=mod #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
-        if 'learned' in mod:
+        self.mod=mod if mod else '' #learned: use network for attention instead of dot product, half: use only half of query/keys for dot product
+        if 'learned' in self.mod:
             self.learned=True
-            assert(h==1)
             self.attNet = nn.Sequential(
                     #nn.GroupNorm(getGroupSize(self.d_k*2),self.d_k*2),
                     nn.ReLU(inplace=True),
@@ -164,8 +164,8 @@ class MultiHeadedAttention(nn.Module):
                     )
         else:
             self.learned=False
-        self.half = 'half' in mod
-        self.none = 'none' in mod
+        self.half = 'half' in self.mod
+        self.none = 'none' in self.mod
         
         
     def forward(self, query, key, value, mask=None):
@@ -176,7 +176,7 @@ class MultiHeadedAttention(nn.Module):
         nbatches = query.size(0)
 
         if self.none:
-            key = torch.cat((key,torch.zeros(key.size(0),1,key.size(2)).to(key.device)),dim=1)
+            key = torch.cat((key,torch.ones(key.size(0),1,key.size(2)).to(key.device)),dim=1)
             value = torch.cat((value,torch.zeros(value.size(0),1,value.size(2)).to(value.device)),dim=1)
             mask = torch.cat((mask,torch.ones(1,1,mask.size(2),1).to(mask.device)),dim=3)
         

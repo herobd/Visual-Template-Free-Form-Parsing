@@ -1,5 +1,5 @@
 {
-    "name": "Forms21_augRFh_staggerLight_NN",
+    "name": "Forms21_augRFh_staggerLight_NN_retrain1",
     "cuda": true,
     "gpu": 0,
     "super_computer":false,
@@ -67,7 +67,7 @@
     "metrics": [],
     "trainer": {
         "class": "BoxDetectTrainer",
-        "iterations": 250000,
+        "iterations": 350000,
         "save_dir": "saved/",
         "val_step": 10000,
         "save_step": 50000,

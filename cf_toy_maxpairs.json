@@ -45,15 +45,16 @@
         "num_layers": 2,
         "repetitions": 4,
         "use_repetition_res": true,
-        "num_heads": 1,
-        "att_mod": "learned",
+        "layer_type": "tree",
+        "Xnum_heads": 4,
+        "Xatt_mod": "learned",
+        "Xrelu_node_act": false,
         "avg_edges": true,
-        "soft_prune_edges": true,
+        "soft_prune_edges": false,
         "prune_with_classifier": false,
-        "encode_type": "fc+attention",
+        "encode_type": "fc+tree",
         "force_encoding" : true,
         "rcrhdn_size":32,
-        "relu_node_act": false,
         "infeats": 1
     }
 }

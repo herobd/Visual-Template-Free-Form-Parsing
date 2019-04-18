@@ -93,6 +93,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     if 'repetitions' in config:
         model.pairer.repetitions=config['repetitions']
     pretty = config['pretty'] if 'pretty' in config else False
+    if 'repetitions' in config:
+        model.pairer.repetitions=config['repetitions']
     useDetections = config['useDetections'] if 'useDetections' in config else False
     if 'useDetect' in config:
         useDetections = config['useDetect']

@@ -11,7 +11,7 @@ def saveBoxes(data,dest):
     for b in range(batchSize):
         #print (data['img'].size())
         #img = (data['img'][0].permute(1,2,0)+1)/2.0
-        img = 255*(data['img'][b].permute(1,2,0)+1)/2.0
+        img = 255*(1-data['img'][b].permute(1,2,0))/2.0
         #print(img.shape)
         #print(data['pixel_gt']['table_pixels'].shape)
         if 'pixel_gt' in data and data['pixel_gt'] is not None:
@@ -19,7 +19,7 @@ def saveBoxes(data,dest):
         imgName=(data['imgName'][b])
 
 
-        img=img.numpy()
+        img=img.numpy().astype(np.uint8)
 
         for i in range(data['bb_sizes'][b]):
             xc=data['bb_gt'][b,i,0]

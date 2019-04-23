@@ -308,6 +308,8 @@ class BaseTrainer:
             state['model'] = self.model.cpu()
             if self.swa:
                 state['swa_model'] = self.swa_model.cpu()
+        if self.useLearningSchedule:
+            state['lr_schedule'] = self.lr_schedule.state_dict()
         #if self.swa:
         #    state['swa_n']=self.swa_n
         torch.cuda.empty_cache() #weird gpu memory issue when calling torch.save()
@@ -383,6 +385,8 @@ class BaseTrainer:
                 for k, v in state.items():
                     if isinstance(v, torch.Tensor):
                         state[k] = v.cuda(self.gpu)
+        if self.useLearningSchedule:
+            self.lr_schedule.load_state_dict(checkpoint['lr_schedule'])
         self.train_logger = checkpoint['logger']
         self.logger.info("Checkpoint '{}' (iteration {}) loaded".format(resume_path, self.start_iteration))
 

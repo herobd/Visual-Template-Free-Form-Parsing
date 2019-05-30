@@ -154,16 +154,18 @@ class FormsGraphPair(GraphPairDataset):
         fixAnnotations(self,annotations)
         bbsToUse=[]
         ids=[]
+        trans={}
         for id,bb in annotations['byId'].items():
             if not self.onlyFormStuff or ('paired' in bb and bb['paired']):
                 bbsToUse.append(bb)
                 ids.append(bb['id'])
+                trans[bb['id']] = annotations['transcription'][bb['id']]
 
 
         
         bbs = getBBWithPoints(bbsToUse,scale,useBlankClass=(not self.no_blanks),usePairedClass=self.use_paired_class)
         numClasses = bbs.shape[2]-16
-        return bbs,ids,numClasses
+        return bbs,ids,numClasses, trans
 
     def getResponseBBIdList(self,queryId,annotations):
         return getResponseBBIdList_(self,queryId,annotations)

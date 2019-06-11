@@ -95,7 +95,7 @@
             "node_channels": 0,
             "edge_channels": 1,
             "layers": ["FC256","FC256"],
-            "shape_layers": "saved/Simple21_pairNotGTNN_feat/checkpoint-iteration10000.pth.tar",
+            "shape_layers": "saved/Simple21_pairNotGTNN_feat/checkpoint-iteration8000.pth.tar",
             "weight_split": 0.0
         },
         "featurizer_start_h": 10,

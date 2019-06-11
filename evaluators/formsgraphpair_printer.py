@@ -191,6 +191,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
     if 'rule' in config:
         if config['rule']=='closest':
+            if relPred.size(1)>1:
+                relPred = relPred[:,0:1]
             dists = torch.FloatTensor(relPred.size())
             differentClass = torch.FloatTensor(relPred.size())
             predClasses = torch.argmax(outputBoxes[:,extraPreds+6:extraPreds+6+numClasses],dim=1)
@@ -202,6 +204,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             relPred = 1-(dists-minDist)/(maxDist-minDist)
             relPred *= differentClass
         elif config['rule']=='icdar':
+            if relPred.size(1)>1:
+                relPred = relPred[:,0:1]
             height = torch.FloatTensor(relPred.size())
             dists = torch.FloatTensor(relPred.size())
             right = torch.FloatTensor(relPred.size())
@@ -235,7 +239,6 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     widthValue = outputBoxes[bb1,5]*2
                     hDist = outputBoxes[bb2,1]-outputBoxes[bb1,1]
                 right[i] = hDist/widthValue
-
             relPred = 1-(height+dists+right + 10000*sameClass)
         else:
             print('ERROR, unknown rule {}'.format(config['rule']))
@@ -432,6 +435,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             i=0
             numMissedByHeur=0
             targGotHit=set()
+            #print('debug relPred: {}'.format(relPred.shape))
             for i,(n0,n1) in enumerate(relCand):
                 t0 = bbAlignment[n0].item()
                 t1 = bbAlignment[n1].item()

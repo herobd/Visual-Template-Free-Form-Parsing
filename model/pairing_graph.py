@@ -310,7 +310,7 @@ class PairingGraph(BaseModel):
                 print('WARNING, text_rec is wrapped to prevent training')
                 self.text_rec[0].eval()
                 self.text_rec[0] = self.text_rec[0].cuda()
-                state=torch.load(config['text_rec']['file'])
+                state=torch.load(config['text_rec']['file'])['state_dict']
                 self.text_rec[0].load_state_dict(state)
                 self.hw_input_height = config['text_rec']['input_height']
                 with open(config['text_rec']['char_set']) as f:
@@ -1220,7 +1220,7 @@ class PairingGraph(BaseModel):
         w *=2
 
         scale = self.hw_input_height/h
-        scaled_w = (w*scale).int()
+        scaled_w = ((w+1)*scale).int()
         max_w = scaled_w.max().item()
 
         #scale = scale.cpu().detach()
@@ -1253,7 +1253,7 @@ class PairingGraph(BaseModel):
         #Debug
         resN=res.data.cpu().numpy()
         output_strings, decoded_raw_hw = decode_handwriting(resN, self.idx_to_char)
-        for i in range(bbs.size(0)):
+        for i in range(min(10,bbs.size(0))):
             cv2.imwrite('out2/line{}-{}.png'.format(i,output_strings[i]),imm[i])
             #cv2.imshow('line',imm)
             #cv2.waitKey()

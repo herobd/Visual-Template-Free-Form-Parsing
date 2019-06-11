@@ -424,7 +424,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
 
             truePred=falsePred=badPred=0
             scores=[]
-            scores_otherTimes=[[] for i in range(relPred_otherTimes.size(1))]
+            if len(relPred_otherTimes)>1:
+                scores_otherTimes=[[] for i in range(relPred_otherTimes.size(1))]
             matches=0
             i=0
             numMissedByHeur=0
@@ -451,17 +452,20 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     if relPred[i]>rel_threshold_use:
                         badPred+=1
                 scores.append( (relPred[i],gtRel) )
-                for t in range(relPred_otherTimes.size(1)):
-                    scores_otherTimes[t].append( (relPred_otherTimes[i,t],gtRel) )
+                if len(relPred_otherTimes.size())>1:
+                    for t in range(relPred_otherTimes.size(1)):
+                        scores_otherTimes[t].append( (relPred_otherTimes[i,t],gtRel) )
             for i in range(len(adjacency)-matches):
                 numMissedByHeur+=1
                 scores.append( (float('nan'),True) )
-                for t in range(relPred_otherTimes.size(1)):
-                    scores_otherTimes[t].append( (float('nan'),True) )
+                if len(relPred_otherTimes.size())>1:
+                    for t in range(relPred_otherTimes.size(1)):
+                        scores_otherTimes[t].append( (float('nan'),True) )
             rel_ap=computeAP(scores)
             rel_ap_otherTimes=[]
-            for t in range(relPred_otherTimes.size(1)):
-                rel_ap_otherTimes.append( computeAP(scores_otherTimes[t]) )
+            if len(relPred_otherTimes.size())>1:
+                for t in range(relPred_otherTimes.size(1)):
+                    rel_ap_otherTimes.append( computeAP(scores_otherTimes[t]) )
 
             numMissedByDetect=0
             for t0,t1 in adjacency:

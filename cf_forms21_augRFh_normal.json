@@ -8,7 +8,7 @@
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
         "data_dir": "../data/forms",
-        "batch_size": 2,
+        "batch_size": 5,
         "shuffle": true,
         "num_workers": 2,
         "crop_to_page":false,
@@ -91,8 +91,8 @@
         "down_layers_cfg": [1,"k5-32", "M", 
                                 64, 64,  "M", 
                                 128, 128, 128,  "M", 
-                                256, 256, 256,  "M", 
-                                512, 512, 512, 512],
+                                128, 128, 128,  "M", 
+                                256, 256, 256, 256],
         "up_layers_cfg":[],
         "anchors_file": "anchors_noRot_new_25.json",
         "rotation":false

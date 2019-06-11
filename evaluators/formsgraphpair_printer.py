@@ -90,6 +90,8 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
     trackAtt = config['showAtt'] if 'showAtt' in config else False
     if trackAtt:
         model.pairer.trackAtt=True
+    if 'repetitions' in config:
+        model.pairer.repetitions=config['repetitions']
     pretty = config['pretty'] if 'pretty' in config else False
     if 'repetitions' in config:
         model.pairer.repetitions=config['repetitions']

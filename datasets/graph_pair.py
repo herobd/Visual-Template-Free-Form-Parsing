@@ -119,7 +119,7 @@ class GraphPairDataset(torch.utils.data.Dataset):
         
         ##tic=timeit.default_timer()
 
-        bbs,ids,numClasses = self.parseAnn(annotations,s)
+        bbs,ids,numClasses,trans = self.parseAnn(annotations,s)
 
         #start_of_line, end_of_line = getStartEndGT(annotations['byId'].values(),s)
         #Try:
@@ -218,7 +218,8 @@ class GraphPairDataset(torch.utils.data.Dataset):
                 "adj": pairs,#adjMatrix,
                 "imgName": imageName,
                 "scale": s,
-                "cropPoint": cropPoint
+                "cropPoint": cropPoint,
+                "transcription": [trans[id] for id in ids if id in trans]
                 }
 
 

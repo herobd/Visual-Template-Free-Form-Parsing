@@ -29,6 +29,8 @@ Step sch, #40,000
 1,fe,rcr,lrn1,avgE,rr,prune 0.84,0.82,0.86
 1,fe,rcr,lrn4,avgE,rr,prune 0.90,0.86
 1,fe,rcr,lrn4,avgE,rr       0.91,0.90,0.92,0.84
+1,fe,rcr,tree,avgE,rr       0.93,1.0,0.93,0.99,0.92
+1,fe,rcr,tree,avgE          0.97,0.97,0.96,0.97   +.02,-.01,-.03,-.01 using 20 reps
 
 step only 30000
 1,fe,gru,lrn1,avgE,rr       0.94,0.88

@@ -219,7 +219,7 @@ class GraphPairDataset(torch.utils.data.Dataset):
                 "imgName": imageName,
                 "scale": s,
                 "cropPoint": cropPoint,
-                "transcription": [trans[id] for id in ids]
+                "transcription": [trans[id] for id in ids if id in trans]
                 }
 
 

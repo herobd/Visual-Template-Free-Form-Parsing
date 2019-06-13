@@ -245,6 +245,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                                 'imgName': imageName,
                                                 'qXY' : (qX,qY),
                                                 'iXY' : (iX,iY),
+                                                'qHW' : (qH,qW),
+                                                'iHW' : (iH,iW),
                                                 'ids' : (id,id2),
                                                 'numNeighbors': torch.tensor([ [numN1,numN2] ])
                                                 } )
@@ -254,6 +256,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                 labels=[]
                                 qXYs=[]
                                 iXYs=[]
+                                qHWs=[]
+                                iHWs=[]
                                 nodeIds=[]
                                 NNs=[]
                                 numTrue=0
@@ -263,6 +267,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                     numTrue += inst['label']
                                     qXYs.append(inst['qXY'])
                                     iXYs.append(inst['iXY'])
+                                    qHWs.append(inst['qHW'])
+                                    iHWs.append(inst['iHW'])
                                     nodeIds.append(inst['ids'])
                                     NNs.append(inst['numNeighbors'])
                                 if len(datas)>0:
@@ -284,6 +290,8 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                                     'imgPath' : path,
                                     'qXY' : qXYs,
                                     'iXY' : iXYs,
+                                    'qHW' : qHWs,
+                                    'iHW' : iHWs,
                                     'nodeIds' : nodeIds,
                                     'numNeighbors' : NNs,
                                     'missedRels': missedCount

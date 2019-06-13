@@ -99,7 +99,10 @@ class FeaturePairTrainer(Trainer):
             lossNN = F.mse_loss(outputNN,gtNN[0])
         else:
             lossNN=0
+        #import pdb;pdb.set_trace()
         lossRel = self.loss(outputRel,label)
+        scoreTrue = (outputRel*label).sum()/label.sum()
+        scoreFalse = (outputRel*(1-label)).sum()/(1-label).sum()
 
         loss = lossRel+lossNN
 
@@ -146,6 +149,8 @@ class FeaturePairTrainer(Trainer):
             'loss': loss,
             'lossRel':lossRel,
             'lossNN':lossNN,
+            'scoreTrue': scoreTrue,
+            'scoreFalse': scoreFalse,
 
             **metrics,
             **losses

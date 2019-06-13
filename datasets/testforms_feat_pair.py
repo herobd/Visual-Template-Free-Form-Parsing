@@ -75,7 +75,7 @@ if __name__ == "__main__":
         repeat = int(sys.argv[3])
     else:
         repeat=1
-    data=FormsFeaturePair(dirPath=dirPath,split='valid',config={
+    data=FormsFeaturePair(dirPath=dirPath,split='train',config={
         "data_set_name": "FormsFeaturePair",
         "simple_dataset": True,
         "alternate_json_dir": "out_json/Simple18_staggerLight_NN",

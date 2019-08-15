@@ -6,25 +6,30 @@ based on victoresque pytorch template
 * PyTorch 1.0+
 
 # Installing to get it to work with pytorch 1
-First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower)
+First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower).
 If upgrading cuda, remove the old version first either with apt-get or uninstall script in /usr/cuda/bin.
     (Be sure CUDA_HOME and PATH are right after installation)
 
-`conda instal $`
+`conda install $`
 * `ipython`
 * `pytorch torchvision -c pytorch` or what ever the command is on pytorch.org given cuda version, etc
 * `opencv`
 * `scikit-image`
-for pytorch geometric (meta graph):
-$ pip install --verbose --no-cache-dir torch-scatter
-$ pip install --verbose --no-cache-dir torch-sparse
-$ pip install --verbose --no-cache-dir torch-cluster
-$ pip install --verbose --no-cache-dir torch-spline-conv (optional)
-$ pip install torch-geometric
 
-for cvxpy (optimiation), must have python 3.7 or later:
+for pytorch geometric (meta graph):
+```
+pip install --verbose --no-cache-dir torch-scatter
+pip install --verbose --no-cache-dir torch-sparse
+pip install --verbose --no-cache-dir torch-cluster
+pip install --verbose --no-cache-dir torch-spline-conv (optional)
+pip install torch-geometric
+```
+
+for cvxpy (optimization), you must have python 3.7 or later:
+
 clone github: https://github.com/cvxgrp/cvxpy
-python setup.py install
+
+`python setup.py install` in the cvxpy repo
 
 # Install
 `python setup.py build develop`
@@ -63,7 +68,7 @@ Pairing, with optimization: `python eval.py -c saved/pairing/checkpoint-iteratio
 
 Pairing, GT detections: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a useDetect=gt`
 
-Pairing, optimized with GT num neighnors: 
+Pairing, optimized with GT num neighnors:  `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a optimize=gt`
 
 ### Training baseline models
 
@@ -73,7 +78,7 @@ Pairing, optimized with GT num neighnors:
 #### Classifier using non-visual features
 
 Make training data for no visual feature pairing: 
-1. `make dir out`
+1. `mkdir out`
 2. `python eval.py -c saved/saved/pairing/checkpoint-iteration125000.pth.tar -g 0 -n 10000 -a save_json=out/detection_data,data_loader=batch_size=1,data_loader=num_workers=0,data_loader=rescale_range=0.52,data_loader=crop_params=,validation=rescale_range=0.52,validation=crop_params=`
 
 Train no visual feature pairing: `python train.py -c cf_no_vis_pairing.json`
@@ -84,9 +89,34 @@ Detection with regular convs, full set: `python eval.py -c saved/baseline_detect
 
 Detection with regular convs, pairing set: `python eval.py -c saved/baseline_detector/checkpoint-iteration150000.pth.tar -n 0 -T -a data_loader=special_dataset=simple`
 
+
+Distance based pairing: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=closest`
+
+Scoring functions pairing: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=icdar`
+
 No visual features pairing: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T`
 
 No visual features pairing, with optimization: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a optimize=true`
+
+#### Perfect information experiments
+
+For GT detections:
+
+`python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=closest,useDetect=gt`
+
+`python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=icdar,useDetect=gt`
+
+`python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a useDetect=gt`
+
+For optimization with GT num neighbors:
+
+`python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=closest,optimize=gt`
+
+`python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=icdar,optimize=gt`
+
+`python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a optimize=gt`
+
+
 
 
 ## Folder Structure

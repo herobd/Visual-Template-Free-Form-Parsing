@@ -7,12 +7,6 @@ based on victoresque pytorch template
 
 # Installing to get it to work with pytorch 1
 First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower)
-            p install --verbose --no-cache-dir torch-sparseif 'Med' in features
-                self.numChX=10
-                self.numChY=7
-                self.minCycle=4
-                self.maxCycleX=1000
-                self.maxCycleY=700
 If upgrading cuda, remove the old version first either with apt-get or uninstall script in /usr/cuda/bin.
     (Be sure CUDA_HOME and PATH are right after installation)
 
@@ -34,6 +28,66 @@ python setup.py install
 
 # Install
 `python setup.py build develop`
+
+## Reproducability instructions
+
+
+### Setting up dataset 
+`../data/forms/`
+
+### Pretraining detector network
+`python train.py -c cf_detector.json`
+
+### Training pairing network
+`python train.py -c cf_pairing.json`
+
+### Evaluating
+
+#### Standard experiments
+
+If you want to run on GPU, add `-g #`, where `#` is the GPU number.
+
+Remove the `-T` flag to run on the validation set.
+
+
+Detection, full set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T`
+
+Detection, pairing set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a data_loader=special_dataset=simple`
+
+Pairing, no optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T`
+`
+
+Pairing, with optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a optimize=true`
+
+#### Perfect information experiments
+
+Pairing, GT detections: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a useDetect=gt`
+
+Pairing, optimized with GT num neighnors: 
+
+### Training baseline models
+
+#### Detector using regular convs
+`python train.py -c cf_baseline_detector.json`
+
+#### Classifier using non-visual features
+
+Make training data for no visual feature pairing: 
+1. `make dir out`
+2. `python eval.py -c saved/saved/pairing/checkpoint-iteration125000.pth.tar -g 0 -n 10000 -a save_json=out/detection_data,data_loader=batch_size=1,data_loader=num_workers=0,data_loader=rescale_range=0.52,data_loader=crop_params=,validation=rescale_range=0.52,validation=crop_params=`
+
+Train no visual feature pairing: `python train.py -c cf_no_vis_pairing.json`
+
+### Evaluating baseline models
+
+Detection with regular convs, full set: `python eval.py -c saved/baseline_detector/checkpoint-iteration150000.pth.tar -n 0 -T`
+
+Detection with regular convs, pairing set: `python eval.py -c saved/baseline_detector/checkpoint-iteration150000.pth.tar -n 0 -T -a data_loader=special_dataset=simple`
+
+No visual features pairing: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T`
+
+No visual features pairing, with optimization: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a optimize=true`
+
 
 ## Folder Structure
   ```

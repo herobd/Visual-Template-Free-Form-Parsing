@@ -66,11 +66,15 @@ class EdgeFunc(nn.Module):
         actS=[]
         actM=[]
         actR=[]
+        actP=[]
+        acts = [actS,actM,actR,actP]
         if 'group' in norm:
             actS.append(nn.GroupNorm(getGroupSize(edge_in*ch+rcrhdn_size,edge_in*8),edge_in*ch+rcrhdn_size))
             actM.append(nn.GroupNorm(getGroupSize(hidden_ch),hidden_ch))
             if self.use_rcrhdn:
                 actR.append(nn.GroupNorm(getGroupSize(ch),ch))
+            if self.soft_prune_edges and edge_decider is None:
+                actP.append(nn.GroupNorm(getGroupSize(ch),ch))
         elif norm:
             raise NotImplemented('Norm: {}, not implmeneted for EdgeFunc'.format(norm))
         if dropout is not None:
@@ -78,20 +82,18 @@ class EdgeFunc(nn.Module):
                 da=dropout
             else:
                 da=0.1
-            actS.append(nn.Dropout(p=da,inplace=True))
-            actM.append(nn.Dropout(p=da,inplace=True))
-            actR.append(nn.Dropout(p=da,inplace=True))
-        actS.append(nn.ReLU(inplace=True))
-        actM.append(nn.ReLU(inplace=True))
-        actR.append(nn.ReLU(inplace=True))
+            for act in acts:
+                act.append(nn.Dropout(p=da,inplace=True))
+        for act in acts:
+            act.append(nn.ReLU(inplace=True))
 
         self.edge_mlp = nn.Sequential(*(actS),nn.Linear(ch*edge_in+rcrhdn_size, hidden_ch), *(actM), nn.Linear(hidden_ch, ch+rcrhdn_size_out))
 
         if self.soft_prune_edges:
             if edge_decider is None:
-                self.edge_decider = nn.Sequential(*(act[5]),nn.Linear(ch, 1), nn.Sigmoid())
+                self.edge_decider = nn.Sequential(*(actP),nn.Linear(ch, 1), nn.Sigmoid())
                 # we shift the mean up to bias keeping edges (should help begining of training
-                self.edge_decider[len(act[5])].bias = nn.Parameter(self.edge_decider[len(act[5])].bias.data + 2.0/self.edge_decider[len(act[5])].bias.size(0))
+                self.edge_decider[len(actP)].bias = nn.Parameter(self.edge_decider[len(actP)].bias.data + 2.0/self.edge_decider[len(actP)].bias.size(0))
             else:
                 # we shouldn't need that bias here since it's already getting trained
                 self.edge_decider = nn.Sequential(edge_decider, SharpSigmoid(-1))
@@ -496,9 +498,9 @@ class SharpSigmoid(nn.Module):
 
 
 #This assumes the inputs are not activated
-#class MetaGraphAttentionLayer(nn.Module):
+#class MetaGraphAttentionLayerOLD(nn.Module):
 #    def __init__(self, ch,heads=4,dropout=0.1,norm='group',useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=False,edge_decider=None,rcrhdn_size=0,relu_node_act=False,att_mod=False,avgEdges=False): 
-#        super(MetaGraphAttentionLayer, self).__init__()
+#        super(MetaGraphAttentionLayerOLD, self).__init__()
 #        
 #        self.thinker=agg_thinker
 #        self.soft_prune_edges=soft_prune_edges
@@ -760,7 +762,7 @@ class SharpSigmoid(nn.Module):
 #        self.rcrhdn_nodes = None
 #        self.rcrhdn_edges = None
 #        self.rcrhdn_global = None
-#
+
 class MetaGraphNet(nn.Module):
     def __init__(self, config): # predCount, base_0, base_1):
         super(MetaGraphNet, self).__init__()
@@ -839,7 +841,7 @@ class MetaGraphNet(nn.Module):
                     return NoGlobalFunc()
 
 
-            #layers = [MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size,relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges) for i in range(layerCount)]
+            #layers = [MetaGraphAttentionLayerOLD(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size[i],relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges) for i in range(layerCount)]
         elif layerType=='tree':
             def getEdgeFunc(i):
                 return EdgeFunc(ch,dropout=dropout,norm=norm,useRes=True,useGlobal=useGlobal,hidden_ch=None,soft_prune_edges=soft_prune_edges_l[i],edge_decider=edge_decider,rcrhdn_size=rcrhdn_size[i],avgEdges=avgEdges)
@@ -860,8 +862,8 @@ class MetaGraphNet(nn.Module):
                     return GlobalFunc(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,hidden_ch=None,rcrhdn_size=rcrhdn_size)
                 else:
                     return NoGlobalFunc()
-            #layers = [MetaGraphMeanLayer(ch,False) for i in range(layerCount)]
-            #self.main_layers = nn.Sequential(*layers)
+            layers = [MetaGraphMeanLayer(ch,False) for i in range(layerCount)]
+            self.main_layers = nn.Sequential(*layers)
         else:
             print('Unknown layer type: {}'.format(layerType))
             exit()
@@ -876,7 +878,7 @@ class MetaGraphNet(nn.Module):
                 infeatsEdge = config['infeats_edge'] if 'infeats_edge' in config else 0
                 self.input_layers = MetaGraphFCEncoderLayer(infeats,infeatsEdge,ch)
             if inputLayerType!='fc':
-                #layer = MetaGraphAttentionLayer(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges)
+                #layer = MetaGraphAttentionLayerOLD(ch,heads=heads,dropout=dropout,norm=norm,useRes=True,useGlobal=False,hidden_ch=None,agg_thinker='cat',relu_node_act=relu_node_act,att_mod=att_mod,avgEdges=avgEdges)
                 layer = MetaGraphLayer(getEdgeFunc(-1),getNodeFunc(-1),getGlobalFunc(-1))
                 if self.input_layers is None:
                     self.input_layers = layer

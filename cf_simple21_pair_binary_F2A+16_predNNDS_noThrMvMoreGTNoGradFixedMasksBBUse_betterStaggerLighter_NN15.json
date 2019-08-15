@@ -1,5 +1,5 @@
 {
-    "name": "Simple20_pair_graphTree2R4FERcrAvgEFixBD_F2A+16_predNNDS_moreGT_betterStaggerLightRFh_NN200000P",
+    "name": "Simple21_pair_binary_F2A+16_predNNDS_noThrMvMoreGTNoGradFixedMasksBBUse_betterStaggerLighter_NN15",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
@@ -40,7 +40,7 @@
  
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.0015,
+        "lr": 0.001,
         "weight_decay": 0
     },
     "loss": {
@@ -52,7 +52,8 @@
     "loss_weights": {
         "box": 1.0,
         "edge": 0.5,
-        "nn": 0.25
+        "nn": 0.25,
+        "class": 0.25
     },
     "loss_params": 
         {
@@ -63,10 +64,10 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 100000,
+        "iterations": 125000,
         "save_dir": "saved/",
         "val_step": 5000,
-        "save_step": 5000,
+        "save_step": 25000,
         "save_step_minor": 250,
         "log_step": 250,
         "verbosity": 1,
@@ -88,7 +89,7 @@
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Forms18_augRFh_staggerLight_NN/checkpoint-iteration200000.pth.tar",
+        "detector_checkpoint": "saved/Forms21_augRFh_staggerLighter_NN/checkpoint-iteration150000.pth.tar",
         "conf_thresh": 0.5,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",
@@ -112,20 +113,13 @@
         "featurizer_bb_start_w": 32,
         "bb_featurizer_conv": ["sep64","M","sep64","sep64","M","sep128","sep128","M",250],
 
-        "fix_bi_dir": true,
         "graph_config": {
-            "arch": "MetaGraphNet",
+            "arch": "BinaryPairReal",
             "in_channels": 256,
-            "node_out": 1,
-            "edge_out": 1,
-            "num_layers": 2,
-            "layer_type": "tree",
-            "repetitions": 4,
-            "use_repetition_res": true,
-            "encode_type": "tree",
-            "force_encoding": true,
-            "avg_edges": true,
-            "rcrhdn_size": 64
+            "bb_out": 1,
+            "rel_out": 1,
+            "layers": ["FC256","FC256"],
+            "layers_bb": ["FC256"]
         }
     }
 }

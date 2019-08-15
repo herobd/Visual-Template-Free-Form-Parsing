@@ -4,8 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from model import *
-from model.graph_net import GraphNet
-from model.meta_graph_net import MetaGraphNet
 from model.binary_pair_net import BinaryPairNet
 from model.binary_pair_real import BinaryPairReal
 #from model.roi_align.roi_align import RoIAlign
@@ -292,9 +290,7 @@ class PairingGraph(BaseModel):
                 self.bbFeaturizerFC = None
 
 
-        #self.pairer = GraphNet(config['graph_config'])
         self.pairer = eval(config['graph_config']['arch'])(config['graph_config'])
-        self.useMetaGraph = type(self.pairer) is MetaGraphNet
         self.fixBiDirection= config['fix_bi_dir'] if 'fix_bi_dir' in config else False
         if 'max_graph_size' in config:
             MAX_GRAPH_SIZE = config['max_graph_size']
@@ -407,50 +403,40 @@ class PairingGraph(BaseModel):
                 embeddings = self.embedding_model(transcriptions)
             else:
                 embeddings=None
-            if self.useMetaGraph:
-                graph,relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings)
-                if graph is None:
+            #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
+            if self.training: #0.3987808480 0.398469038200 not a big difference, but it's "the right" thing to do
+                if debug:
+                    import pdb;pdb.set_trace()
+                bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings)# ,debug_image=image)
+                if bbAndRel_features is None:
                     return bbPredictions, offsetPredictions, None, None, None
-                bbOuts, relOuts = self.pairer(graph)
-                if self.fixBiDirection or not self.training:
-                    relIndexes = relIndexes[:len(relIndexes)//2]
-                if self.fixBiDirection:
-                    relOuts = (relOuts[:relOuts.size(0)//2] + relOuts[relOuts.size(0)//2:])/2 #average two directions of edge
+
+                ##tic=timeit.default_timer()
+                #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
+                bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
             else:
-                #bb_features, adjacencyMatrix, rel_features = self.createGraph(useBBs,final_features)
-                if self.training: #0.3987808480 0.398469038200 not a big difference, but it's "the right" thing to do
-                    if debug:
-                        import pdb;pdb.set_trace()
-                    bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings)# ,debug_image=image)
-                    if bbAndRel_features is None:
-                        return bbPredictions, offsetPredictions, None, None, None
+                #If evaluating, force the masks of relationships to be the two ways and average
+                bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings,flip=False)
+                if bbAndRel_features is None:
+                    return bbPredictions, offsetPredictions, None, None, None
 
-                    ##tic=timeit.default_timer()
-                    #nodeOuts, relOuts = self.pairer(bb_features, adjacencyMatrix, rel_features)
-                    bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
-                else:
-                    #If evaluating, force the masks of relationships to be the two ways and average
-                    bbAndRel_features, adjacencyMatrix, numBBs, numRel, relIndexes = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings,flip=False)
-                    if bbAndRel_features is None:
-                        return bbPredictions, offsetPredictions, None, None, None
+                bbAndRel_features_B, adjacencyMatrix_B, numBBs_B, numRel_B, relIndexes_B = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings,flip=True)
 
-                    bbAndRel_features_B, adjacencyMatrix_B, numBBs_B, numRel_B, relIndexes_B = self.createGraph(useBBs,saved_features,saved_features2,image.size(-2),image.size(-1),text_emb=embeddings,flip=True)
-
-                    assert(numBBs==numBBs_B and numRel==numRel_B)
-                    for i,(n1,n2) in enumerate(relIndexes):
-                        assert(relIndexes_B[i][0]==n1 and relIndexes_B[i][1]==n2)
-                    bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
-                    bbOuts_B, relOuts_B = self.pairer(bbAndRel_features_B, adjacencyMatrix, numBBs)
-                    #Average results together
-                    if bbOuts is not None:
-                        bbOuts = (bbOuts+bbOuts_B)/2
-                    relOuts = (relOuts+relOuts_B)/2
+                assert(numBBs==numBBs_B and numRel==numRel_B)
+                for i,(n1,n2) in enumerate(relIndexes):
+                    assert(relIndexes_B[i][0]==n1 and relIndexes_B[i][1]==n2)
+                bbOuts, relOuts = self.pairer(bbAndRel_features, adjacencyMatrix, numBBs)
+                bbOuts_B, relOuts_B = self.pairer(bbAndRel_features_B, adjacencyMatrix, numBBs)
+                #Average results together
                 if bbOuts is not None:
-                    bbOuts = bbOuts[:,None,:]
-                relOuts = relOuts[:,None,:]
-                #bbOuts = graphOut[:numBBs]
-                #relOuts = graphOut[numBBs:]
-                ##print('pairer: {}'.format(timeit.default_timer()-tic))
+                    bbOuts = (bbOuts+bbOuts_B)/2
+                relOuts = (relOuts+relOuts_B)/2
+            if bbOuts is not None:
+                bbOuts = bbOuts[:,None,:]
+            relOuts = relOuts[:,None,:]
+            #bbOuts = graphOut[:numBBs]
+            #relOuts = graphOut[numBBs:]
+            ##print('pairer: {}'.format(timeit.default_timer()-tic))
 
             #adjacencyMatrix = torch.zeros((bbPredictions.size(1),bbPredictions.size(1)))
             #for rel in relOuts:
@@ -479,10 +465,7 @@ class PairingGraph(BaseModel):
         candidates = self.selectCandidateEdges(bbs,imageHeight,imageWidth)
         ##print('  candidate: {}'.format(timeit.default_timer()-tic))
         if len(candidates)==0:
-            if self.useMetaGraph:
-                return None, None
-            else:
-                return None,None,None,None,None
+            return None,None,None,None,None
         ##tic=timeit.default_timer()
 
         #stackedEdgeFeatWindows = torch.FloatTensor((len(candidates),features.size(1)+2,self.relWindowSize,self.relWindowSize)).to(features.device())
@@ -822,63 +805,49 @@ class PairingGraph(BaseModel):
         relIndexes=candidates
         numBB = bbs.size(0)
         numRel = len(candidates)
-        if self.useMetaGraph:
-            nodeFeatures= bb_features
-            edgeFeatures= relFeats
-
-            edges=candidates
-            edges += [(y,x) for x,y in edges] #add backward edges for undirected graph
-            edgeIndexes = torch.LongTensor(edges).t().to(relFeats.device)
-            #now we need to also replicate the edgeFeatures
-            edgeFeatures = edgeFeatures.repeat(2,1)
-
-            #features
-            universalFeatures=None
-            return (nodeFeatures, edgeIndexes, edgeFeatures, universalFeatures), relIndexes
+        if bb_features is None:
+            numBB=0
+            bbAndRel_features=relFeats
+            adjacencyMatrix = None
+            numOfNeighbors = None
         else:
-            if bb_features is None:
-                numBB=0
-                bbAndRel_features=relFeats
-                adjacencyMatrix = None
-                numOfNeighbors = None
-            else:
-                bbAndRel_features = torch.cat((bb_features,relFeats),dim=0)
-                numOfNeighbors = torch.ones(bbs.size(0)+len(candidates)) #starts at one for yourself
-                edges=[]
+            bbAndRel_features = torch.cat((bb_features,relFeats),dim=0)
+            numOfNeighbors = torch.ones(bbs.size(0)+len(candidates)) #starts at one for yourself
+            edges=[]
+            i=0
+            for bb1,bb2 in candidates:
+                edges.append( (bb1,numBB+i) )
+                edges.append( (bb2,numBB+i) )
+                numOfNeighbors[bb1]+=1
+                numOfNeighbors[bb2]+=1
+                numOfNeighbors[numBB+i]+=2
+                i+=1
+            if self.includeRelRelEdges:
+                relEdges=set()
                 i=0
                 for bb1,bb2 in candidates:
-                    edges.append( (bb1,numBB+i) )
-                    edges.append( (bb2,numBB+i) )
-                    numOfNeighbors[bb1]+=1
-                    numOfNeighbors[bb2]+=1
-                    numOfNeighbors[numBB+i]+=2
+                    j=0
+                    for bbA,bbB in candidates[i:]:
+                        if i!=j and bb1==bbA or bb1==bbB or bb2==bbA or bb2==bbB:
+                            relEdges.add( (numBB+i,numBB+j) ) #i<j always
+                        j+=1   
                     i+=1
-                if self.includeRelRelEdges:
-                    relEdges=set()
-                    i=0
-                    for bb1,bb2 in candidates:
-                        j=0
-                        for bbA,bbB in candidates[i:]:
-                            if i!=j and bb1==bbA or bb1==bbB or bb2==bbA or bb2==bbB:
-                                relEdges.add( (numBB+i,numBB+j) ) #i<j always
-                            j+=1   
-                        i+=1
-                    relEdges = list(relEdges)
-                    for r1, r2 in relEdges:
-                        numOfNeighbors[r1]+=1
-                        numOfNeighbors[r2]+=1
-                    edges += relEdges
-                #add reverse edges
-                edges+=[(y,x) for x,y in edges]
-                #add diagonal (self edges)
-                for i in range(bbAndRel_features.size(0)):
-                    edges.append((i,i))
+                relEdges = list(relEdges)
+                for r1, r2 in relEdges:
+                    numOfNeighbors[r1]+=1
+                    numOfNeighbors[r2]+=1
+                edges += relEdges
+            #add reverse edges
+            edges+=[(y,x) for x,y in edges]
+            #add diagonal (self edges)
+            for i in range(bbAndRel_features.size(0)):
+                edges.append((i,i))
 
-                edgeLocs = torch.LongTensor(edges).t().to(relFeats.device)
-                ones = torch.ones(len(edges)).to(relFeats.device)
-                adjacencyMatrix = torch.sparse.FloatTensor(edgeLocs,ones,torch.Size([bbAndRel_features.size(0),bbAndRel_features.size(0)]))
-                #numOfNeighbors is for convienence in tracking the normalization term
-                numOfNeighbors=numOfNeighbors.to(relFeats.device)
+            edgeLocs = torch.LongTensor(edges).t().to(relFeats.device)
+            ones = torch.ones(len(edges)).to(relFeats.device)
+            adjacencyMatrix = torch.sparse.FloatTensor(edgeLocs,ones,torch.Size([bbAndRel_features.size(0),bbAndRel_features.size(0)]))
+            #numOfNeighbors is for convienence in tracking the normalization term
+            numOfNeighbors=numOfNeighbors.to(relFeats.device)
 
             #rel_features = (candidates,relFeats)
             #adjacencyMatrix = None

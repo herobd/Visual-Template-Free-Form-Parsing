@@ -1,23 +1,11 @@
 import torch
 import torch.utils.data
 import numpy as np
-#from datasets.cancer import CancerDataset
-from datasets.ai2d import AI2D
-from datasets import forms_detect
-from datasets.forms_detect import FormsDetect
 from datasets import forms_box_detect
 from datasets.forms_box_detect import FormsBoxDetect
-from datasets import ai2d_box_detect
 from datasets import forms_graph_pair
-from datasets import forms_box_pair
-from datasets.forms_box_pair import FormsBoxPair
 from datasets.forms_feature_pair import FormsFeaturePair
 from datasets import forms_feature_pair
-from datasets.forms_pair import FormsPair
-from datasets.forms_lf import FormsLF
-from datasets import random_messages
-from datasets import random_diffusion
-from datasets import random_maxpairs
 #from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -87,49 +75,12 @@ def getDataLoader(config,split):
             numDataWorkers = 1
         shuffleValid = config['validation']['shuffle']
 
-        if data_set_name=='AI2D':
-            dataset=AI2D(dirPath=data_dir, split=split, config=config)
-            if split=='train':
-                validation=torch.utils.data.DataLoader(dataset.splitValidation(config), batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
-            else:
-                validation=None
-            return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers), validation
-        elif data_set_name=='FormsDetect':
-            return withCollate(FormsDetect,forms_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
-        elif data_set_name=='FormsBoxDetect':
+        if data_set_name=='FormsBoxDetect':
             return withCollate(FormsBoxDetect,forms_box_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
-        elif data_set_name=='AI2DBoxDetect':
-            return withCollate(ai2d_box_detect.AI2DBoxDetect,ai2d_box_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
-        elif data_set_name=='FormsBoxPair':
-            return withCollate(FormsBoxPair,forms_box_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsGraphPair':
             return withCollate(forms_graph_pair.FormsGraphPair,forms_graph_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsFeaturePair':
             return withCollate(FormsFeaturePair,forms_feature_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
-        elif data_set_name=='FormsPair':
-            return basic(FormsPair,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
-        elif data_set_name=='FormsLF':
-            return basic(FormsLF,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
-        elif data_set_name=='Cancer':
-            if split=='train':
-                rot=config['rot'] if 'rot' in config else None
-                trainData = CancerDataset(data_dir, train=True, rot=rot)
-                trainLoader = torch.utils.data.DataLoader(trainData, batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers)
-                validData = CancerDataset(data_dir, train=False)
-                validLoader = torch.utils.data.DataLoader(validData, batch_size=batch_size, shuffle=shuffleValid, num_workers=numDataWorkers)
-                return trainLoader, validLoader
-        elif data_set_name=='RandomMessagesDataset':
-            data = random_messages.RandomMessagesDataset(config['data_loader'])
-            dataLoader = torch.utils.data.DataLoader(data,batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers,collate_fn=random_messages.collate)
-            return dataLoader,dataLoader
-        elif data_set_name=='RandomDiffusionDataset':
-            data = random_diffusion.RandomDiffusionDataset(config)
-            dataLoader = torch.utils.data.DataLoader(data,batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers,collate_fn=random_diffusion.collate)
-            return dataLoader,dataLoader
-        elif data_set_name=='RandomMaxPairsDataset':
-            data = random_maxpairs.RandomMaxPairsDataset(config)
-            dataLoader = torch.utils.data.DataLoader(data,batch_size=batch_size, shuffle=shuffle, num_workers=numDataWorkers,collate_fn=random_maxpairs.collate)
-            return dataLoader,dataLoader
         else:
             print('Error, no dataloader has no set for {}'.format(data_set_name))
             exit()

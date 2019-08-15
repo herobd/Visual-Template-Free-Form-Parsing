@@ -82,7 +82,8 @@
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Forms18_augRFh_staggerLight_NN/checkpoint-iteration200000.pth.tar",
+        "Xdetector_checkpoint": "saved/Forms18_augRFh_staggerLight_NN/checkpoint-iteration200000.pth.tar",
+        "detector_checkpoint": "saved/Forms21_augRFh_staggerLighter_NN/checkpoint-iteration150000.pth.tar",
         "conf_thresh": 0.92,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",
@@ -94,8 +95,11 @@
             "node_channels": 0,
             "edge_channels": 1,
             "layers": ["FC256","FC256"],
-            "xxshape_layers": "saved/Simple19_pairNotGT_feat_wH/checkpoint-iteration6000.pth.tar",
-            "shape_layers": "saved/Simple18_pairNotGT_feat_wH/checkpoint-iteration6000.pth.tar",
+            "XXshape_layers": "saved/Simple19_pairNotGT_feat_wH/checkpoint-iteration6000.pth.tar",
+            "Xshape_layers": "saved/Simple18_pairNotGT_feat_wH/checkpoint-iteration8000.pth.tar",
+            "Xshape_layers": "saved/Simple18_pairNotGT_feat_retrain2/checkpoint-iteration6000.pth.tar",
+            "Xshape_layers": "saved/Simple21_pairNotGTNN_feat/checkpoint-iteration10000.pth.tar",
+            "shape_layers": "saved/What_pairNotGTNN_feat/checkpoint-iteration8000.pth.tar",
             "weight_split": 0.0
         },
         "featurizer_start_h": 10,

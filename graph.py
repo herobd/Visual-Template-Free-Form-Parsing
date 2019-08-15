@@ -70,6 +70,8 @@ if __name__ == '__main__':
                         help='only stats with this prefix (default: None)')
     parser.add_argument('-e', '--extract', default=None, type=str,
                         help='instead of ploting, save a new file with only the log (default: None)')
+    parser.add_argument('-C', '--printconfig', default=False, type=bool,
+                        help='print config (defaut False')
 
     args = parser.parse_args()
 
@@ -78,6 +80,11 @@ if __name__ == '__main__':
     log = saved['logger']
     iteration = saved['iteration']
     print('loaded iteration {}'.format(iteration))
+
+    if args.printconfig:
+        print(saved['config'])
+        exit()
+
     saved=None
 
     if args.extract is None:

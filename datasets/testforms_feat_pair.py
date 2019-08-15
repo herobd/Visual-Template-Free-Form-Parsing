@@ -75,10 +75,10 @@ if __name__ == "__main__":
         repeat = int(sys.argv[3])
     else:
         repeat=1
-    data=FormsFeaturePair(dirPath=dirPath,split='valid',config={
+    data=FormsFeaturePair(dirPath=dirPath,split='train',config={
         "data_set_name": "FormsFeaturePair",
         "simple_dataset": True,
-        "alternate_json_dir": "out_json/Simple18_staggerLight_NN",
+        "alternate_json_dir": "out_json/Forms21_augRFh_staggerLighter_NN",
         "data_dir": "../data/forms",
         "batch_size": 1,
         "shuffle": False,

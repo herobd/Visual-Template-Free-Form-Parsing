@@ -98,7 +98,8 @@
             "XXshape_layers": "saved/Simple19_pairNotGT_feat_wH/checkpoint-iteration6000.pth.tar",
             "Xshape_layers": "saved/Simple18_pairNotGT_feat_wH/checkpoint-iteration8000.pth.tar",
             "Xshape_layers": "saved/Simple18_pairNotGT_feat_retrain2/checkpoint-iteration6000.pth.tar",
-            "shape_layers": "saved/Simple21_pairNotGTNN_feat/checkpoint-iteration8000.pth.tar",
+            "Xshape_layers": "saved/Simple21_pairNotGTNN_feat/checkpoint-iteration10000.pth.tar",
+            "shape_layers": "saved/What_pairNotGTNN_feat/checkpoint-iteration8000.pth.tar",
             "weight_split": 0.0
         },
         "featurizer_start_h": 10,

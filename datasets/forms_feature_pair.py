@@ -141,6 +141,7 @@ class FormsFeaturePair(torch.utils.data.Dataset):
                 if groupName in SKIP:
                     print('Skipped group {}'.format(groupName))
                     continue
+                
                 for imageName in imageNames:
                     org_path = os.path.join(dirPath,'groups',groupName,imageName)
                     #print(org_path)

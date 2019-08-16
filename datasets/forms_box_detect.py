@@ -234,8 +234,8 @@ class FormsBoxDetect(BoxDetectDataset):
             table_points=None
             table_pixels=None
             if imageName not in self.errors:
-                print(inst)
-                print('Table error on: '+imageName)
+                #print(inst)
+                #print('Table error on: '+imageName)
                 self.errors.append(imageName)
 
         ##print('getStartEndGt: '+str(timeit.default_timer()-tic))

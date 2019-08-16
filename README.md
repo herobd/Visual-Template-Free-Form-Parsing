@@ -2,8 +2,10 @@
 based on victoresque pytorch template
 
 ## Requirements
-* Python 3.x
+* Python 3.x (at least 3.7 for doing optimization)
 * PyTorch 1.0+
+
+I used conda, but it shouldn't be hard to install the packages another way.
 
 # Installing to get it to work with pytorch 1
 First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower).
@@ -16,14 +18,6 @@ If upgrading cuda, remove the old version first either with apt-get or uninstall
 * `opencv`
 * `scikit-image`
 
-for pytorch geometric (meta graph):
-```
-pip install --verbose --no-cache-dir torch-scatter
-pip install --verbose --no-cache-dir torch-sparse
-pip install --verbose --no-cache-dir torch-cluster
-pip install --verbose --no-cache-dir torch-spline-conv (optional)
-pip install torch-geometric
-```
 
 for cvxpy (optimization), you must have python 3.7 or later:
 

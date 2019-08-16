@@ -7,7 +7,7 @@
     "override": true,
     "data_loader": {
         "data_set_name": "FormsBoxDetect",
-        "data_dir": "../data/forms",
+        "data_dir": "../data/NAF_dataset",
         "batch_size": 5,
         "shuffle": true,
         "num_workers": 2,

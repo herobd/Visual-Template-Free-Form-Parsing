@@ -268,15 +268,15 @@ def AP_(target,pred,iou_thresh,numClasses,ignoreClasses,beforeCls,getLoc,getClas
 
         #add all the preds that didn't have a hit
         hasHit,_ = validHits.max(dim=0) #which preds have hits
-        notHitScores = pred[1-hasHit,0]
-        notHitClass = predClasses_index[1-hasHit]
+        notHitScores = pred[~hasHit,0]
+        notHitClass = predClasses_index[~hasHit]
         for i in range(notHitScores.shape[0]):
             allScores.append( (notHitScores[i].item(), False) )
             cls = notHitClass[i]
             classScores[cls].append( (notHitScores[i].item(), False) )
 
         # if something has multiple hits, it gets paired to the closest (with matching class)
-        allIOUs[1-validHits] -= 9999999 #Force these to be smaller
+        allIOUs[~validHits] -= 9999999 #Force these to be smaller
         maxValidHitIndexes = torch.argmax(allIOUs,dim=0)
         for i in range(maxValidHitIndexes.size(0)):
             if validHits[maxValidHitIndexes[i],i]:

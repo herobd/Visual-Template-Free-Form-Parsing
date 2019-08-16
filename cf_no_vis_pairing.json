@@ -9,7 +9,7 @@
         "data_set_name": "FormsFeaturePair",
         "simple_dataset": true,
         "alternate_json_dir": "out/detection_data/",
-        "data_dir": "../data/forms",
+        "data_dir": "../data/NAF_dataset",
         "batch_size": 512,
         "shuffle": true,
         "num_workers": 0,

@@ -82,7 +82,7 @@
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/detector/checkpoint-iteration150000.pth.tar",
+        "detector_checkpoint": "saved/detector/checkpoint-iteration150000.pth",
         "conf_thresh": 0.92,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",
@@ -94,7 +94,7 @@
             "node_channels": 0,
             "edge_channels": 1,
             "layers": ["FC256","FC256"],
-            "shape_layers": "saved/no_vis_pairing/checkpoint-iteration6000.pth.tar",
+            "shape_layers": "saved/no_vis_pairing/checkpoint-iteration6000.pth",
             "weight_split": 0.0
         },
         "featurizer_start_h": 10,

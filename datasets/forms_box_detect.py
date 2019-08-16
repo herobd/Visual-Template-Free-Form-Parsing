@@ -171,6 +171,7 @@ class FormsBoxDetect(BoxDetectDataset):
                                 if org_img is None:
                                     print('WARNING, could not read {}'.format(org_img))
                                     continue
+                                print('caching {} '.format(org_img),, end='\r')
                                 #target_dim1 = self.rescale_range[1]
                                 #target_dim0 = int(org_img.shape[0]/float(org_img.shape[1]) * target_dim1)
                                 #resized = cv2.resize(org_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)

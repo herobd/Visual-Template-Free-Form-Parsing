@@ -49,39 +49,42 @@ If you want to run on GPU, add `-g #`, where `#` is the GPU number.
 Remove the `-T` flag to run on the validation set.
 
 
-Detection, full set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T`
+Detection, full set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T`
 
-Detection, pairing set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a data_loader=special_dataset=simple`
+Detection, pairing set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T -a data_loader=special_dataset=simple`
 
-Pairing, no optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T`
+Pairing, no optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T`
 `
 
-Pairing, with optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a optimize=true`
+Pairing, with optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T -a optimize=true`
 
 #### Perfect information experiments
 
-Pairing, GT detections: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a useDetect=gt`
+Pairing, GT detections: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T -a useDetect=gt`
 
-Pairing, optimized with GT num neighnors:  `python eval.py -c saved/pairing/checkpoint-iteration125000.pth.tar -n 0 -T -a optimize=gt`
+Pairing, optimized with GT num neighnors:  `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T -a optimize=gt`
 
 ### Training baseline models
 
 #### Detector using regular convs
+
 `python train.py -c cf_baseline_detector.json`
+
+Note: This will take a while before it begins training on your first run as it caches smaller sizes of the dataset.
 
 #### Classifier using non-visual features
 
 Make training data for no visual feature pairing: 
 1. `mkdir out`
-2. `python eval.py -c saved/saved/pairing/checkpoint-iteration125000.pth.tar -g 0 -n 10000 -a save_json=out/detection_data,data_loader=batch_size=1,data_loader=num_workers=0,data_loader=rescale_range=0.52,data_loader=crop_params=,validation=rescale_range=0.52,validation=crop_params=`
+2. `python eval.py -c saved/saved/pairing/checkpoint-iteration125000.pth -g 0 -n 10000 -a save_json=out/detection_data,data_loader=batch_size=1,data_loader=num_workers=0,data_loader=rescale_range=0.52,data_loader=crop_params=,validation=rescale_range=0.52,validation=crop_params=`
 
 Train no visual feature pairing: `python train.py -c cf_no_vis_pairing.json`
 
 ### Evaluating baseline models
 
-Detection with regular convs, full set: `python eval.py -c saved/baseline_detector/checkpoint-iteration150000.pth.tar -n 0 -T`
+Detection with regular convs, full set: `python eval.py -c saved/baseline_detector/checkpoint-iteration150000.pth -n 0 -T`
 
-Detection with regular convs, pairing set: `python eval.py -c saved/baseline_detector/checkpoint-iteration150000.pth.tar -n 0 -T -a data_loader=special_dataset=simple`
+Detection with regular convs, pairing set: `python eval.py -c saved/baseline_detector/checkpoint-iteration150000.pth -n 0 -T -a data_loader=special_dataset=simple`
 
 
 Distance based pairing: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=closest`
@@ -111,6 +114,15 @@ For optimization with GT num neighbors:
 `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a optimize=gt`
 
 
+## Usage
+
+### train.py
+
+This is the script that executes training based on a configuration file. The training code is found in `trainer/`
+
+The usage is: `python train.py -c CONFIG.json`
+
+A training session can be resumed with: `python train.py -r CHECKPOINT.pth`
 
 
 ## Folder Structure
@@ -174,7 +186,7 @@ Config files are in `.json` format:
     },
     "optimizer_type": "Adam",
     "optimizer": {
-        "lr": 0.001,              // (optional) learning rate
+        "lr": -2.001,              // (optional) learning rate
         "weight_decay": 0         // (optional) weight decay
     },
     "loss": "my_loss",            // loss

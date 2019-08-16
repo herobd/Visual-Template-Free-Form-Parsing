@@ -283,7 +283,7 @@ class BaseTrainer:
 
         :param iteration: current iteration number
         :param log: logging information of the ipoch
-        :param save_best: if True, rename the saved checkpoint to 'model_best.pth.tar'
+        :param save_best: if True, rename the saved checkpoint to 'model_best.pth'
         """
         arch = type(self.model).__name__
         state = {
@@ -314,16 +314,16 @@ class BaseTrainer:
         #    state['swa_n']=self.swa_n
         torch.cuda.empty_cache() #weird gpu memory issue when calling torch.save()
         if not minor:
-            filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth.tar'
+            filename = os.path.join(self.checkpoint_dir, 'checkpoint-iteration{}.pth'
                                     .format(iteration))
         else:
-            filename = os.path.join(self.checkpoint_dir, 'checkpoint-latest.pth.tar')
+            filename = os.path.join(self.checkpoint_dir, 'checkpoint-latest.pth')
                             
         #print(self.module.state_dict().keys())
         torch.save(state, filename)
         if not minor:
             #remove minor as this is the latest
-            filename_late = os.path.join(self.checkpoint_dir, 'checkpoint-latest.pth.tar')
+            filename_late = os.path.join(self.checkpoint_dir, 'checkpoint-latest.pth')
             try:
                 os.remove(filename_late)
             except FileNotFoundError:
@@ -332,8 +332,8 @@ class BaseTrainer:
             torch.save(state, filename_late) #something is wrong with thel inkgin
 
         if save_best:
-            os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth.tar'))
-            self.logger.info("Saved current best: {} ...".format('model_best.pth.tar'))
+            os.rename(filename, os.path.join(self.checkpoint_dir, 'model_best.pth'))
+            self.logger.info("Saved current best: {} ...".format('model_best.pth'))
         else:
             self.logger.info("Saved checkpoint: {} ...".format(filename))
 

@@ -89,7 +89,7 @@
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Forms21_augRFh_staggerLighter_NN/checkpoint-iteration150000.pth.tar",
+        "detector_checkpoint": "saved/Forms21_augRFh_staggerLighter_NN/checkpoint-iteration150000.pth",
         "conf_thresh": 0.5,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",

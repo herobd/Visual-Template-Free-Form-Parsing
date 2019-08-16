@@ -108,6 +108,7 @@ if __name__ == '__main__':
     if args.gpu is not None:
         config['gpu']=args.gpu
         print('override gpu to '+str(config['gpu']))
+
     if config['cuda']:
         with torch.cuda.device(config['gpu']):
             main(config, args.resume)

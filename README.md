@@ -2,8 +2,10 @@
 based on victoresque pytorch template
 
 ## Requirements
-* Python 3.x
+* Python 3.x (at least 3.7 for doing optimization)
 * PyTorch 1.0+
+
+I used conda, but it shouldn't be hard to install the packages another way.
 
 # Installing to get it to work with pytorch 1
 First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower).

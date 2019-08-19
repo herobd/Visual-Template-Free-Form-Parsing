@@ -49,9 +49,9 @@ If you want to run on GPU, add `-g #`, where `#` is the GPU number.
 Remove the `-T` flag to run on the validation set.
 
 
-Detection, full set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T`
+Detection, full set: `python eval.py -c saved/detector/checkpoint-iteration150000.pth -n 0 -T`
 
-Detection, pairing set: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T -a data_loader=special_dataset=simple`
+Detection, pairing set: `python eval.py -c saved/detector/checkpoint-iteration150000.pth -n 0 -T -a data_loader=special_dataset=simple`
 
 Pairing, no optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T`
 `

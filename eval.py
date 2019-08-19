@@ -10,8 +10,6 @@ from evaluators import *
 import math
 from collections import defaultdict
 
-from datasets.forms_detect import FormsDetect
-from datasets import forms_detect
 
 logging.basicConfig(level=logging.INFO, format='')
 
@@ -98,9 +96,6 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
 
     if addDATASET:
         config['DATASET']=valid_data_loader.dataset
-    #ttt=FormsDetect(dirPath='/home/ubuntu/brian/data/forms',split='train',config={'crop_to_page':False,'rescale_range':[450,800],'crop_params':{"crop_size":512},'no_blanks':True, "only_types": ["text_start_gt"], 'cache_resized_images': True})
-    #data_loader = torch.utils.data.DataLoader(ttt, batch_size=16, shuffle=False, num_workers=5, collate_fn=forms_detect.collate)
-    #valid_data_loader = data_loader.split_validation()
 
     if checkpoint is not None:
         if 'state_dict' in checkpoint:

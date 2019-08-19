@@ -1145,7 +1145,7 @@ class PairingGraph(BaseModel):
                 else:
                     distMul=distMul*0.8 - 0.05
         #This is a problem, we couldn't prune down enough
-        print("ERROR: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
+        #print("WARNING:: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
         return list(candidates)[:MAX_GRAPH_SIZE-numBoxes]
 
     def getTranscriptions(self,bbs,image):

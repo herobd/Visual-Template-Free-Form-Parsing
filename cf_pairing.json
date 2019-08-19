@@ -4,7 +4,7 @@
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":true,
+    "super_computer":false,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "special_dataset": "simple",
@@ -89,7 +89,7 @@
     },
     "arch": "PairingGraph", 
     "model": {
-        "detector_checkpoint": "saved/Forms21_augRFh_staggerLighter_NN/checkpoint-iteration150000.pth",
+        "detector_checkpoint": "saved/detector/checkpoint-iteration150000.pth",
         "conf_thresh": 0.5,
         "start_frozen": true,
 	"use_rel_shape_feats": "corner",

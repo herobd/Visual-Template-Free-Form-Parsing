@@ -501,7 +501,7 @@ class GraphPairTrainer(BaseTrainer):
                     #remove predictions that overlapped with GT, but not enough
                     if self.model.predNN:
                         start=1
-                        toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
+                        toKeep = ~((bbFullHit==0) & (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
                         if toKeep.any():
                             bbPredNN_use = bbPred[toKeep][:,0]
                             bbAlignment_use = bbAlignment[toKeep]

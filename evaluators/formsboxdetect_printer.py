@@ -10,6 +10,7 @@ from model.loss import *
 from collections import defaultdict
 from utils.yolo_tools import non_max_sup_iou, AP_iou, non_max_sup_dist, AP_dist, getTargIndexForPreds_iou, getTargIndexForPreds_dist
 import json
+from utils.util import ensure_dir
 
 #THRESH=0.5
 
@@ -299,7 +300,8 @@ def FormsBoxDetect_printer(config,instance, model, gpu, metrics, outDir=None, st
                 #import pdb; pdb.set_trace()
                 instance['pairs']=[]
             pairsData=[ ('m{}'.format(i1),'m{}'.format(i2)) for i1,i2 in instance['pairs'] ]
-
+            
+            ensure_dir(config['save_json'])
             saveJSON = os.path.join(config['save_json'],imageName[b]+'.json')
             allData = {
                     'textBBs': bbsData,

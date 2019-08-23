@@ -46,7 +46,7 @@
         "class": "FeaturePairTrainer",
         "iterations": 10000,
         "save_dir": "saved/",
-        "val_step": 250,
+        "val_step": 2000,
         "save_step": 2000,
         "save_step_minor": 250,
         "log_step": 50,

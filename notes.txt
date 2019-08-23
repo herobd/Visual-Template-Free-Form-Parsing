@@ -34,3 +34,28 @@ Step sch, #40,000
 
 step only 30000
 1,fe,gru,lrn1,avgE,rr       0.94,0.88
+
+
+After running reproducibility instructions:
+bb_ap overall mean: 0.4245414744870879, std 0.05992214677924842
+bb_recall overall mean: [0.9085108  0.75969355], std [0.07431647 0.19411495]
+bb_prec overall mean: [0.78065136 0.71984299], std [0.20507893 0.196836  ]
+bb_Fm overall mean: -1.0, std 0.0
+nn_loss overall mean: 0.03530250337759131, std 0.0331923394725507
+rel_recall overall mean: 0.6944726554909622, std 0.21906173981880636
+rel_precision overall mean: 0.6514794508010785, std 0.15718074652845865
+rel_Fm overall mean: 0.6430445318270176, std 0.14279309841442422
+relMissedByHeur overall mean: 1.368421052631579, std 2.5175285774950313
+relMissedByDetect overall mean: 5.315789473684211, std 7.356004576133685
+heurRecall overall mean: 0.9638793891082221, std 0.06479530822436647
+detectRecall overall mean: 0.7740061464088924, std 0.19850782946862844
+prec@0.5 overall mean: 0.6514794508010785, std 0.15718074652845865
+recall@0.5 overall mean: 0.6944726554909622, std 0.21906173981880636
+F-M@0.5 overall mean: 0.6430445318270176, std 0.14279309841442422
+rel_AP@0.5 overall mean: 0.616308119655676, std 0.21664192844128685
+rel_AP overall mean: 0.616308119655676, std 0.21664192844128685
+no_targs overall mean: 0.0, std 0.0
+nn_loss_final overall mean: 0.33462982134599434, std 0.3748013931824183
+nn_loss_diff overall mean: 0.29932731796840306, std 0.3421111374927549
+nn_acc_final overall mean: 0.7141149257469313, std 0.16618617068601443
+nn_acc_detector overall mean: 0.7141038546485179, std 0.1379463483665521

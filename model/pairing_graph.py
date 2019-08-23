@@ -853,7 +853,7 @@ class PairingGraph(BaseModel):
             #adjacencyMatrix = None
             ##print('create graph: {}'.format(timeit.default_timer()-tic))
             #return bb_features, adjacencyMatrix, rel_features
-            return bbAndRel_features, (adjacencyMatrix,numOfNeighbors), numBB, numRel, relIndexes
+        return bbAndRel_features, (adjacencyMatrix,numOfNeighbors), numBB, numRel, relIndexes
 
 
 

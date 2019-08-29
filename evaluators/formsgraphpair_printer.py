@@ -308,7 +308,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                 thresh=0.15
                 while thresh<0.45:
                     keep = relPred>thresh
-                    newRelPred = relPred[keep]
+                    newRelPred = relPred[keep].cpu()
                     if newRelPred.size(0)<700:
                         break
                 if newRelPred.size(0)>0:
@@ -325,14 +325,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                                 if not usePredNN:
                                     numNeighbors.append(target_num_neighbors[0,bbAlignment[id1]])
                                 else:
-                                    numNeighbors.append(predNN[id1])
+                                    numNeighbors.append(predNN[id1].item())
                                 newId+=1
                             if id2 not in idMap:
                                 idMap[id2]=newId
                                 if not usePredNN:
                                     numNeighbors.append(target_num_neighbors[0,bbAlignment[id2]])
                                 else:
-                                    numNeighbors.append(predNN[id2])
+                                    numNeighbors.append(predNN[id2].item())
                                 newId+=1
                             newRelCand.append( [idMap[id1],idMap[id2]] )            
 
@@ -344,7 +344,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     decision= torch.from_numpy( np.round_(decision).astype(int) )
                     decision=decision.to(relPred.device)
                     relPred[keep] = torch.where(0==decision,relPred[keep]-1,relPred[keep])
-                    relPred[1-keep] -=1
+                    relPred[~keep] -=1
                     rel_threshold_use=0#-0.5
                 else:
                     rel_threshold_use=rel_threshold
@@ -363,7 +363,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     #remove predictions that overlapped with GT, but not enough
                     if model.predNN:
                         start=1
-                        toKeep = 1-((bbFullHit==0) * (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
+                        toKeep = ~((bbFullHit==0) & (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
                         if toKeep.any():
                             bbPredNN_use = bbPred[toKeep][:,:,0]
                             bbAlignment_use = bbAlignment[toKeep]

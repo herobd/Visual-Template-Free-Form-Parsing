@@ -1,5 +1,7 @@
 # Pairing project
 
+This code is free to use for non-commericial purposes. Contact me if commericialization is desired.
+
 ## Requirements
 * Python 3.x (at least 3.7 for doing optimization)
 * PyTorch 1.0+
@@ -75,7 +77,7 @@ Note: This will take a while before it begins training on your first run as it c
 
 Make training data for no visual feature pairing: 
 1. `mkdir out`
-2. `python eval.py -c saved/saved/pairing/checkpoint-iteration125000.pth -g 0 -n 10000 -a save_json=out/detection_data,data_loader=batch_size=1,data_loader=num_workers=0,data_loader=rescale_range=0.52,data_loader=crop_params=,validation=rescale_range=0.52,validation=crop_params=`
+2. `python eval.py -c saved/detector/checkpoint-iteration150000.pth -g 0 -n 10000 -a save_json=out/detection_data,data_loader=batch_size=1,data_loader=num_workers=0,data_loader=rescale_range=0.52,data_loader=crop_params=,validation=rescale_range=0.52,validation=crop_params=,data_loader=cache_resized_images=0`
 
 Train no visual feature pairing: `python train.py -c cf_no_vis_pairing.json`
 

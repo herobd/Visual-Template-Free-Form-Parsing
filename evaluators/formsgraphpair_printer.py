@@ -56,7 +56,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #adjacenyMatrix = adjacenyMatrix.to(self.gpu)
         return image, bbs, adjaceny, num_neighbors
 
-    rel_thresholds = [config['THRESH']] if 'THRESH' in config else [0.5]
+    rel_thresholds = [config['THRESH']] if 'THRESH' in config else [0.7]
     if ('sweep_threshold' in config and config['sweep_threshold']) or ('sweep_thresholds' in config and config['sweep_thresholds']):
         rel_thresholds = np.arange(0.1,1.0,0.05)
     if ('sweep_threshold_big' in config and config['sweep_threshold_big']) or ('sweep_thresholds_big' in config and config['sweep_thresholds_big']):

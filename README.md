@@ -33,7 +33,7 @@ clone github: https://github.com/cvxgrp/cvxpy
 
 
 ### Setting up dataset 
-`../data/forms/`
+see https://github.com/herobd/NAF_dataset
 
 ### Pretraining detector network
 `python train.py -c cf_detector.json`

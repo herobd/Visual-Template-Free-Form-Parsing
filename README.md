@@ -8,7 +8,7 @@ This code is free to use for non-commericial purposes. Contact me if commericial
 
 I used conda, but it shouldn't be hard to install the packages another way.
 
-# Installing to get it to work with pytorch 1
+## Installing
 First check gcc version (must be atleast 4.9) and cuda version (8 requires gcc to be 5.3 or lower).
 If upgrading cuda, remove the old version first either with apt-get or uninstall script in /usr/cuda/bin.
     (Be sure CUDA_HOME and PATH are right after installation)
@@ -20,14 +20,15 @@ If upgrading cuda, remove the old version first either with apt-get or uninstall
 * `scikit-image`
 
 
+Run this in the Visual-Template-Free-Form-Parsing directoty: `python setup.py build develop`
+
+###CVXPY
+
 for cvxpy (optimization), you must have python 3.7 or later:
 
 clone github: https://github.com/cvxgrp/cvxpy
 
 `python setup.py install` in the cvxpy repo
-
-# Install
-`python setup.py build develop`
 
 ## Reproducability instructions
 
@@ -132,7 +133,7 @@ If you want to override the config file on a resume, just use the `-c` flag and 
 
 This script runs a trained model (from a snapshot) through the dataset and prints its scores. It is also used to save images with the predictions on them.
 
-Usage:  `python eval.py -c CHECKPOINT.pth -f OVERRIDE_CONFIG.pth -g (gpu number) -n (number of images to save) -d (directory to save images) -T
+Usage:  `python eval.py -c CHECKPOINT.pth -f OVERRIDE_CONFIG.pth -g (gpu number) -n (number of images to save) -d (directory to save images) -T`
 
 The only flags required is `-c` or `-f`.
 

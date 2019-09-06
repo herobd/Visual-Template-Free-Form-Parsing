@@ -1,4 +1,6 @@
-# Pairing project
+# Deep Visual Template-Free Form Parsing
+
+This is the code for our ICDAR 2019 paper, Deep Visual Template-Free Form Parsing.
 
 This code is free to use for non-commericial purposes. Contact me if commericialization is desired.
 
@@ -22,11 +24,11 @@ If upgrading cuda, remove the old version first either with apt-get or uninstall
 
 Run this in the Visual-Template-Free-Form-Parsing directoty: `python setup.py build develop`
 
-###CVXPY
+### CVXPY
 
-for cvxpy (optimization), you must have python 3.7 or later:
+To run the optimization, you need cvxpy, which requires python 3.7 or later:
 
-clone github: https://github.com/cvxgrp/cvxpy
+Clone github: https://github.com/cvxgrp/cvxpy
 
 `python setup.py install` in the cvxpy repo
 

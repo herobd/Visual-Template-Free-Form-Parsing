@@ -718,8 +718,11 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                         elif (targ2,targ1) in adjacency:
                             aId = adjacency.index((targ2,targ1))
                     if pretty=='pred':
-                        shade = (relPred[i].item()-draw_rel_thresh)/(1-draw_rel_thresh)
-                        color=np.array([0,shade,0])
+                        if pruned:
+                            color=np.array([1,0.8,0])
+                        else:
+                            shade = (relPred[i].item()-draw_rel_thresh)/(1-draw_rel_thresh)
+                            color=np.array([0,shade,0])
                     elif aId is None:
                         if pretty=='clean' and pruned:
                             color=np.array([1,1,0])

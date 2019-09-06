@@ -1,4 +1,6 @@
-# Pairing project
+# Deep Visual Template-free Form Parsing
+
+This is the code from our ICDAR 2019 paper, "Deep Visual Template-free Form Parsing."
 
 This code is free to use for non-commericial purposes. Contact me if commericialization is desired.
 

@@ -20,9 +20,8 @@ import json
 import timeit
 import cv2
 
-MAX_CANDIDATES=325 #450
+MAX_CANDIDATES=325 
 MAX_GRAPH_SIZE=370
-#max seen 428, so why'd it crash on 375?
 
 class PairingGraph(BaseModel):
     def __init__(self, config):
@@ -431,6 +430,10 @@ class PairingGraph(BaseModel):
                 if bbOuts is not None:
                     bbOuts = (bbOuts+bbOuts_B)/2
                 relOuts = (relOuts+relOuts_B)/2
+                ####
+                #print(" TO GET IMAGE OF LINEOFSIGHT")
+                #relOuts[:]=1
+                ####
             if bbOuts is not None:
                 bbOuts = bbOuts[:,None,:]
             relOuts = relOuts[:,None,:]
@@ -996,6 +999,9 @@ class PairingGraph(BaseModel):
             #list is candidates
             maxDist = 600*scaleCand*distMul
             maxDistY = 200*scaleCand*distMul
+            if not self.training:
+                maxDist = 3000
+                maxDistY = 3000
             minWidth=30
             minHeight=20
             numFan=5
@@ -1137,7 +1143,7 @@ class PairingGraph(BaseModel):
             #print('candidates:{} ({})'.format(len(candidates),distMul))
             #if len(candidates)>1:
             #    drawIt()
-            if len(candidates)+numBoxes<MAX_GRAPH_SIZE and len(candidates)<MAX_CANDIDATES:
+            if (len(candidates)+numBoxes<MAX_GRAPH_SIZE and len(candidates)<MAX_CANDIDATES) or not self.training:
                 return list(candidates)
             else:
                 if self.useOldDecay:
@@ -1145,7 +1151,7 @@ class PairingGraph(BaseModel):
                 else:
                     distMul=distMul*0.8 - 0.05
         #This is a problem, we couldn't prune down enough
-        #print("WARNING:: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
+        print("WARNING:: could not prune number of candidates down: {} (should be {})".format(len(candidates),MAX_GRAPH_SIZE-numBoxes))
         return list(candidates)[:MAX_GRAPH_SIZE-numBoxes]
 
     def getTranscriptions(self,bbs,image):

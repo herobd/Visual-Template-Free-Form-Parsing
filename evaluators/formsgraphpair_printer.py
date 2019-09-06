@@ -675,7 +675,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         #    #print(rad)
         #    cv2.circle(image,mid,rad,(1,0,1),1)
 
-        draw_rel_thresh = relPred.max() * draw_rel_thresh
+        draw_rel_thresh = (relPred.max() * draw_rel_thresh).item()
 
 
         #Draw pred pairings
@@ -717,7 +717,13 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                             aId = adjacency.index((targ1,targ2))
                         elif (targ2,targ1) in adjacency:
                             aId = adjacency.index((targ2,targ1))
-                    if aId is None:
+                    if pretty=='pred':
+                        if pruned:
+                            color=np.array([1,0.8,0])
+                        else:
+                            shade = (relPred[i].item()-draw_rel_thresh)/(1-draw_rel_thresh)
+                            color=np.array([0,shade,0])
+                    elif aId is None:
                         if pretty=='clean' and pruned:
                             color=np.array([1,1,0])
                         else:
@@ -744,7 +750,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
                     #print('draw {} {} {} {} '.format(x1,y1,x2,y2))
                     cv2.line(image,(x1,y1),(x2,y2),(0,shade,0),lineWidth)
                 numrelpred+=1
-        if pretty and pretty!="light" and pretty!="clean":
+        if pretty and pretty!="light" and pretty!="clean" and pretty!='pred':
             for i in range(len(relCand)):
                 #print('{},{} : {}'.format(relCand[i][0],relCand[i][1],relPred[i]))
                 if relPred[i]>-1:
@@ -789,13 +795,14 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
             #gtcolor=(1,0,0.6)
             gtcolor=(1,0.6,0)
             wth=2
-        for aId,(i,j) in enumerate(adjacency):
-            if not pretty or not hits[aId]:
-                x1 = round(targetBoxes[0,i,0].item())
-                y1 = round(targetBoxes[0,i,1].item())
-                x2 = round(targetBoxes[0,j,0].item())
-                y2 = round(targetBoxes[0,j,1].item())
-                cv2.line(image,(x1,y1),(x2,y2),gtcolor,wth)
+        if pretty!='pred':
+            for aId,(i,j) in enumerate(adjacency):
+                if not pretty or not hits[aId]:
+                    x1 = round(targetBoxes[0,i,0].item())
+                    y1 = round(targetBoxes[0,i,1].item())
+                    x2 = round(targetBoxes[0,j,0].item())
+                    y2 = round(targetBoxes[0,j,1].item())
+                    cv2.line(image,(x1,y1),(x2,y2),gtcolor,wth)
 
         #Draw alginment between gt and pred bbs
         if not pretty:

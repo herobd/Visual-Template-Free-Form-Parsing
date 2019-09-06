@@ -36,6 +36,7 @@
         "crop_to_page":false,
         "color":false,
         "rescale_range": [0.52,0.52],
+        "crop_params": null,
         "only_types": {
             "boxes":true
         },

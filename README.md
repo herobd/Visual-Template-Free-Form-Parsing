@@ -1,6 +1,6 @@
-# Deep Visual Template-Free Form Parsing
+# Deep Visual Template-free Form Parsing
 
-This is the code for our ICDAR 2019 paper, Deep Visual Template-Free Form Parsing.
+This is the code from our ICDAR 2019 paper, "Deep Visual Template-free Form Parsing."
 
 This code is free to use for non-commericial purposes. Contact me if commericialization is desired.
 
@@ -30,7 +30,7 @@ To run the optimization, you need cvxpy, which requires python 3.7 or later:
 
 Clone github: https://github.com/cvxgrp/cvxpy
 
-`python setup.py install` in the cvxpy repo
+`python setup.py install` in the cvxpy repo`
 
 ## Reproducability instructions
 

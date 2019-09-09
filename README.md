@@ -1,6 +1,6 @@
 # Deep Visual Template-free Form Parsing
 
-This is the code from our ICDAR 2019 paper, "Deep Visual Template-free Form Parsing."
+This is the code from our ICDAR 2019 paper, "Deep Visual Template-free Form Parsing." (http://arxiv.org/abs/1909.02576)
 
 This code is free to use for non-commericial purposes. Contact me if commericialization is desired.
 

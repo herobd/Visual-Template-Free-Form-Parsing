@@ -1,8 +1,8 @@
-# Deep Visual Template-free Form Parsing
+# Visual Template-free Form Parsing
 
 This is the code from our ICDAR 2019 paper, "Deep Visual Template-free Form Parsing." (http://arxiv.org/abs/1909.02576)
 
-This code is free to use for non-commericial purposes. Contact me if commericialization is desired.
+This code is licensed under GNU GPL v3. If you would like it distributed to you under a different license, please contact me (briandavis@byu.net).
 
 ## Requirements
 * Python 3.x (at least 3.7 for doing optimization)

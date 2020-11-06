@@ -16,13 +16,13 @@ If upgrading cuda, remove the old version first either with apt-get or uninstall
     (Be sure CUDA_HOME and PATH are right after installation)
 
 `conda install $`
-* `ipython`
+* `ipython`  (maybe not needed anymore)
 * `pytorch torchvision -c pytorch` or what ever the command is on pytorch.org given cuda version, etc
 * `opencv`
 * `scikit-image`
 
 
-Run this in the Visual-Template-Free-Form-Parsing directoty: `python setup.py build develop`
+Run this in the Visual-Template-Free-Form-Parsing directoty: `python setup.py build develop` (I don't think this is needed since I replaced RoIAlign with the torchvision implementation).
 
 ### CVXPY
 

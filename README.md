@@ -6,7 +6,7 @@ This code is licensed under GNU GPL v3. If you would like it distributed to you 
 
 ## Requirements
 * Python 3.x (at least 3.7 for doing global pairing optimization)
-* PyTorch 1.0+
+* PyTorch 1.2+
 
 I used conda, but it shouldn't be hard to install the packages another way.
 

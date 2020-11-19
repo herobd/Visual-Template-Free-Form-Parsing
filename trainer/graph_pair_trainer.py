@@ -440,6 +440,7 @@ class GraphPairTrainer(BaseTrainer):
             The validation metrics in log must have the key 'val_metrics'.
         """
         self.model.eval()
+        self.model.valid=True
         total_val_loss = 0
         total_box_loss =0
         total_rel_loss =0
@@ -632,6 +633,7 @@ class GraphPairTrainer(BaseTrainer):
         if self.model.predClass:
             toRet['val_class_loss_final']=class_loss_final_total/len(self.valid_data_loader)
             toRet['val_class_loss_diff']=class_loss_diff_total/len(self.valid_data_loader)
+        self.model.valid=False
         return toRet
 
 

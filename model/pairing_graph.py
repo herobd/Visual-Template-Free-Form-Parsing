@@ -213,9 +213,9 @@ class PairingGraph(BaseModel):
             layers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
             self.relFeaturizerConv = nn.Sequential(*layers)
 
-            self.roi_align = RoIAlign(self.pool_h,self.pool_w,1.0/detect_save_scale,-1)
+            self.roi_align = RoIAlign((self.pool_h,self.pool_w),1.0/detect_save_scale,-1)
             if self.use2ndFeatures:
-                self.roi_align2 = RoIAlign(self.pool2_h,self.pool2_w,1.0/detect_save2_scale,-1)
+                self.roi_align2 = RoIAlign((self.pool2_h,self.pool2_w),1.0/detect_save2_scale,-1)
         else:
             last_ch_relC=0
 
@@ -292,9 +292,9 @@ class PairingGraph(BaseModel):
                     convlayers.append( nn.AvgPool2d((fsizeY,fsizeX)) )
                 self.bbFeaturizerConv = nn.Sequential(*convlayers)
 
-                self.roi_alignBB = RoIAlign(self.poolBB_h,self.poolBB_w,1.0/detect_save_scale,-1)
+                self.roi_alignBB = RoIAlign((self.poolBB_h,self.poolBB_w),1.0/detect_save_scale,-1)
                 if self.use2ndFeatures:
-                    self.roi_alignBB2 = RoIAlign(self.poolBB2_h,self.poolBB2_w,1.0/detect_save2_scale,-1)
+                    self.roi_alignBB2 = RoIAlign((self.poolBB2_h,self.poolBB2_w),1.0/detect_save2_scale,-1)
             else:
                 featurizer_fc = [self.numShapeFeatsBB]+featurizer_fc
             if featurizer_fc is not None:

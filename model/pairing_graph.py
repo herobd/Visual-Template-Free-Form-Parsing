@@ -44,7 +44,7 @@ class PairingGraph(BaseModel):
         super(PairingGraph, self).__init__(config)
 
         if 'detector_checkpoint' in config:
-            checkpoint = torch.load(config['detector_checkpoint'])
+            checkpoint = torch.load(config['detector_checkpoint'],map_location=torch.device('cpu'))
             detector_config = json.load(open(config['detector_config']))['model'] if 'detector_config' in config else checkpoint['config']['model']
             if 'state_dict' in checkpoint:
                 self.detector = eval(checkpoint['config']['arch'])(detector_config)

@@ -26,6 +26,7 @@ MAX_GRAPH_SIZE=370
 class PairingGraph(BaseModel):
     def __init__(self, config):
         super(PairingGraph, self).__init__(config)
+        self.valid=False
 
         if 'detector_checkpoint' in config:
             checkpoint = torch.load(config['detector_checkpoint'])
@@ -999,7 +1000,7 @@ class PairingGraph(BaseModel):
             #list is candidates
             maxDist = 600*scaleCand*distMul
             maxDistY = 200*scaleCand*distMul
-            if not self.training:
+            if not self.training and not self.valid:
                 maxDist = 3000
                 maxDistY = 3000
             minWidth=30

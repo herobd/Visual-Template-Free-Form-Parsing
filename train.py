@@ -29,9 +29,10 @@ from logger import Logger
 
 try:
     from knockknock import slack_sender
+    with open('knock.knock') as f:
+        webhook_url = f.read().strip()
 except:
     pass
-webhook_url = 'https://hooks.slack.com/services/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'
 
 logging.basicConfig(level=logging.INFO, format='')
 def set_procname(newname):

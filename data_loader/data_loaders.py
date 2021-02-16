@@ -21,6 +21,8 @@ from datasets.forms_box_detect import FormsBoxDetect
 from datasets import forms_graph_pair
 from datasets.forms_feature_pair import FormsFeaturePair
 from datasets import forms_feature_pair
+from datasets import funsd_graph_pair
+from datasets import funsd_box_detect
 #from torchvision import datasets, transforms
 from base import BaseDataLoader
 
@@ -96,6 +98,10 @@ def getDataLoader(config,split):
             return withCollate(forms_graph_pair.FormsGraphPair,forms_graph_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         elif data_set_name=='FormsFeaturePair':
             return withCollate(FormsFeaturePair,forms_feature_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
+        elif data_set_name=='FUNSDBoxDetect':
+            return withCollate(funsd_box_detect.FUNSDBoxDetect,funsd_box_detect.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
+        elif data_set_name=='FUNSDGraphPair':
+            return withCollate(funsd_graph_pair.FUNSDGraphPair,funsd_graph_pair.collate,batch_size,valid_batch_size,shuffle,shuffleValid,numDataWorkers,split,data_dir,config)
         else:
             print('Error, no dataloader has no set for {}'.format(data_set_name))
             exit()

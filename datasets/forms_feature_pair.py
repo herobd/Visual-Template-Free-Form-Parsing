@@ -22,7 +22,7 @@ import json
 #import skimage.transform as sktransform
 import os
 import math
-import cv2
+import utils.img_f as cv2
 from collections import defaultdict
 import random
 from random import shuffle

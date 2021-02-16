@@ -27,7 +27,7 @@ from collections import defaultdict, OrderedDict
 from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT
 import timeit
 
-import cv2
+import utils.img_f as cv2
 
 
 def collate(batch):

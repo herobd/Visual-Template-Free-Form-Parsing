@@ -28,7 +28,7 @@ from .box_detect import BoxDetectDataset, collate
 from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT, getResponseBBIdList_
 import timeit
 
-import cv2
+import utils.img_f as cv2
 
 SKIP=['174']#['193','194','197','200']
 ONE_DONE=[]

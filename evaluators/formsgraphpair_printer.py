@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
-import cv2
+import utils.img_f as cv2
 from utils import util
 from model.alignment_loss import alignment_loss
 import math

@@ -14,7 +14,7 @@
     along with Visual-Template-free-Form-Parsting.  If not, see <https://www.gnu.org/licenses/>.
 """
 import numpy as np
-import cv2
+import utils.img_f as cv2
 import timeit
 import warnings
 import random, math

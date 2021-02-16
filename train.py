@@ -27,6 +27,12 @@ from data_loader import getDataLoader
 from trainer import *
 from logger import Logger
 
+try:
+    from knockknock import slack_sender
+except:
+    pass
+webhook_url = 'https://hooks.slack.com/services/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'
+
 logging.basicConfig(level=logging.INFO, format='')
 def set_procname(newname):
         from ctypes import cdll, byref, create_string_buffer
@@ -36,6 +42,7 @@ def set_procname(newname):
         buff.value = newname                 #Null terminated string as it should be
         libc.prctl(15, byref(buff), 0, 0, 0) #Refer to "#define" of "/usr/include/linux/prctl.h" for the misterious value 16 & arg[3..5] are zero as the man page says.
 
+@slack_sender(webhook_url=webhook_url, channel="herding-neural-networks")
 def main(config, resume):
     set_procname(config['name'])
     #np.random.seed(1234) I don't have a way of restarting the DataLoader at the same place, so this makes it totaly random

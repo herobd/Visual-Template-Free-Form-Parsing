@@ -2,7 +2,7 @@ from skimage import color, io
 import os
 import numpy as np
 import torch
-import cv2
+import utils.img_f as cv2
 from utils import util
 from model.alignment_loss import alignment_loss
 import math

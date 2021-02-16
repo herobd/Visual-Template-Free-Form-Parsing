@@ -34,7 +34,7 @@ import random
 import json
 
 import timeit
-import cv2
+import utils.img_f as cv2
 
 MAX_CANDIDATES=325 
 MAX_GRAPH_SIZE=370
@@ -55,6 +55,19 @@ class PairingGraph(BaseModel):
         else:
             detector_config = config['detector_config']
             self.detector = eval(detector_config['arch'])(detector_config)
+
+	if 'pretrained_backbone_checkpoint' in config:
+            if os.path.exists(config['pretrained_backbone_checkpoint']):
+                checkpoint = torch.load(config['pretrained_backbone_checkpoint'], map_location=lambda storage, location: storage)
+                detector_state_dict={}
+                for name,data in checkpoint['state_dict'].items():
+                    if name.startswith('detector.'):
+                        detector_state_dict[name[9:]]=data
+                self.detector.load_state_dict(detector_state_dict)
+            elif 'DONT_NEED_TO_LOAD_PRETRAINED' not in config or not config['DONT_NEED_TO_LOAD_PRETRAINED']:
+                raise FileNotFoundError('Could not find pretrained backbone: {}'.format(config['pretrained_backbone_checkpoint']))
+
+
         useBeginningOfLast = config['use_beg_det_feats'] if 'use_beg_det_feats' in config else False
         useFeatsLayer = config['use_detect_layer_feats'] if 'use_detect_layer_feats' in config else -1
         useFeatsScale = config['use_detect_scale_feats'] if 'use_detect_scale_feats' in config else -2

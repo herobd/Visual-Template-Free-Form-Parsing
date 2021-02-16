@@ -12,17 +12,20 @@
     You should have received a copy of the GNU General Public License
     along with Visual-Template-free-Form-Parsting.  If not, see <https://www.gnu.org/licenses/>.
 """
-import cv2
+import utils.img_f as cv2
 import numpy as np
 
 def tensmeyer_brightness(img, foreground=0, background=0):
     if img.shape[2]==3:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.rgb2gray(img)
     else:
         gray = img
-    ret,th = cv2.threshold(gray ,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    try:
+        ret,th = cv2.otsuThreshold(gray)
+    except ValueError:
+        th=img/2
 
-    th = (th.astype(np.float32) / 255)[...,None]
+    th = (th.astype(np.float32) / 255)
 
     img = img.astype(np.float32)
     img = img + (1.0 - th) * foreground

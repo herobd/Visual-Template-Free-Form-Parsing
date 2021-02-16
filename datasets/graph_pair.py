@@ -27,7 +27,7 @@ from collections import defaultdict, OrderedDict
 from utils.forms_annotations import fixAnnotations, convertBBs, getBBWithPoints, getStartEndGT
 import timeit
 
-import cv2
+import utils.img_f as cv2
 
 
 def collate(batch):
@@ -126,8 +126,8 @@ class GraphPairDataset(torch.utils.data.Dataset):
         #np_img = cv2.resize(np_img,(target_dim1, target_dim0), interpolation = cv2.INTER_CUBIC)
         np_img = cv2.resize(np_img,(0,0),
                 fx=partial_rescale,
-                fy=partial_rescale,
-                interpolation = cv2.INTER_CUBIC)
+                fy=partial_rescale)
+                #interpolation = cv2.INTER_CUBIC)
         if not self.color:
             np_img=np_img[...,None] #add 'color' channel
         ##print('resize: {}  [{}, {}]'.format(timeit.default_timer()-tic,np_img.shape[0],np_img.shape[1]))

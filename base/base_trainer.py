@@ -9,6 +9,10 @@ import time
 from utils.util import ensure_dir
 from collections import defaultdict
 from model import *
+try:
+    from torch.optim.swa_utils import AveragedModel
+except ModuleNotFoundError:
+    pass
 #from ..model import PairingGraph
 
 class BaseTrainer:
@@ -42,8 +46,16 @@ class BaseTrainer:
         self.train_logger = train_logger
         if config['optimizer_type']!="none":
             self.optimizer = getattr(optim, config['optimizer_type'])(model.parameters(),
-                                                                      **config['optimizer'])
+                                        **config['optimizer'])
+
+        self.swa = config['trainer']['swa'] if 'swa' in config['trainer'] else (config['trainer']['weight_averaging'] if 'weight_averaging' in config['trainer'] else False)
+        if self.swa:
+            self.swa_model = AveragedModel(self.model)
+            self.swa_start = config['trainer']['swa_start'] if 'swa_start' in config['trainer'] else config['trainer']['weight_averaging_start']
+            self.swa_avg_every = config['trainer']['swa_avg_every'] if 'swa_avg_every' in config['trainer'] else 0
+            assert(self.val_step>=self.swa_avg_every) #otherwise we'll start evaluating more than the (swa)model is updated
         self.useLearningSchedule = config['trainer']['use_learning_schedule'] if 'use_learning_schedule' in config['trainer'] else False
+
         if self.useLearningSchedule=='LR_test':
             start_lr=0.000001
             slope = (1-start_lr)/self.iterations
@@ -106,6 +118,15 @@ class BaseTrainer:
                         mul*=0.1
                 return mul
             self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,stepLR)
+        elif self.useLearningSchedule=='spike then swa':
+            warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
+            swa_lr_mul = config['trainer']['swa_lr_mul'] if 'swa_lr_mul' in config['trainer'] else 0.1
+            def spikeThenSWA(step_num):
+                if step_num<self.swa_start:
+                    return min((max(0.000001,step_num-(warmup_steps-3))/100)**-0.1, step_num*(1.485/warmup_steps)+.01)
+                else:
+                    return swa_lr_mul
+            self.lr_schedule = torch.optim.lr_scheduler.LambdaLR(self.optimizer,spikeThenSWA)
         elif self.useLearningSchedule is True:
             warmup_steps = config['trainer']['warmup_steps'] if 'warmup_steps' in config['trainer'] else 1000
             #lr_lambda = lambda step_num: min((step_num+1)**-0.3, (step_num+1)*warmup_steps**-1.3)
@@ -126,13 +147,6 @@ class BaseTrainer:
         ensure_dir(self.checkpoint_dir)
         json.dump(config, open(os.path.join(self.checkpoint_dir, 'config.json'), 'w'),
                   indent=4, sort_keys=False)
-        self.swa = config['trainer']['swa'] if 'swa' in config['trainer'] else (config['trainer']['weight_averaging'] if 'weight_averaging' in config['trainer'] else False)
-        if self.swa:
-            self.swa_model = type(self.model)(config['model'])
-            if config['cuda']:
-                self.swa_model = self.swa_model.to(self.gpu)
-            self.swa_start = config['trainer']['swa_start'] if 'swa_start' in config['trainer'] else config['trainer']['weight_averaging_start']
-            self.swa_c_iters = config['trainer']['swa_c_iters'] if 'swa_c_iters' in config['trainer'] else config['trainer']['weight_averaging_c_iters']
         if resume:
             self._resume_checkpoint(resume)
 
@@ -170,12 +184,10 @@ class BaseTrainer:
             sumLog['sec_per_iter'] += elapsed_time
             #print('iter: '+str(elapsed_time))
 
-            #Stochastic Weight Averaging    https://github.com/timgaripov/swa/blob/master/train.py
-            if self.swa and self.iteration>=self.swa_start and (self.iterations-self.swa_start)%self.swa_c_iters==0:
-                swa_n = (self.iterations-self.swa_start)//self.swa_c_iters
-                moving_average(self.swa_model, self.model, 1.0 / (swa_n + 1))
-                #swa_n += 1
-
+            if self.swa and self.iteration>=self.swa_start and (self.swa_avg_every==0 or (self.iteration-self.swa_start)%self.swa_avg_every==0):
+                if self.swa_model is None:
+                    self.swa_model = AveragedModel(self.model)
+                self.swa_model.update_parameters(self.model)
 
             for key, value in result.items():
                 if key == 'metrics':
@@ -216,14 +228,6 @@ class BaseTrainer:
 
             #VALIDATION
             if self.iteration%self.val_step==0:
-                val_result = self._valid_epoch()
-                for key, value in val_result.items():
-                    if 'metrics' in key:
-                        for i, metric in enumerate(self.metrics):
-                            log['val_' + metric.__name__] = val_result[key][i]
-                    else:
-                        log[key] = value
-                        #sumLog['avg_'+key] += value
                 if self.swa and self.iteration>=self.swa_start:
                     temp_model = self.model
                     self.model = self.swa_model
@@ -235,6 +239,15 @@ class BaseTrainer:
                                 log['swa_val_' + metric.__name__] = val_result[key][i]
                         else:
                             log['swa_'+key] = value
+                else:
+                    val_result = self._valid_epoch()
+                    for key, value in val_result.items():
+                        if 'metrics' in key:
+                            for i, metric in enumerate(self.metrics):
+                                log['val_' + metric.__name__] = val_result[key][i]
+                        else:
+                            log[key] = value
+                            #sumLog['avg_'+key] += value
 
                 if self.train_logger is not None:
                     if self.iteration%self.log_step!=0:
@@ -371,11 +384,12 @@ class BaseTrainer:
             ##DEBUG
 
             self.model.load_state_dict(checkpoint['state_dict'])
-            if self.swa:
+            if self.swa  and 'swa_state_dict' in checkpoint:
+                self.swa_model = AveragedModel(self.model)
                 self.swa_model.load_state_dict(checkpoint['swa_state_dict'])
         else:
             self.model = checkpoint['model']
-            if self.swa:
+            if self.swa  and 'swa_state_dict' in checkpoint:
                 self.swa_model = checkpoint['swa_model']
         #if self.swa:
         #    self.swa_n = checkpoint['swa_n']

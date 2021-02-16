@@ -1,10 +1,10 @@
 {
-    "name": "pairing_fullNAF",
+    "name": "pairing_fullNAF_early",
     "cuda": true,
     "gpu": 0,
     "save_mode": "state_dict",
     "override": true,
-    "super_computer":false,
+    "super_computer":true,
     "data_loader": {
         "data_set_name": "FormsGraphPair",
         "special_dataset": null,
@@ -64,9 +64,9 @@
     "metrics": [],
     "trainer": {
         "class": "GraphPairTrainer",
-        "iterations": 500000,
+        "iterations": 440000,
         "swa": true,
-        "swa_start": 400000,
+        "swa_start": 340000,
         "save_dir": "saved/",
         "val_step": 5000,
         "save_step": 25000,

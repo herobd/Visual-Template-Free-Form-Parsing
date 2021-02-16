@@ -56,7 +56,7 @@ class PairingGraph(BaseModel):
             detector_config = config['detector_config']
             self.detector = eval(detector_config['arch'])(detector_config)
 
-	if 'pretrained_backbone_checkpoint' in config:
+        if 'pretrained_backbone_checkpoint' in config:
             if os.path.exists(config['pretrained_backbone_checkpoint']):
                 checkpoint = torch.load(config['pretrained_backbone_checkpoint'], map_location=lambda storage, location: storage)
                 detector_state_dict={}

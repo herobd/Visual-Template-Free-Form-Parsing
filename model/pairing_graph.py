@@ -83,8 +83,9 @@ class PairingGraph(BaseModel):
         self.use2ndFeatures = useFLayer2 is not None
         if self.use2ndFeatures and not self.splitFeatures:
             detectorSavedFeatSize += detectorSavedFeatSize2
-            
-        self.detector.setForGraphPairing(useBeginningOfLast,useFeatsLayer,useFeatsScale,useFLayer2,useFScale2)
+         
+        self.set_detect_params = [useBeginningOfLast,useFeatsLayer,useFeatsScale,useFLayer2,useFScale2]
+        self.detector.setForGraphPairing(*self.set_detect_params)
 
 
         self.no_grad_feats = config['no_grad_feats'] if 'no_grad_feats' in config else False
@@ -368,8 +369,14 @@ class PairingGraph(BaseModel):
 
     def forward(self, image, gtBBs=None, gtNNs=None, useGTBBs=False, otherThresh=None, otherThreshIntur=None, hard_detect_limit=300, debug=False,old_nn=False):
         ##tic=timeit.default_timer()
+        if not self.detector.forGraphPairing:
+            self.detector.setForGraphPairing(*self.set_detect_params)
+
         bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         _=None
+        if self.detector.saved_features is None:
+            self.detector.setForGraphPairing(*self.set_detect_params)
+            bbPredictions, offsetPredictions, _,_,_,_ = self.detector(image)
         saved_features=self.detector.saved_features
         self.detector.saved_features=None
         if self.use2ndFeatures:

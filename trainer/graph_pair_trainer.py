@@ -161,7 +161,7 @@ class GraphPairTrainer(BaseTrainer):
         except StopIteration:
             self.data_loader_iter = iter(self.data_loader)
             thisInstance = self.data_loader_iter.next()
-        if not self.model.detector.predNumNeighbors:
+        if not self.model_ref.detector.predNumNeighbors:
             thisInstance['num_neighbors']=None
         ##toc=timeit.default_timer()
         ##print('data: '+str(toc-tic))
@@ -196,17 +196,17 @@ class GraphPairTrainer(BaseTrainer):
             #gtPairing,predPairing = self.prealignedEdgePred(adj,relPred)
             predPairingShouldBeTrue,predPairingShouldBeFalse, eRecall,ePrec,fullPrec,ap = self.prealignedEdgePred(adj,relPred,relIndexes)
             if bbPred is not None:
-                if self.model.predNN or self.model.predClass:
+                if self.model_ref.predNN or self.model_ref.predClass:
                     if target_num_neighbors is not None:
                         alignedNN_use = target_num_neighbors[0]
                     bbPredNN_use = bbPred[:,:,0]
                     start=1
                 else:
                     start=0
-                if self.model.predClass:
+                if self.model_ref.predClass:
                     if targetBoxes is not None:
-                        alignedClass_use =  targetBoxes[0,:,13:13+self.model.numBBTypes]
-                    bbPredClass_use = bbPred[:,:,start:start+self.model.numBBTypes]
+                        alignedClass_use =  targetBoxes[0,:,13:13+self.model_ref.numBBTypes]
+                    bbPredClass_use = bbPred[:,:,start:start+self.model_ref.numBBTypes]
             else:
                 bbPredNN_use=None
                 bbPredClass_use=None
@@ -221,7 +221,7 @@ class GraphPairTrainer(BaseTrainer):
                     #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
                     #toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
                 #remove predictions that overlapped with GT, but not enough
-                if self.model.predNN:
+                if self.model_ref.predNN:
                     start=1
                     toKeep = ~((bbFullHit==0) & (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
                     if toKeep.any():
@@ -239,14 +239,14 @@ class GraphPairTrainer(BaseTrainer):
                         alignedNN_use=None
                 else:
                     start=0
-                if self.model.predClass:
+                if self.model_ref.predClass:
                     #We really don't care about the class of non-overlapping instances
                     if targetBoxes is not None:
                         toKeep = bbFullHit==1
                         if toKeep.any():
-                            bbPredClass_use = bbPred[toKeep][:,:,start:start+self.model.numBBTypes]
+                            bbPredClass_use = bbPred[toKeep][:,:,start:start+self.model_ref.numBBTypes]
                             bbAlignment_use = bbAlignment[toKeep]
-                            alignedClass_use =  targetBoxes[0][bbAlignment_use.long()][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use.long()][:,13:13+self.model_ref.numBBTypes] #There should be no -1 indexes in hereS
                         else:
                             alignedClass_use = None
                             bbPredClass_use = None
@@ -299,7 +299,7 @@ class GraphPairTrainer(BaseTrainer):
 
 
 
-        if not self.model.detector_frozen:
+        if not self.model_ref.detector_frozen:
             if targetBoxes is not None:
                 targSize = targetBoxes.size(1)
             else:
@@ -315,7 +315,7 @@ class GraphPairTrainer(BaseTrainer):
             loss = relLoss
 
 
-        if self.model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
+        if self.model_ref.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
             alignedNN_use = alignedNN_use[:,None] #introduce "time" dimension to broadcast
             nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
             nn_loss_final *= self.lossWeights['nn']
@@ -328,7 +328,7 @@ class GraphPairTrainer(BaseTrainer):
         else:
             nn_loss_final=0
 
-        if self.model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
+        if self.model_ref.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
             alignedClass_use = alignedClass_use[:,None] #introduce "time" dimension to broadcast
             class_loss_final = self.loss['class'](bbPredClass_use,alignedClass_use)
             class_loss_final *= self.lossWeights['class']
@@ -346,7 +346,7 @@ class GraphPairTrainer(BaseTrainer):
             relLoss = relLoss.item()
         else:
             relLoss = 0
-        if not self.model.detector_frozen:
+        if not self.model_ref.detector_frozen:
             boxLoss = boxLoss.item()
         else:
             boxLoss = 0
@@ -398,13 +398,13 @@ class GraphPairTrainer(BaseTrainer):
 
             **metrics,
         }
-        if self.model.predNN:
+        if self.model_ref.predNN:
             log['nn_loss_final'] = nn_loss_final
-            if not self.model.detector_frozen:
+            if not self.model_ref.detector_frozen:
                 log['nn_loss_diff'] = nn_loss_final-nn_loss
-        if self.model.predClass:
+        if self.model_ref.predClass:
             log['class_loss_final'] = class_loss_final
-            if not self.model.detector_frozen:
+            if not self.model_ref.detector_frozen:
                 log['class_loss_diff'] = class_loss_final-class_loss
         if ap is not None:
             log['rel_AP']=ap
@@ -456,7 +456,7 @@ class GraphPairTrainer(BaseTrainer):
         class_loss_final_total=0
         class_loss_diff_total=0
 
-        numClasses = self.model.numBBTypes
+        numClasses = self.model_ref.numBBTypes
         if 'no_blanks' in self.config['validation'] and not self.config['data_loader']['no_blanks']:
             numClasses-=1
         mAP = 0
@@ -467,7 +467,7 @@ class GraphPairTrainer(BaseTrainer):
         with torch.no_grad():
             losses = defaultdict(lambda: 0)
             for batch_idx, instance in enumerate(self.valid_data_loader):
-                if not self.model.detector.predNumNeighbors:
+                if not self.model_ref.detector.predNumNeighbors:
                     instance['num_neighbors']=None
                 if not self.logged:
                     print('iter:{} valid batch: {}/{}'.format(self.iteration,batch_idx,len(self.valid_data_loader)), end='\r')
@@ -500,7 +500,7 @@ class GraphPairTrainer(BaseTrainer):
                     relLoss = torch.tensor(0.0).to(image.device)
                 #else:
                 #    relLoss = relLoss.cpu()
-                if not self.model.detector_frozen:
+                if not self.model_ref.detector_frozen:
                     boxLoss, position_loss, conf_loss, class_loss, nn_loss, recallX, precisionX = self.loss['box'](outputOffsets,targetBoxes,[targetBoxes.size(1)],target_num_neighbors)
                     loss = relLoss*self.lossWeights['rel'] + boxLoss*self.lossWeights['box']
                 else:
@@ -515,7 +515,7 @@ class GraphPairTrainer(BaseTrainer):
                         #first, remove unmatched predicitons that didn't overlap (weren't close) to any targets
                         #toKeep = 1-((bbNoIntersections==1) * (bbAlignment==-1))
                     #remove predictions that overlapped with GT, but not enough
-                    if self.model.predNN:
+                    if self.model_ref.predNN:
                         start=1
                         toKeep = ~((bbFullHit==0) & (bbAlignment!=-1)) #toKeep = not (incomplete_overlap and did_overlap)
                         if toKeep.any():
@@ -532,20 +532,20 @@ class GraphPairTrainer(BaseTrainer):
                             alignedNN_use=None
                     else:
                         start=0
-                    if self.model.predClass:
+                    if self.model_ref.predClass:
                         #We really don't care about the class of non-overlapping instances
                         if targetBoxes is not None:
                             toKeep = bbFullHit==1
-                            bbPredClass_use = bbPred[toKeep][:,:,start:start+self.model.numBBTypes]
+                            bbPredClass_use = bbPred[toKeep][:,:,start:start+self.model_ref.numBBTypes]
                             bbAlignment_use = bbAlignment[toKeep]
-                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model.numBBTypes] #There should be no -1 indexes in hereS
+                            alignedClass_use =  targetBoxes[0][bbAlignment_use][:,13:13+self.model_ref.numBBTypes] #There should be no -1 indexes in hereS
                         else:
                             alignedClass_use = None
                 else:
                     bbPredNN_use = None
                     bbPredClass_use = None
 
-                if self.model.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
+                if self.model_ref.predNN and bbPredNN_use is not None and bbPredNN_use.size(0)>0:
                     alignedNN_use = alignedNN_use[:,None] #introduce "time" dimension to broadcast
                     nn_loss_final = self.loss['nn'](bbPredNN_use,alignedNN_use)
                     nn_loss_final *= self.lossWeights['nn']
@@ -556,13 +556,13 @@ class GraphPairTrainer(BaseTrainer):
                     nn_loss_final=0
                 nn_loss_final_total += nn_loss_final
                 nn_acc=-1
-                if self.model.predNN and bbPred is not None:
+                if self.model_ref.predNN and bbPred is not None:
                     predNN_p=bbPred[:,-1,0]
                     diffs=torch.abs(predNN_p-target_num_neighbors[0][bbAlignment].float())
                     nn_acc = (diffs<0.5).float().mean().item()
                 nn_acc_total += nn_acc
 
-                if self.model.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
+                if self.model_ref.predClass and bbPredClass_use is not None and bbPredClass_use.size(0)>0:
                     alignedClass_use = alignedClass_use[:,None] #introduce "time" dimension to broadcast
                     class_loss_final = self.loss['class'](bbPredClass_use,alignedClass_use)
                     class_loss_final *= self.lossWeights['class']
@@ -572,11 +572,11 @@ class GraphPairTrainer(BaseTrainer):
                     class_loss_final = 0
                 class_loss_final_total += class_loss_final
 
-                if not self.model.detector_frozen:
+                if not self.model_ref.detector_frozen:
                     nn_loss_diff_total += nn_loss_final-nn_loss
                     class_loss_diff_total += class_loss_final-class_loss
                 
-                if self.model.detector.predNumNeighbors and outputBoxes.size(0)>0:
+                if self.model_ref.detector.predNumNeighbors and outputBoxes.size(0)>0:
                     outputBoxes=torch.cat((outputBoxes[:,0:6],outputBoxes[:,7:]),dim=1) #throw away NN pred
                 if targetBoxes is not None:
                     targetBoxes = targetBoxes.cpu()
@@ -584,7 +584,7 @@ class GraphPairTrainer(BaseTrainer):
                     target_for_b = targetBoxes[0]
                 else:
                     target_for_b = torch.empty(0)
-                if self.model.rotation:
+                if self.model_ref.rotation:
                     ap_5, prec_5, recall_5 =AP_dist(target_for_b,outputBoxes,0.9,numClasses)
                 else:
                     ap_5, prec_5, recall_5 =AP_iou(target_for_b,outputBoxes,0.5,numClasses)
@@ -626,11 +626,11 @@ class GraphPairTrainer(BaseTrainer):
             #'val_conf_loss':total_conf_loss / len(self.valid_data_loader),
             #'val_class_loss':tota_class_loss / len(self.valid_data_loader),
         }
-        if self.model.predNN:
+        if self.model_ref.predNN:
             toRet['val_nn_loss_final']=nn_loss_final_total/len(self.valid_data_loader)
             toRet['val_nn_loss_diff']=nn_loss_diff_total/len(self.valid_data_loader)
             toRet['val_nn_acc'] = nn_acc_total/len(self.valid_data_loader)
-        if self.model.predClass:
+        if self.model_ref.predClass:
             toRet['val_class_loss_final']=class_loss_final_total/len(self.valid_data_loader)
             toRet['val_class_loss_diff']=class_loss_diff_total/len(self.valid_data_loader)
         self.model.valid=False
@@ -664,12 +664,12 @@ class GraphPairTrainer(BaseTrainer):
         #should this be the same as AP_?
         numClasses = 2
 
-        if self.model.rotation:
+        if self.model_ref.rotation:
             targIndex, fullHit = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses,hard_thresh=False)
         else:
             targIndex, fullHit = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses,hard_thresh=False,fixed=self.fixedAlign)
         #else:
-        #    if self.model.rotation:
+        #    if self.model_ref.rotation:
         #        targIndex, predsWithNoIntersection = getTargIndexForPreds_dist(targetBoxes[0],outputBoxes,1.1,numClasses)
         #    else:
         #        targIndex, predsWithNoIntersection = getTargIndexForPreds_iou(targetBoxes[0],outputBoxes,0.4,numClasses)

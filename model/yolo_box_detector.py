@@ -30,6 +30,8 @@ class YoloBoxDetector(nn.Module): #BaseModel
         #super(YoloBoxDetector, self).__init__(config)
         super(YoloBoxDetector, self).__init__()
         self.forPairing=False
+        self.forGraphPairing=False
+        self.saved_features=None
         self.config = config
         self.rotation = config['rotation'] if 'rotation' in config else True
         self.numBBTypes = config['number_of_box_types']
@@ -242,6 +244,7 @@ class YoloBoxDetector(nn.Module): #BaseModel
             self.final_features=output
         self.net_down_modules[-2].register_forward_hook(save_final)
     def setForGraphPairing(self,beginningOfLast=False,featuresFromHere=-1,featuresFromScale=-2,f2Here=None,f2Scale=None):
+        self.forGraphPairing=True
         def save_feats(module,input,output):
             self.saved_features=output
         if beginningOfLast:

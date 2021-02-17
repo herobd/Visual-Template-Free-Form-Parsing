@@ -32,7 +32,7 @@ try:
     with open('knock.knock') as f:
         webhook_url = f.read().strip()
 except:
-    pass
+    webhook_url = None
 
 logging.basicConfig(level=logging.INFO, format='')
 def set_procname(newname):
@@ -44,6 +44,9 @@ def set_procname(newname):
         libc.prctl(15, byref(buff), 0, 0, 0) #Refer to "#define" of "/usr/include/linux/prctl.h" for the misterious value 16 & arg[3..5] are zero as the man page says.
 
 @slack_sender(webhook_url=webhook_url, channel="herding-neural-networks")
+def notify_main(config, resume):
+    main(config,resum)
+
 def main(config, resume):
     set_procname(config['name'])
     #np.random.seed(1234) I don't have a way of restarting the DataLoader at the same place, so this makes it totaly random
@@ -131,9 +134,16 @@ if __name__ == '__main__':
     if args.gpu is not None:
         config['gpu']=args.gpu
         print('override gpu to '+str(config['gpu']))
-
-    if config['cuda']:
-        with torch.cuda.device(config['gpu']):
-            main(config, args.resume)
+    
+    if webhook_url is not None:
+        if config['cuda']:
+            with torch.cuda.device(config['gpu']):
+                notify_main(config, args.resume)
+        else:
+            notify_main(config, args.resume)
     else:
-        main(config, args.resume)
+        if config['cuda']:
+            with torch.cuda.device(config['gpu']):
+                main(config, args.resume)
+        else:
+            main(config, args.resume)

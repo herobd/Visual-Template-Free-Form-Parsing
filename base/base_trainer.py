@@ -23,6 +23,7 @@ class BaseTrainer:
         self.config = config
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model = model
+        self.model_ref = model
         self.loss = loss
         self.metrics = metrics
         self.name = config['name']

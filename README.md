@@ -24,7 +24,7 @@ If upgrading cuda, remove the old version first either with apt-get or uninstall
 
 Run this in the Visual-Template-Free-Form-Parsing directoty: `python setup.py build develop`
 
-###CVXPY
+### CVXPY
 
 for cvxpy (optimization), you must have python 3.7 or later:
 

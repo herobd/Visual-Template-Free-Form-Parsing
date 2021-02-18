@@ -1,12 +1,12 @@
-# Deep Visual Template-free Form Parsing
+# Visual Template-free Form Parsing
 
-This is the code from our ICDAR 2019 paper, "Deep Visual Template-free Form Parsing."
+This is the code from our ICDAR 2019 paper, "Deep Visual Template-free Form Parsing." (http://arxiv.org/abs/1909.02576)
 
-This code is free to use for non-commericial purposes. Contact me if commericialization is desired.
+This code is licensed under GNU GPL v3. If you would like it distributed to you under a different license, please contact me (briandavis@byu.net).
 
 ## Requirements
-* Python 3.x (at least 3.7 for doing optimization)
-* PyTorch 1.0+
+* Python 3.x (at least 3.7 for doing global pairing optimization)
+* PyTorch 1.2+
 
 I used conda, but it shouldn't be hard to install the packages another way.
 
@@ -16,19 +16,19 @@ If upgrading cuda, remove the old version first either with apt-get or uninstall
     (Be sure CUDA_HOME and PATH are right after installation)
 
 `conda install $`
-* `ipython`
+* `ipython`  (maybe not needed anymore)
 * `pytorch torchvision -c pytorch` or what ever the command is on pytorch.org given cuda version, etc
 * `opencv`
 * `scikit-image`
 
 
-Run this in the Visual-Template-Free-Form-Parsing directoty: `python setup.py build develop`
+Run this in the Visual-Template-Free-Form-Parsing directoty: `python setup.py build develop` (I don't think this is needed since I replaced RoIAlign with the torchvision implementation).
 
 ### CVXPY
 
-for cvxpy (optimization), you must have python 3.7 or later:
+To run the global pairing optimization, you need cvxpy, which requires python 3.7 or later:
 
-clone github: https://github.com/cvxgrp/cvxpy
+Clone github: https://github.com/cvxgrp/cvxpy
 
 `python setup.py install` in the cvxpy repo`
 
@@ -57,10 +57,10 @@ Detection, full set: `python eval.py -c saved/detector/checkpoint-iteration15000
 
 Detection, pairing set: `python eval.py -c saved/detector/checkpoint-iteration150000.pth -n 0 -T -a data_loader=special_dataset=simple`
 
-Pairing, no optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T`
+Pairing, no pairing optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T`
 `
 
-Pairing, with optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T -a optimize=true`
+Pairing, with pairing optimization: `python eval.py -c saved/pairing/checkpoint-iteration125000.pth -n 0 -T -a optimize=true`
 
 #### Perfect information experiments
 
@@ -97,7 +97,7 @@ Scoring functions pairing: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -
 
 No visual features pairing: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T`
 
-No visual features pairing, with optimization: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a optimize=true`
+No visual features pairing, with global optimization: `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a optimize=true`
 
 #### Perfect information experiments
 
@@ -109,7 +109,7 @@ For GT detections:
 
 `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a useDetect=gt`
 
-For optimization with GT num neighbors:
+For global optimization with GT num neighbors:
 
 `python eval.py -f cf_test_no_vis_pairing.json -n 0 -T -a rule=closest,optimize=gt`
 
@@ -151,7 +151,7 @@ Evaluating detector:
 Evaluatring pairing:
 * `-a useDetect=[gt,path]`:  Whether to use GT detections (`gt`) or can be directory with jsons with saved detections.
 * `-a rule=[closest,icdar]`: Use a rule (nearest or scoring functions) to do pairing (instead of model).
-* `-a optimize=[true,gt]`: Use optimization. If `gt` specified it will use the GT number of neighbors.
+* `-a optimize=[true,gt]`: Use global pairing optimization. If `gt` specified it will use the GT number of neighbors.
 * `-a penalty=[float]`: The variable *c* in Equation 1. Default is 0.25
 * `-a THRESH=[float]`: Modify the thresh for calculating prec/recall for relationships. Also is *T* in Equation 1. Default is 0.7
 * `-a sweep_threshold=true`: Run metrics using a range of thresholds

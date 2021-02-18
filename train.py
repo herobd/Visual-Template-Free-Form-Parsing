@@ -45,7 +45,7 @@ def set_procname(newname):
 
 @slack_sender(webhook_url=webhook_url, channel="herding-neural-networks")
 def notify_main(config, resume):
-    main(config,resum)
+    main(config,resume)
 
 def main(config, resume):
     set_procname(config['name'])

@@ -324,6 +324,8 @@ class PairingGraph(BaseModel):
         self.fixBiDirection= config['fix_bi_dir'] if 'fix_bi_dir' in config else False
         if 'max_graph_size' in config:
             MAX_GRAPH_SIZE = config['max_graph_size']
+        if 'max_graph_cand' in config:
+            MAX_CANDIDATES = config['max_graph_cand']
 
         self.useOldDecay = config['use_old_len_decay'] if 'use_old_len_decay' in config else False
 

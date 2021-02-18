@@ -52,6 +52,10 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
         config['THRESH'] = thresh
         if verbose:
             print('Threshold at {}'.format(thresh))
+    config['model']['max_graph_size']=650
+    config['model']['max_graph_cand']=600
+    config['data_loader']['pixel_count_thresh']=900000000000
+    config['data_loader']['max_dim_thresh']=999999999
     addDATASET=False
     if addToConfig is not None:
         for add in addToConfig:

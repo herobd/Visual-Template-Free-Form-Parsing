@@ -119,7 +119,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,targetBoxesT,target_num_neighborsT,True,
                 otherThresh=confThresh,
                 otherThreshIntur=1 if confThresh is not None else None,
-                hard_detect_limit=600,
+                hard_detect_limit=600000000000, #600
                 old_nn=True)
         outputBoxes=torch.cat((torch.ones(targetBoxes.size(1),1),targetBoxes[0,:,0:5],targetBoxes[0,:,-numClasses:]),dim=1) #add score
     elif type(useDetections) is str:
@@ -150,7 +150,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,savedBoxes,None,"saved",
                 otherThresh=confThresh,
                 otherThreshIntur=1 if confThresh is not None else None,
-                hard_detect_limit=600,
+                hard_detect_limit=60000000000000, #600
                 old_nn=True)
         outputBoxes=savedBoxes.cpu()
     elif useDetections:
@@ -160,7 +160,7 @@ def FormsGraphPair_printer(config,instance, model, gpu, metrics, outDir=None, st
         outputBoxes, outputOffsets, relPred, relIndexes, bbPred = model(dataT,
                 otherThresh=confThresh,
                 otherThreshIntur=1 if confThresh is not None else None,
-                hard_detect_limit=600,
+                hard_detect_limit=60000000000000,
                 old_nn=True)
 
     if trackAtt:

@@ -204,7 +204,7 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
 
             validName='valid' if not test else 'test'
 
-            for index in range(0,numberOfImages,step*batchSize):
+            for index in range(0,numberOfImages,step*vBatchSize):
             
                 for validIndex in range(index,index+step*vBatchSize, vBatchSize):
                     if validIndex/vBatchSize < len(valid_data_loader):
@@ -231,20 +231,20 @@ def main(resume,saveDir,numberOfImages,index,gpu=None, shuffle=False, setBatch=N
                         else:
                             val_metrics_sum += metricsO.sum(axis=0)/metricsO.shape[0]
                     
-                if not test:
-                    for trainIndex in range(index,index+step*batchSize, batchSize):
-                        if trainIndex/batchSize < len(data_loader):
-                            print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
-                            #data, target = train_iter.next() #data_loader[trainIndex]
-                            #dataT = _to_tensor(gpu,data)
-                            #output = model(dataT)
-                            #data = data.cpu().data.numpy()
-                            #output = output.cpu().data.numpy()
-                            #target = target.data.numpy()
-                            #metricsO = _eval_metrics_ind(metrics,output, target)
-                            _,aux=saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
-                            if 'save_nns' in config:
-                                nns+=aux[-1]
+                #if not test:
+                #    for trainIndex in range(index,index+step*batchSize, batchSize):
+                #        if trainIndex/batchSize < len(data_loader):
+                #            print('train batch index: {}/{}'.format(trainIndex/batchSize,len(data_loader)),end='\r')
+                #            #data, target = train_iter.next() #data_loader[trainIndex]
+                #            #dataT = _to_tensor(gpu,data)
+                #            #output = model(dataT)
+                #            #data = data.cpu().data.numpy()
+                #            #output = output.cpu().data.numpy()
+                #            #target = target.data.numpy()
+                #            #metricsO = _eval_metrics_ind(metrics,output, target)
+                #            _,aux=saveFunc(config,train_iter.next(),model,gpu,metrics,trainDir,trainIndex)
+                #            if 'save_nns' in config:
+                #                nns+=aux[-1]
 
             #if gpu is not None or numberOfImages==0:
             try:

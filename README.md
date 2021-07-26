@@ -159,6 +159,14 @@ Evaluatring pairing:
 * `-a confThresh=[float]`: Threshold used for detections.
 * `-a pretty=[true,light,clean]`: Different ways of displaying the results.
 
+### run.py
+
+This script will load an image and create a copy of it with bounding boxes annotated.
+
+Usage: `python run.py image.png image_result.png`
+
+The requirements to run this script can be found in `requirements.txt`. It also requires the [trained weights](https://github.com/herobd/Visual-Template-Free-Form-Parsing/releases/tag/w1.0) to be downloaded and saved to `saved/detector/checkpoint-iteration150000.pth`.
+
 ## File Structure
 
 This is based on victoresque's pytorch template: https://github.com/victoresque/pytorch-template

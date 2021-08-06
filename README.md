@@ -161,11 +161,13 @@ Evaluatring pairing:
 
 ### run.py
 
-This script will load an image and create a copy of it with bounding boxes annotated.
+This script will load a single image and create a copy of it with the predicted annotations drawn on it, either detection and pairing, or just detection.
 
-Usage: `python run.py image.png image_result.png`
+Usage: `python run.py image.png image_result.png -c checkpoint/path.pth`
 
-The requirements to run this script can be found in `requirements.txt`. It also requires the [trained weights](https://github.com/herobd/Visual-Template-Free-Form-Parsing/releases/tag/w1.0) to be downloaded and saved to `saved/detector/checkpoint-iteration150000.pth`.
+Use the `-d` flag if running a detection model.
+It automatically scales images to 0.52 as the NAF model is trainined. If this isn't desired use the `--scale-image` flag to override this.
+
 
 ## File Structure
 

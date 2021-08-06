@@ -159,6 +159,16 @@ Evaluatring pairing:
 * `-a confThresh=[float]`: Threshold used for detections.
 * `-a pretty=[true,light,clean]`: Different ways of displaying the results.
 
+### run.py
+
+This script will load a single image and create a copy of it with the predicted annotations drawn on it, either detection and pairing, or just detection.
+
+Usage: `python run.py image.png image_result.png -c checkpoint/path.pth`
+
+Use the `-d` flag if running a detection model.
+It automatically scales images to 0.52 as the NAF model is trainined. If this isn't desired use the `--scale-image` flag to override this.
+
+
 ## File Structure
 
 This is based on victoresque's pytorch template: https://github.com/victoresque/pytorch-template

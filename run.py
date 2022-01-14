@@ -37,7 +37,16 @@ def plotRect(img,color,xyrhw,lineW=1):
     cv2.line(img,br,bl,color,lineW)
     cv2.line(img,bl,tl,color,lineW)
 
-def detect_boxes(run_img,np_img, include_threshold=INCLUDE_THRESHOLD_DEFAULT, output_image=None,model_checkpoint=DETECTOR_TRAINED_MODEL):
+def detect_boxes(run_img,np_img, include_threshold=INCLUDE_THRESHOLD_DEFAULT, output_image=None,model_checkpoint=DETECTOR_TRAINED_MODEL,use_gpu=None):
+
+    if gpu is not None:
+        device="cuda"
+    else:
+        device="cpu"
+
+    # device= "cuda" if use_gpu else "cpu"
+    print(f"Using {device} device")      
+
     # fetch the model
     checkpoint = torch.load(model_checkpoint, map_location=lambda storage, location: storage)
     print(f"Using {checkpoint['arch']}")
@@ -83,18 +92,26 @@ def detect_boxes(run_img,np_img, include_threshold=INCLUDE_THRESHOLD_DEFAULT, ou
     return output
 
     
-def detect_boxes_and_pairs(run_img,np_img, output_image=None,model_checkpoint=TRAINED_MODEL,pair_threshold=PAIR_THRESHOLD_DEFAULT):
+def detect_boxes_and_pairs(run_img,np_img, output_image=None,model_checkpoint=TRAINED_MODEL,pair_threshold=PAIR_THRESHOLD_DEFAULT,use_gpu=None):
+
+    if gpu is not None:
+        device="cuda"
+    else:
+        device="cpu"
+
+    # device= "cuda" if use_gpu else "cpu"
+    print(f"Using {device} device")        
+
     # fetch the model
     checkpoint = torch.load(model_checkpoint, map_location=lambda storage, location: storage)
     print(f"Using {checkpoint['arch']}")
     model = eval(checkpoint['arch'])(checkpoint['config']['model'])
     model.load_state_dict(checkpoint['state_dict'])
-
-
+    model.to(device)
     # run the image through the model
     print(f"Run image through model: {imagePath}")
+    run_img=run_img.to(device)
     result = model(run_img)
-    # print(result)
     outputBoxes, outputOffsets, relPred, relIndexes, bbPred = result
     relPred = torch.sigmoid(relPred)
     np_img = draw_graph(outputBoxes,relPred,relIndexes,np_img,pair_threshold)
@@ -103,6 +120,47 @@ def detect_boxes_and_pairs(run_img,np_img, output_image=None,model_checkpoint=TR
         print(f"Saving output: {output_image}")
         io.imsave(output_image, np_img)
     return result
+
+def main(imagePath,scale_image,detection,checkpoint,detect_threshold,output_image,pair_threshold,gpu=None):  
+
+    print(f"Loading image: {imagePath}")
+    np_img = cv2.imread(imagePath, cv2.IMREAD_COLOR)
+
+    print(f"Transforming image: {imagePath}")
+    width = int(np_img.shape[1] * scale_image)
+    height = int(np_img.shape[0] * scale_image)
+    new_size = (width, height)
+    np_img = cv2.resize(np_img,new_size)
+    img = cv2.cvtColor(np_img, cv2.COLOR_BGR2GRAY)
+    img = img[None,None,:,:]
+    img = img.astype(np.float32)
+    img = torch.from_numpy(img)
+    img = 1.0 - img / 128.0
+
+    if detection:
+        if checkpoint is None:
+            checkpoint = DETECTOR_TRAINED_MODEL
+        result = detect_boxes(
+            img,
+            np_img,
+            include_threshold=args.detect_threshold,
+            output_image=output_image,
+            model_checkpoint = checkpoint,
+            use_gpu=gpu
+        )
+    else:
+        if checkpoint is None:
+            checkpoint = TRAINED_MODEL
+        np_img=np_img.astype(np.float32)/255
+        result = detect_boxes_and_pairs(
+            img,
+            np_img,
+            output_image=output_image,
+            pair_threshold=args.pair_threshold,
+            model_checkpoint = checkpoint,
+            use_gpu=gpu
+        )
+        
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run on a single image')
@@ -118,47 +176,21 @@ if __name__ == "__main__":
                         help='path to checkpoint (default: pretrained model)')
     parser.add_argument('-d', '--detection', default=False, action='store_const', const=True,
                         help='Run detection model. Default is full (pairing) model')
+    parser.add_argument('-g', '--gpu', default=None, type=int,
+                        help='gpu number (default: cpu only)')                   
     args = parser.parse_args()
     
     imagePath = args.image
     output_image = args.output_image
     scale_image = args.scale_image
     checkpoint = args.checkpoint
-    # load the image
-    print(f"Loading image: {imagePath}")
-    np_img = cv2.imread(imagePath, cv2.IMREAD_COLOR)
-
+    detection=args.detection
+    detect_threshold=args.detect_threshold
+    pair_threshold=args.pair_threshold
+    gpu=args.gpu
     
-    print(f"Transforming image: {imagePath}")
-    width = int(np_img.shape[1] * scale_image)
-    height = int(np_img.shape[0] * scale_image)
-    new_size = (width, height)
-    np_img = cv2.resize(np_img,new_size)
-    img = cv2.cvtColor(np_img, cv2.COLOR_BGR2GRAY)
-    img = img[None,None,:,:]
-    img = img.astype(np.float32)
-    img = torch.from_numpy(img)
-    img = 1.0 - img / 128.0
-
-    if args.detection:
-        if checkpoint is None:
-            checkpoint = DETECTOR_TRAINED_MODEL
-        result = detect_boxes(
-            img,
-            np_img,
-            include_threshold=args.detect_threshold,
-            output_image=output_image,
-            model_checkpoint = checkpoint
-        )
+    if gpu is not None:
+        with torch.cuda.device(gpu):
+            main(imagePath,scale_image,detection,checkpoint,detect_threshold,output_image,pair_threshold,gpu)
     else:
-        if checkpoint is None:
-            checkpoint = TRAINED_MODEL
-        np_img=np_img.astype(np.float32)/255
-        result = detect_boxes_and_pairs(
-            img,
-            np_img,
-            output_image=output_image,
-            pair_threshold=args.pair_threshold,
-            model_checkpoint = checkpoint
-        )
-
+        main(imagePath,scale_image,detection,checkpoint,detect_threshold,output_image,pair_threshold,gpu)
